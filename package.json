@@ -1,0 +1,16 @@
+{
+  "name": "travel-share-backend",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "fastify": "^4.20.2",
+    "@fastify/cors": "^8.4.0",
+    "simple-git": "^3.19.1",
+    "dotenv": "^16.3.1",
+    "marked": "^11.2.0"
+  }
+}

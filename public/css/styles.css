@@ -1,0 +1,434 @@
+/* styles.css */
+:root {
+  --bg: #ffffff;
+  --fg: #111111;
+  --bg-card: #f9f9f9;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111111;
+    --fg: #eeeeee;
+    --bg-card: #222222;
+  }
+}
+html {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--fg);
+}
+body {
+  margin: 0;
+  padding: 1rem;
+}
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+/* 12-column fluid grid */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 1rem;
+}
+@media (max-width: 600px) {
+  .grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+.card {
+  background: var(--bg-card);
+  border-radius: 6px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.1s ease;
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+.card img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.photo-interactions {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(transparent, rgba(0,0,0,0.8));
+  color: white;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.photo-reactions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.photo-reaction {
+  background: rgba(255,255,255,0.2);
+  padding: 0.2rem 0.4rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+}
+
+.photo-comment-count {
+  opacity: 0.9;
+  font-size: 0.7rem;
+}
+
+.gallery .card {
+  position: relative;
+  overflow: hidden;
+}
+.card h3 {
+  margin: 0.5rem 1rem;
+}
+.card p {
+  margin: 0 1rem 1rem;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+/* Gallery masonry */
+.gallery {
+  column-count: 3;
+  column-gap: 1rem;
+}
+.gallery .card {
+  break-inside: avoid;
+  margin-bottom: 1rem;
+}
+@media (max-width: 600px) {
+  .gallery {
+    column-count: 2;
+  }
+}
+.gallery img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Responsive index cards grid */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.hidden { display:none; }
+
+.photo-overlay {
+  position: fixed;
+  top: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.9);
+  color: #fff;
+  padding: 1rem;
+  border-radius: 8px;
+  max-width: 90vw;
+  z-index: 1000;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+.photo-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.photo-overlay img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+.photo-overlay button.close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #fff;
+  cursor: pointer;
+}
+
+.photo-marker {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 0 2px rgba(0,0,0,0.5);
+}
+.photo-marker img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display:block;
+}
+
+.overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  backdrop-filter: blur(6px);
+  background: rgba(0,0,0,0.4);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  z-index: 900;
+  pointer-events: none;
+}
+.overlay-backdrop.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.react-btn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 0.3rem;
+}
+.react-btn:hover {
+  background: rgba(255,255,255,0.2);
+}
+.react-btn span {
+  margin-left: 0.2rem;
+}
+
+button {
+  cursor: pointer;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.95);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.lightbox.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.lightbox-content {
+  position: relative;
+  max-width: 95vw;
+  max-height: 95vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lightbox-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  cursor: zoom-in;
+  transition: transform 0.2s ease;
+}
+
+.lightbox-image.zoomed {
+  cursor: zoom-out;
+  transform: scale(2);
+}
+
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: white;
+  font-size: 2rem;
+  padding: 1rem 1.5rem;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background 0.2s ease;
+  user-select: none;
+}
+
+.lightbox-nav:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+.lightbox-prev {
+  left: 2rem;
+}
+
+.lightbox-next {
+  right: 2rem;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 2rem;
+  right: 2rem;
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: white;
+  font-size: 2rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background 0.2s ease;
+}
+
+.lightbox-close:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+.lightbox-info {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.7);
+  color: white;
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  text-align: center;
+  max-width: 90vw;
+}
+
+.lightbox-interactions {
+  position: absolute;
+  right: 2rem;
+  bottom: 2rem;
+  width: 300px;
+  background: rgba(0,0,0,0.8);
+  color: white;
+  padding: 1rem;
+  border-radius: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.lightbox-reactions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.lightbox-react-btn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: white;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.lightbox-react-btn:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+.lightbox-comments {
+  margin-bottom: 1rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.lightbox-comment {
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+}
+
+.lightbox-comment-author {
+  font-weight: bold;
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.lightbox-comment-text {
+  margin-top: 0.2rem;
+  font-size: 0.9rem;
+}
+
+.lightbox-comment-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.lightbox-comment-form input {
+  flex: 1;
+  padding: 0.4rem;
+  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.1);
+  color: white;
+  border-radius: 4px;
+}
+
+.lightbox-comment-form input::placeholder {
+  color: rgba(255,255,255,0.6);
+}
+
+.lightbox-comment-form button {
+  padding: 0.4rem 0.8rem;
+  background: steelblue;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .lightbox-interactions {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    border-radius: 0;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    max-height: 50vh;
+  }
+}
+
+.lightbox-counter {
+  opacity: 0.8;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .lightbox-nav {
+    font-size: 1.5rem;
+    padding: 0.8rem 1.2rem;
+  }
+  .lightbox-prev { left: 1rem; }
+  .lightbox-next { right: 1rem; }
+  .lightbox-close { top: 1rem; right: 1rem; }
+  .lightbox-info { bottom: 1rem; }
+}
+
+#comments p {
+  margin: 0.2rem 0;
+  font-size: 0.9rem;
+}
+
+.admin-cover {
+  outline: 4px solid gold;
+}

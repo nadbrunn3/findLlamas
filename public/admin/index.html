@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Trip Manager</title>
+  <link rel="stylesheet" href="../css/styles.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    #tabs button { margin-right:0.5rem; padding:0.4rem 0.8rem; }
+    #tabs button.active { background: steelblue; color:#fff; }
+  </style>
+</head>
+<body>
+  <header class="container">
+    <h1>Admin</h1>
+    <p style="opacity:0.8; font-size:0.9rem;">Local editor — changes are saved directly to your repo</p>
+  </header>
+  <main class="container" id="app">
+    <!-- password prompt will replace content -->
+  </main>
+
+  <script type="module" src="admin.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</body>
+</html>

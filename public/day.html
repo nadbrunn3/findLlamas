@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trip Day</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+</head>
+<body>
+  <header class="container">
+    <p><a href="index.html">← Back to index</a> · <a href="blog/index.html">Blog</a></p>
+    <h1 id="day-title">Loading…</h1>
+    <p id="day-stats"></p>
+  </header>
+  <main class="container">
+    <section id="map" style="height:50vh;"></section>
+    <div style="margin:1rem 0; display:flex; align-items:center; gap:0.5rem;">
+      <button id="play-btn" aria-label="Play" style="padding:0.4rem 0.6rem; font-size:1rem;">▶︎</button>
+      <input type="range" id="time-slider" min="0" value="0" step="1" style="flex:1;" />
+    </div>
+    <p id="time-label" style="text-align:center; margin:0.5rem 0 0; font-size:0.9rem; opacity:0.8;">00:00</p>
+    <section id="gallery" class="gallery"></section>
+
+    <section id="day-diary" style="margin-top:2rem; max-width:700px;"></section>
+  </main>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="js/day.js"></script>
+
+  <div id="overlay-backdrop" class="overlay-backdrop hidden"></div>
+  <div id="photo-overlay" class="photo-overlay hidden">
+    <button class="close" aria-label="Close">×</button>
+    <img id="overlay-img" src="" alt="" />
+    <p id="overlay-caption" style="margin-top:0.5rem;"></p>
+    <p id="overlay-location" style="font-size:0.8rem; opacity:0.8;"></p>
+
+    <div id="reaction-bar" style="margin-top:0.5rem;">
+      <button class="react-btn" data-emoji="👍">👍 <span>0</span></button>
+      <button class="react-btn" data-emoji="😊">😊 <span>0</span></button>
+      <button class="react-btn" data-emoji="❤️">❤️ <span>0</span></button>
+    </div>
+
+    <div id="comments" style="text-align:left; margin-top:1rem; max-height:150px; overflow:auto;"></div>
+    <form id="comment-form" style="margin-top:0.5rem; display:flex; gap:0.5rem;">
+      <input type="text" id="comment-input" placeholder="Add a comment..." style="flex:1; padding:0.3rem;" />
+      <button type="submit">Send</button>
+    </form>
+  </div>
+
+  <div id="lightbox" class="lightbox">
+    <div class="lightbox-content">
+      <img id="lightbox-image" class="lightbox-image" src="" alt="" />
+      <button class="lightbox-nav lightbox-prev" id="lightbox-prev">‹</button>
+      <button class="lightbox-nav lightbox-next" id="lightbox-next">›</button>
+      <button class="lightbox-close" id="lightbox-close">×</button>
+      <div class="lightbox-info">
+        <div class="lightbox-counter" id="lightbox-counter">1 / 5</div>
+        <div id="lightbox-caption">Photo caption</div>
+      </div>
+      <div class="lightbox-interactions" id="lightbox-interactions">
+        <div class="lightbox-reactions" id="lightbox-reactions">
+          <button class="lightbox-react-btn" data-emoji="👍">👍 <span>0</span></button>
+          <button class="lightbox-react-btn" data-emoji="😊">😊 <span>0</span></button>
+          <button class="lightbox-react-btn" data-emoji="❤️">❤️ <span>0</span></button>
+        </div>
+        <div class="lightbox-comments" id="lightbox-comments"></div>
+        <form class="lightbox-comment-form" id="lightbox-comment-form">
+          <input type="text" id="lightbox-comment-input" placeholder="Add a comment..." />
+          <button type="submit">Send</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
