@@ -1,106 +1,269 @@
+// --- Lightbox helpers ---
+function escapeHtml(s){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+function likeKey(kind, id){ return `liked:${kind}:${id}`; }
+
+function renderLbComment(c){
+  const li = document.createElement('div');
+  li.className = 'lb-citem';
+  const initials = (c.author || 'A').trim()[0]?.toUpperCase() || 'A';
+  li.innerHTML = `
+    <div class="lb-ava">${initials}</div>
+    <div class="lb-bubble">
+      <div class="lb-head">
+        <span class="lb-author">${escapeHtml(c.author || 'Anonymous')}</span>
+        <span class="lb-time">${new Date(c.timestamp || c.edited || Date.now()).toLocaleString([], {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short'})}</span>
+      </div>
+      <div class="lb-text">${escapeHtml(c.text || '')}</div>
+    </div>`;
+  return li;
+}
+
+async function loadPhotoInteractions(photoId, panel){
+  try {
+    const api = (window.getApiBase ? window.getApiBase() : "") || "";
+    const res = await fetch(`${api}/api/photo/${photoId}/interactions`);
+    const data = res.ok ? await res.json() : {reactions:{}, comments:[]};
+
+    // counts
+    const likeCnt = Object.values(data.reactions || {}).reduce((a,b)=>a+b,0);
+    panel.querySelector('.lb-like .count').textContent = likeCnt;
+    panel.querySelector('.lb-comments-btn .count').textContent = (data.comments?.length || 0);
+
+    // comments
+    const list = panel.querySelector('#lbComments');
+    list.innerHTML = '';
+    (data.comments || []).forEach(c => list.appendChild(renderLbComment(c)));
+
+    // liked state from localStorage
+    const liked = localStorage.getItem(likeKey('photo', photoId)) === '1';
+    const likeBtn = panel.querySelector('.lb-like');
+    likeBtn.setAttribute('aria-pressed', liked);
+  } catch(e) {
+    // fallback on error
+    panel.querySelector('.lb-like .count').textContent = '0';
+    panel.querySelector('.lb-comments-btn .count').textContent = '0';
+  }
+}
+
+function bindLbPanel(photoId){
+  const api = (window.getApiBase ? window.getApiBase() : "") || "";
+  const panel = document.getElementById('lbPanel');
+  const likeBtn = panel.querySelector('.lb-like');
+  const commentsBtn = panel.querySelector('.lb-comments-btn');
+  const input = panel.querySelector('.lb-input');
+  const form  = panel.querySelector('#lbComposer');
+
+  // Store current photo ID on panel to avoid duplicate bindings
+  if (panel._currentPhotoId === photoId) return;
+  panel._currentPhotoId = photoId;
+
+  // like toggle - replace existing handler
+  likeBtn.onclick = async ()=>{
+    if (likeBtn._busy) return;
+    likeBtn._busy = true;
+
+    let liked = likeBtn.getAttribute('aria-pressed') === 'true';
+    liked = !liked;
+    likeBtn.setAttribute('aria-pressed', liked);
+    localStorage.setItem(likeKey('photo', photoId), liked ? '1' : '0');
+
+    try{
+      const res = await fetch(`${api}/api/photo/${photoId}/react`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ emoji:'♥', action: liked ? 'add' : 'remove' })
+      });
+      const out = await res.json();
+      const cntEl = likeBtn.querySelector('.count');
+      if (typeof out.count === 'number') cntEl.textContent = out.count;
+    }finally{
+      likeBtn._busy = false;
+    }
+  };
+
+  // post comment - replace existing handler
+  form.onsubmit = async (e)=>{
+    e.preventDefault();
+    const text = input.value.trim(); if(!text) return;
+    const list = document.getElementById('lbComments');
+    const temp = { author:'You', text, timestamp:new Date().toISOString() };
+    list.appendChild(renderLbComment(temp));
+    input.value = '';
+
+    try{
+      const res = await fetch(`${api}/api/photo/${photoId}/comment`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ text })
+      });
+      const out = await res.json();
+      // bump count
+      const cBtn = panel.querySelector('.lb-comments-btn .count');
+      cBtn.textContent = (+cBtn.textContent || 0) + 1;
+    }catch{}
+  };
+
+  // comments toggle - only bind once
+  if (!commentsBtn._bound) {
+    commentsBtn._bound = true;
+    commentsBtn.onclick = () => {
+      const list = document.getElementById('lbComments');
+      const isHidden = list.style.display === 'none';
+      list.style.display = isHidden ? 'block' : 'none';
+      form.style.display = isHidden ? 'block' : 'none';
+    };
+  }
+
+  loadPhotoInteractions(photoId, panel);
+}
+
 // --- Lightweight lightbox with per-photo interactions ---
 window.openPhotoLightbox = (photos, startIndex=0) => {
   let i = startIndex;
+
+  // Store reference for close function
+  if (window.lbRoot) {
+    window.lbRoot = null;
+  }
 
   // build once
   let el = document.querySelector(".lb-portal");
   if (!el) {
     el = document.createElement("div");
-    el.className = "lb-portal";
+    el.className = "lb-portal lightbox-root";
     el.innerHTML = `
-      <div class="lb-backdrop"></div>
-      <div class="lb-frame" role="dialog" aria-modal="true">
-        <button class="lb-close" aria-label="Close">✕</button>
+      <div class="lb-backdrop lightbox-backdrop" data-lb-backdrop></div>
+      <div class="lb-frame lightbox-shell" role="dialog" aria-modal="true">
+        <button class="lb-close" data-lb-close aria-label="Close (Esc)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 6l12 12M18 6l-12 12"/>
+          </svg>
+        </button>
         <img class="lb-img" alt="">
-        <button class="lb-nav lb-prev" aria-label="Prev">‹</button>
-        <button class="lb-nav lb-next" aria-label="Next">›</button>
+        <button class="lb-nav lb-prev lightbox-prev" aria-label="Prev">‹</button>
+        <button class="lb-nav lb-next lightbox-next" aria-label="Next">›</button>
 
-        <div class="lb-rail">
-          <button class="lb-like"><span>♥</span> <b class="lb-like-count">0</b></button>
-          <div class="lb-comments">
-            <div class="lb-comments-list"></div>
-            <div class="lb-compose">
-              <input class="lb-input" placeholder="Comment…" />
-              <button class="lb-post">Post</button>
-            </div>
+        <div class="lb-panel lightbox-side" id="lbPanel">
+          <div class="lb-toolbar">
+            <button class="lb-chip lb-like" aria-pressed="false">
+              <span class="icon">♥</span>
+              <span class="count">0</span>
+            </button>
+            <button class="lb-chip lb-comments-btn">
+              <span class="icon">💬</span>
+              <span class="count">0</span>
+            </button>
+          </div>
+
+          <div class="lb-comments" id="lbComments"></div>
+
+          <form class="lb-composer" id="lbComposer" autocomplete="off">
+            <input class="lb-input" name="text" placeholder="Add a comment…" maxlength="500" />
+            <button class="lb-send" type="submit">Post</button>
+          </form>
+          
+          <div class="lb-actions" style="margin-top: 12px;">
+            <button type="button" class="lb-action-btn lb-show-map">🗺️ Show on map</button>
           </div>
         </div>
       </div>
     `;
     document.body.appendChild(el);
+    
+    // Store reference for close function
+    window.lbRoot = el;
 
-    el.querySelector(".lb-backdrop").onclick =
-    el.querySelector(".lb-close").onclick = () => el.classList.remove("on");
+    // lock page scroll while lightbox is open
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
 
+    // close handlers
+    el.querySelector('[data-lb-close]').addEventListener('click', window.closeLightbox || (() => el.classList.remove("on")));
+    el.querySelector('[data-lb-backdrop]').addEventListener('click', (e)=>{
+      // click on the dark backdrop (not inside the shell) closes
+      if (e.target === e.currentTarget) {
+        if (window.closeLightbox) window.closeLightbox();
+        else el.classList.remove("on");
+      }
+    });
+    
+    // Navigation handlers
     el.querySelector(".lb-prev").onclick = () => show(i-1);
     el.querySelector(".lb-next").onclick = () => show(i+1);
-    document.addEventListener("keydown", (e)=>{
+    
+    // Map action button
+    const showOnMapBtn = el.querySelector('.lb-show-map');
+    
+    function syncActionsForCurrentPhoto(){
+      const p = photos[i] || {};
+      const hasCoords = Number.isFinite(p.lat) && Number.isFinite(p.lon);
+      showOnMapBtn.disabled = !hasCoords;
+      showOnMapBtn.title = hasCoords ? 'Open map at this photo' : 'No GPS for this photo';
+    }
+    
+    showOnMapBtn.addEventListener('click', ()=>{
+      const p = photos[i];
+      if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
+      
+      // Close the lightbox first (clean UI)
+      if (window.closeLightbox) window.closeLightbox();
+      else el.classList.remove("on");
+      
+      // Jump right to the location
+      if (window.openMapOverlayAt) {
+        window.openMapOverlayAt(p.lat, p.lon, p.caption || '');
+        
+        // When overlay closes, pan page map (if present)
+        const latlng = [p.lat, p.lon];
+        const onClose = ()=>{ 
+          if (window.topMap?.panTo) window.topMap.panTo(latlng); 
+          document.removeEventListener('map:closed', onClose); 
+        };
+        document.addEventListener('map:closed', onClose);
+      }
+    });
+    
+    // Keyboard handler with escape
+    window.lbEscHandler = (e)=>{
       if (!el.classList.contains("on")) return;
-      if (e.key==="Escape") el.classList.remove("on");
+      if (e.key==="Escape") {
+        if (window.closeLightbox) window.closeLightbox();
+        else el.classList.remove("on");
+      }
       if (e.key==="ArrowLeft") show(i-1);
       if (e.key==="ArrowRight") show(i+1);
-    });
+    };
+    document.addEventListener("keydown", window.lbEscHandler);
   }
 
   const img = el.querySelector(".lb-img");
-  const likeBtn = el.querySelector(".lb-like");
-  const likeCount = el.querySelector(".lb-like-count");
-  const list = el.querySelector(".lb-comments-list");
-  const input = el.querySelector(".lb-input");
-  const post = el.querySelector(".lb-post");
-
-  async function hydrate(photo) {
-    const data = await fetchPhotoInteractions(photo.id);
-    const count = Object.values(data.reactions || {}).reduce((a,b)=>a+b,0);
-    likeCount.textContent = count;
-
-    const key = `liked:photo:${photo.id}`;
-    let liked = localStorage.getItem(key) === "1";
-    paintLiked();
-
-    likeBtn.onclick = async () => {
-      const r = await reactPhoto(photo.id, liked);
-      if (r?.ok) {
-        liked = !liked; localStorage.setItem(key, liked ? "1" : "");
-        likeCount.textContent = r.count ?? likeCount.textContent;
-        paintLiked();
-      }
-    };
-    function paintLiked(){ likeBtn.classList.toggle("liked", liked); }
-
-    list.innerHTML = (data.comments || []).slice(-30).map(c=>`
-      <div class="comment-item">
-        <div class="comment-author">${c.author || "Anon"}</div>
-        <div class="comment-text">${(c.text||"").replace(/</g,"&lt;")}</div>
-        <div class="comment-time">${new Date(c.timestamp||Date.now()).toLocaleString()}</div>
-      </div>
-    `).join("");
-
-    post.onclick = async () => {
-      const t = input.value.trim(); if (!t) return;
-      const c = await commentPhoto(photo.id, t);
-      if (c) {
-        list.insertAdjacentHTML("beforeend", `
-          <div class="comment-item">
-            <div class="comment-author">${c.author}</div>
-            <div class="comment-text">${c.text.replace(/</g,"&lt;")}</div>
-            <div class="comment-time">${new Date(c.timestamp).toLocaleString()}</div>
-          </div>
-        `);
-        input.value = "";
-      }
-    };
-  }
 
   function show(next) {
     i = (next + photos.length) % photos.length;
     const p = photos[i];
     img.src = p.url;
-    hydrate(p);
     el.querySelector(".lb-prev").disabled = photos.length < 2;
     el.querySelector(".lb-next").disabled = photos.length < 2;
+    
+    // Bind panel for current photo
+    bindLbPanel(p.id);
+    
+    // Sync map button for current photo
+    syncActionsForCurrentPhoto();
+    
+    // Call slide change callback if available
+    if (window.onLightboxSlideChange) {
+      window.onLightboxSlideChange(i);
+    }
   }
 
   show(i);
   el.classList.add("on");
+  
+  // Store reference for close function when opened
+  window.lbRoot = el;
+  
+  // lock page scroll while lightbox is open
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
 };

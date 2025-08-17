@@ -5,6 +5,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import simpleGit from 'simple-git';
 import dotenv from 'dotenv';
+import Sharp from 'sharp';
 
 dotenv.config();
 
@@ -14,6 +15,12 @@ const REPO_DIR = process.env.REPO_DIR || process.cwd();
 const DAYS_DIR = path.join(REPO_DIR, 'public', 'days');
 const INTERACTIONS_DIR = path.join(REPO_DIR, 'public', 'interactions');
 const SHOULD_PUSH = String(process.env.GIT_PUSH).toLowerCase() === 'true';
+
+// Immich integration constants
+const IMMICH_URL = process.env.IMMICH_URL || '';
+const IMMICH_API_KEYS = (process.env.IMMICH_API_KEYS || '')
+  .split(',').map(s => s.trim()).filter(Boolean);
+const IMG_DIR = path.join(REPO_DIR, 'public', 'img');
 
 const git = simpleGit(REPO_DIR);
 
@@ -26,6 +33,63 @@ app.register(staticFiles, {
   root: path.join(REPO_DIR, 'public'),
   prefix: '/', // optional: default '/'
 });
+
+/* ------------ Immich Integration Helpers ------------ */
+
+async function immichFetch(pathname, { method='GET', headers={}, signal } = {}) {
+  if (!IMMICH_URL || !IMMICH_API_KEYS.length) {
+    throw new Error('IMMICH_URL or IMMICH_API_KEYS not configured');
+  }
+  let lastErr;
+  for (const key of IMMICH_API_KEYS) {
+    try {
+      const res = await fetch(`${IMMICH_URL}${pathname}`, {
+        method,
+        headers: { 'x-api-key': key, ...headers },
+        signal
+      });
+      if (res.ok) return res;
+      lastErr = new Error(`Immich ${method} ${pathname} -> ${res.status}`);
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('Immich request failed');
+}
+
+async function immichJson(pathname, opts) {
+  const res = await immichFetch(pathname, opts);
+  return res.json();
+}
+
+function pick(obj, ...keys){ const o={}; for(const k of keys){ if(obj && obj[k]!==undefined) o[k]=obj[k]; } return o; }
+
+function safeExif(asset) {
+  const ex = asset.exifInfo || asset.exif || {};
+  const lat = ex.latitude ?? ex.lat ?? ex.GPSLatitude ?? asset.latitude ?? asset.lat;
+  const lon = ex.longitude ?? ex.lng ?? ex.GPSLongitude ?? asset.longitude ?? asset.lon;
+  const taken = ex.dateTimeOriginal ?? ex.DateTimeOriginal ?? asset.fileCreatedAt ?? asset.createdAt;
+  return { lat: lat != null ? Number(lat) : null, lon: lon != null ? Number(lon) : null, taken_at: taken || new Date().toISOString() };
+}
+
+async function ensureImgSizes(buf, baseOutPathNoExt) {
+  const large = `${baseOutPathNoExt}_1600.jpg`;
+  const small = `${baseOutPathNoExt}_400.jpg`;
+  await fs.mkdir(path.dirname(large), { recursive: true });
+  await Sharp(buf).rotate().resize({ width: 1600, withoutEnlargement: true })
+    .jpeg({ quality: 82, mozjpeg: true }).toFile(large);
+  await Sharp(buf).rotate().resize({ width: 400, withoutEnlargement: true })
+    .jpeg({ quality: 80, mozjpeg: true }).toFile(small);
+  return { large, small };
+}
+
+async function updateDaysIndex({ slug, date, title, coverThumbRel }) {
+  const idxPath = path.join(DAYS_DIR, 'index.json');
+  const list = await readJson(idxPath, []);
+  const filtered = list.filter((d) => d.slug !== slug);
+  filtered.push({ slug, date, title, cover: coverThumbRel });
+  filtered.sort((a, b) => a.date.localeCompare(b.date));
+  await writeJson(idxPath, filtered);
+  await git.add([idxPath]);
+}
 
 /* ------------ Small utils ------------ */
 
@@ -442,6 +506,127 @@ app.delete('/api/stack/:stackId/comment/:commentId', async (req, reply) => {
   } catch (err) {
     req.log.error(err);
     if (!reply.sent) reply.code(500).send({ error: 'delete failed' });
+  }
+});
+
+/* ------------ Immich Import ------------ */
+
+// POST /api/import/immich-day
+app.post('/api/import/immich-day', async (req, reply) => {
+  try {
+    const { date, albumTitle, albumId, radiusMeters = 500 } = req.body || {};
+    if (!date) return reply.code(400).send({ error: 'date required (YYYY-MM-DD)' });
+    if (!albumTitle && !albumId) return reply.code(400).send({ error: 'albumTitle or albumId required' });
+    if (!IMMICH_URL || !IMMICH_API_KEYS.length) return reply.code(400).send({ error: 'Immich not configured on server' });
+
+    // 1) Find album
+    let album;
+    if (albumId) {
+      album = await immichJson(`/api/albums/${albumId}`);
+    } else {
+      // try to find by exact or fuzzy title
+      const albums = await immichJson('/api/albums');
+      album = albums.find(a =>
+        a.albumName === albumTitle ||
+        a.title === albumTitle ||
+        a.name === albumTitle ||
+        (a.albumName || a.title || a.name || '').includes(albumTitle)
+      );
+      if (!album) return reply.code(404).send({ error: 'Album not found in Immich' });
+      // fetch full album (some installs need this to include assets)
+      try { album = await immichJson(`/api/albums/${album.id}`); } catch {}
+    }
+
+    // 2) Get assets in album (varies by Immich version)
+    let assets = [];
+    if (Array.isArray(album.assets) && album.assets.length) {
+      assets = album.assets;
+    } else if (Array.isArray(album.assetIds) && album.assetIds.length) {
+      // fetch each asset detail
+      assets = await Promise.all(album.assetIds.map(async (id) => immichJson(`/api/assets/${id}`)));
+    } else {
+      // fallback (older API): try /api/albums/:id/assets
+      try {
+        const res = await immichJson(`/api/albums/${album.id}/assets`);
+        if (Array.isArray(res)) assets = res;
+      } catch {}
+    }
+
+    if (!assets.length) return reply.code(404).send({ error: 'Album has no assets' });
+
+    // 3) Download originals -> generate sizes -> build photos[]
+    const dayDir = path.join(IMG_DIR, date);
+    const photos = [];
+    for (const a of assets) {
+      const assetId = a.id || a.assetId;
+      if (!assetId) continue;
+
+      const origRes = await immichFetch(`/api/assets/${assetId}/original`);
+      const buf = Buffer.from(await origRes.arrayBuffer());
+
+      const baseNoExt = path.join(dayDir, assetId);
+      const { large, small } = await ensureImgSizes(buf, baseNoExt);
+
+      const relLarge = `img/${date}/${path.basename(large)}`;
+      const relSmall = `img/${date}/${path.basename(small)}`;
+
+      const { lat, lon, taken_at } = safeExif(a);
+      photos.push({
+        id: assetId,
+        url: relLarge,
+        thumb: relSmall,
+        taken_at,
+        lat, lon,
+        caption: a.description || a.exifInfo?.imageDescription || ''
+      });
+    }
+
+    // 4) Sort photos by time
+    photos.sort((x, y) => (+new Date(x.taken_at)) - (+new Date(y.taken_at)));
+
+    // 5) Merge / write day JSON
+    const slug = date;
+    const djPath = dayFile(slug);
+    const existing = await readJson(djPath, null);
+
+    const day = {
+      date: slug,
+      segment: 'day',
+      slug,
+      title: existing?.title || album.title || album.albumName || `Day — ${slug}`,
+      stats: existing?.stats || {},
+      polyline: existing?.polyline || { type: 'LineString', coordinates: [] },
+      points: existing?.points || [],
+      photos,
+      cover: existing?.cover || photos[0]?.id
+    };
+
+    await writeJson(djPath, day);
+
+    // 6) Update index.json (cover -> 400px version of cover id)
+    const coverId = day.cover || photos[0]?.id;
+    const coverThumbRel = coverId ? `img/${date}/${coverId}_400.jpg` : (photos[0]?.thumb || '');
+    await updateDaysIndex({ slug, date, title: day.title, coverThumbRel });
+
+    // 7) Git add/commit/push
+    const filesToAdd = [
+      djPath,
+      path.join(DAYS_DIR, 'index.json'),
+      ...photos.flatMap(p => [
+        path.join(REPO_DIR, 'public', p.url),
+        path.join(REPO_DIR, 'public', p.thumb)
+      ])
+    ];
+    await git.add(filesToAdd);
+    await git.commit(`Publish day ${slug} from Immich album ${album.title || album.albumName || albumId || albumTitle}`);
+    if (process.env.GIT_PUSH !== 'false') {
+      try { await git.push(); } catch (e) { req.log.warn('git push failed (skipped): ' + e.message); }
+    }
+
+    reply.send(day);
+  } catch (err) {
+    req.log.error(err);
+    reply.code(500).send({ error: err.message || 'import failed' });
   }
 });
 

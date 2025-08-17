@@ -6,6 +6,13 @@ let photoStacks = [];
 let activeStackId = null;
 let scrollLocked = false;
 
+// Full-screen map overlay variables
+let mapOverlay, overlayMap, overlayMarker;
+
+// Lightbox variables
+let lbRoot = null;
+let lbEscHandler = null;
+
 const currentLocation = { lat: 35.6762, lng: 139.6503, name: "Tokyo, Japan" };
 
 // Expose getApiBase to global window for lightbox script
@@ -15,6 +22,9 @@ window.getApiBase = getApiBase;
 window.fetchPhotoInteractions = fetchPhotoInteractions;
 window.reactPhoto = reactPhoto;
 window.commentPhoto = commentPhoto;
+
+// Expose lightbox functions
+window.closeLightbox = closeLightbox;
 
 // ---- interactions helpers ----
 const API = () => (getApiBase() || ""); // allow same-origin
@@ -69,6 +79,7 @@ async function init(){
   await loadStacks();
   initMaps();
   renderFeed();
+  setupStickyMiniMap();
   setupScrollSync();
 
   const initial = urlParam("stack") || (photoStacks[0]?.id);
@@ -267,58 +278,55 @@ function renderFeed(){
       <div class="stack-photo-area" data-stack-id="${stack.id}">
         <div class="stack-media-container">
           <img class="stack-main-photo" src="${stack.photos[0].url}" alt="" draggable="false">
-          ${
-            stack.photos.length>1 ? `
+          ${stack.photos.length>1 ? `
               <button class="stack-photo-nav prev" data-dir="-1" aria-label="Prev">‹</button>
-              <button class="stack-photo-nav next" data-dir="1" aria-label="Next">›</button>
-              <div class="thumb-rail" data-stack-id="${stack.id}">
-                <button class="rail-nav rail-left" aria-label="Scroll thumbnails left">‹</button>
-                <div class="rail-track" role="listbox" aria-label="Stack thumbnails">
-                  ${stack.photos.map((p, idx) => `
-                    <div class="rail-thumb ${idx===0?'active':''}" data-index="${idx}" role="option" aria-selected="${idx===0}">
-                      <img src="${p.thumb || p.url}" alt="">
-                    </div>
-                  `).join('')}
-                </div>
-                <button class="rail-nav rail-right" aria-label="Scroll thumbnails right">›</button>
-                <button class="rail-expand" aria-expanded="false" title="Expand thumbnails">⋯</button>
-              </div>` : ""
-          }
+              <button class="stack-photo-nav next" data-dir="1" aria-label="Next">›</button>` : ``}
         </div>
+        ${stack.photos.length>1 ? `
+          <div class="stack-thumbnail-drawer" data-stack-id="${stack.id}">
+            <button class="thumb-scroll left" aria-label="Scroll thumbnails left">‹</button>
+            <div class="drawer-thumbnails">
+              ${stack.photos.map((p,idx)=>`
+                <img class="drawer-thumbnail ${idx===0?'active':''}"
+                     src="${p.thumb || p.url}" data-index="${idx}" draggable="false" alt="">
+              `).join('')}
+            </div>
+            <button class="thumb-scroll right" aria-label="Scroll thumbnails right">›</button>
+          </div>` : ``}
       </div>
 
-      <div class="stack-actions">
-        <button class="stack-action-btn like-btn" data-action="like" aria-pressed="false">
-          <span class="heart-icon">♥</span> <span class="like-count">0</span>
-        </button>
-        <button class="stack-action-btn comment-btn" data-action="comment">
-          💬 <span class="comment-count">0</span>
-        </button>
+      <!-- PERMANENT inline interactions -->
+      <section class="stack-interactions" data-stack-id="${stack.id}">
+        <div class="stack-reaction-pills">
+          <button class="reaction-pill like-pill" type="button" aria-pressed="false">
+            <span>♥</span><span class="count">0</span>
+          </button>
+          <button class="reaction-pill comment-pill" type="button">
+            <span>💬</span><span class="count">0</span>
+          </button>
       </div>
 
-      <div class="stack-comments" hidden>
-        <div class="comments-list" data-role="list"></div>
-        <div class="comment-composer">
-          <textarea class="comment-input" rows="1" placeholder="Leave a comment…"></textarea>
-          <button class="comment-submit">Post</button>
-        </div>
-      </div>
+        <ul class="comment-list"></ul>
+
+        <form class="comment-form" autocomplete="off">
+          <input name="text" placeholder="Leave a comment…" />
+          <button type="submit">Post</button>
+        </form>
+      </section>
     `;
 
     // events
     const main = card.querySelector(".stack-main-photo");
-    const rail = card.querySelector(".thumb-rail");
-    const expandBtn = card.querySelector(".rail-expand");
+    const drawer = card.querySelector(".stack-thumbnail-drawer");
     
     // Keep current index for navigation
     let current = 0;
 
     function updateMain() {
       main.src = stack.photos[current].url;
-      if (rail) {
-        rail.querySelectorAll(".rail-thumb").forEach((t, i) => {
+      if (drawer) {
+        drawer.querySelectorAll(".drawer-thumbnail").forEach((t, i) => {
           t.classList.toggle("active", i === current);
-          t.setAttribute("aria-selected", i === current);
         });
       }
     }
@@ -338,129 +346,291 @@ function renderFeed(){
       });
     });
 
-    if (rail) {
-      const track = rail.querySelector(".rail-track");
-      const left  = rail.querySelector(".rail-left");
-      const right = rail.querySelector(".rail-right");
-      const expandBtn = rail.querySelector(".rail-expand");
+    if (drawer) {
+      const thumbWrap = drawer.querySelector('.drawer-thumbnails');
+      const leftBtn = drawer.querySelector('.thumb-scroll.left');
+      const rightBtn = drawer.querySelector('.thumb-scroll.right');
 
-      // click a thumbnail -> swap main photo
-      track.querySelectorAll(".rail-thumb").forEach(el => {
-        el.addEventListener("click", () => {
-          const idx = +el.dataset.index;
+      // click a thumb -> change main photo
+      drawer.querySelectorAll('.drawer-thumbnail').forEach(img=>{
+        img.onclick = ()=>{
+          const idx = +img.dataset.index;
           main.src = stack.photos[idx].url;
           current = idx; // Update current index
-          track.querySelectorAll(".rail-thumb").forEach(t => {
-            t.classList.toggle("active", t === el);
-            t.setAttribute("aria-selected", t === el ? "true" : "false");
-          });
-        });
+          drawer.querySelectorAll('.drawer-thumbnail').forEach(t=>t.classList.toggle('active', t===img));
+        };
       });
 
-      // rail scrolling
-      const scrollBy = () => Math.min(track.clientWidth * 0.9, 320);
-      left.onclick  = () => track.scrollBy({ left: -scrollBy(), behavior: 'smooth' });
-      right.onclick = () => track.scrollBy({ left:  scrollBy(), behavior: 'smooth' });
+      // arrow buttons scroll the row
+      leftBtn.onclick  = ()=> thumbWrap.scrollBy({ left: -thumbWrap.clientWidth * 0.9, behavior: 'smooth' });
+      rightBtn.onclick = ()=> thumbWrap.scrollBy({ left:  thumbWrap.clientWidth * 0.9, behavior: 'smooth' });
 
-      // expand / collapse
-      expandBtn.onclick = () => {
-        const expanded = rail.classList.toggle("expanded");
-        expandBtn.setAttribute("aria-expanded", expanded);
-      };
+      // wheel to scroll horizontally (nice on trackpads)
+      thumbWrap.addEventListener('wheel', (e)=>{
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+          e.preventDefault();
+          thumbWrap.scrollBy({ left: e.deltaY, behavior: 'auto' });
+        }
+      }, { passive:false });
 
-      // swipe/drag-to-scroll
-      makeDragScrollable(track);
-
-      // Optional keyboard navigation when rail has focus
-      track.addEventListener('keydown', (e) => {
-        const thumbs = [...track.querySelectorAll('.rail-thumb')];
-        const activeIdx = thumbs.findIndex(t => t.classList.contains('active'));
-        if (e.key === 'ArrowRight' && activeIdx < thumbs.length - 1) thumbs[activeIdx + 1].click();
-        if (e.key === 'ArrowLeft'  && activeIdx > 0)                   thumbs[activeIdx - 1].click();
-      });
+      // show arrows only if overflow
+      function updateOverflow(){
+        const has = thumbWrap.scrollWidth > thumbWrap.clientWidth + 1;
+        drawer.classList.toggle('has-overflow', has);
+      }
+      new ResizeObserver(updateOverflow).observe(thumbWrap);
+      setTimeout(updateOverflow, 0);
     }
 
     // card bg click -> center map
     card.addEventListener("click", (e)=>{
-      if (e.target.closest(".stack-media-container") || e.target.closest(".stack-actions") || e.target.closest(".thumb-rail")) return;
+      if (e.target.closest(".stack-media-container") || e.target.closest(".stack-interactions") || e.target.closest(".stack-thumbnail-drawer")) return;
       setActive(stack.id); replaceUrlParam("stack", stack.id); panMiniMapTo(stack.id);
     });
 
     host.appendChild(card);
 
-    // ----- hydrate interactions (likes + comments)
-    (async () => {
-      const data = await fetchStackInteractions(stack);
-      const likeBtn = card.querySelector(".like-btn");
-      const likeCountEl = card.querySelector(".like-count");
-      const commentBtn = card.querySelector(".comment-btn");
-      const commentCountEl = card.querySelector(".comment-count");
-      const commentsWrap = card.querySelector(".stack-comments");
-      const list = commentsWrap.querySelector('[data-role="list"]');
-      const input = commentsWrap.querySelector(".comment-input");
-      const postBtn = commentsWrap.querySelector(".comment-submit");
-
-      // counts
-      const totalReactions = Object.values(data.rollup?.reactions || {}).reduce((a,b)=>a+b,0);
-      likeCountEl.textContent = totalReactions;
-      commentCountEl.textContent = data.rollup?.totalCommentCount || (data.rollup?.comments?.length || 0);
-
-      // render comments (stack roll-up list)
-      list.innerHTML = (data.rollup?.comments || [])
-        .slice(-15) // show recent 15
-        .map(c => `
-          <div class="comment-item">
-            <div class="comment-author">${c.author || "Anon"}</div>
-            <div class="comment-text">${(c.text || "").replace(/</g,"&lt;")}</div>
-            <div class="comment-time">${new Date(c.timestamp || Date.now()).toLocaleString()}</div>
-          </div>
-        `).join("");
-
-      // reveal comments when clicking 💬 or when there are any
-      const openComments = () => {
-        commentsWrap.hidden = false;
-        input.focus();
-      };
-      if ((data.rollup?.comments || []).length) commentsWrap.hidden = false;
-      commentBtn.addEventListener("click", openComments);
-
-      // like toggle (remember local state)
-      const key = `liked:stack:${stack.id}`;
-      let liked = localStorage.getItem(key) === "1";
-      const paintLiked = () => likeBtn.classList.toggle("liked", liked);
-      paintLiked();
-
-      likeBtn.addEventListener("click", async () => {
-        const r = await reactStack(stack.id, liked);
-        if (r?.ok) {
-          liked = !liked; localStorage.setItem(key, liked ? "1" : "");
-          likeCountEl.textContent = r.count ?? likeCountEl.textContent;
-          paintLiked();
-        }
-      });
-
-      // post comment
-      postBtn.addEventListener("click", async () => {
-        const text = input.value.trim();
-        if (!text) return;
-        const c = await commentStack(stack.id, text);
-        if (c) {
-          list.insertAdjacentHTML("beforeend", `
-            <div class="comment-item">
-              <div class="comment-author">${c.author}</div>
-              <div class="comment-text">${c.text.replace(/</g,"&lt;")}</div>
-              <div class="comment-time">${new Date(c.timestamp).toLocaleString()}</div>
-            </div>
-          `);
-          input.value = "";
-          commentCountEl.textContent = (+commentCountEl.textContent || 0) + 1;
-        }
-      });
-    })();
+    // Bind interactions functionality using new helpers
+    const interactionsBlock = card.querySelector('.stack-interactions');
+    bindStackInteractions(stack.id, interactionsBlock);
+    loadStackInteractions(stack.id, interactionsBlock);
   });
 }
 
+// ----- Stack Interactions Helpers -----
+
+// Load and render stack interactions in new format
+async function loadStackInteractions(stackId, block){
+  try {
+    // GET interactions
+    const res = await fetch(`${getApiBase()}/api/stack/${stackId}/interactions`);
+    const data = await res.json();
+    const ul = block.querySelector('.comment-list');
+    const likeCountEl = block.querySelector('.like-pill .count');
+    const commentCountEl = block.querySelector('.comment-pill .count');
+    
+    // Update counts
+    const likeCount = Object.values(data.reactions || {}).reduce((a,b)=>a+b,0);
+    likeCountEl.textContent = likeCount;
+    commentCountEl.textContent = (data.comments?.length || 0);
+
+    // Render comments
+    ul.innerHTML = '';
+    (data.comments || []).forEach(c=>{
+      ul.appendChild(renderStackComment(c));
+    });
+  } catch(e) {
+    // fallback on error
+    block.querySelector('.like-pill .count').textContent = '0';
+    block.querySelector('.comment-pill .count').textContent = '0';
+  }
+}
+
+function renderStackComment(c){
+  const li = document.createElement('li');
+  li.className = 'comment';
+  li.innerHTML = `
+    <div class="meta">${escapeHtml(c.author || 'Anonymous')} • ${new Date(c.timestamp || c.edited || Date.now()).toLocaleString([], {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short'})}</div>
+    <div class="text">${escapeHtml(c.text || '')}</div>
+  `;
+  return li;
+}
+
+// Bind events for stack interactions block
+function bindStackInteractions(stackId, block){
+  const likePill = block.querySelector('.like-pill');
+  const commentPill = block.querySelector('.comment-pill');
+  const form = block.querySelector('.comment-form');
+  const input = form.querySelector('input[name="text"]');
+
+  // Use existing like chip logic
+  initLikeChip(block, 'stack', stackId);
+
+  // Comment form submission
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const text = input.value.trim(); 
+    if (!text) return;
+    
+    const ul = block.querySelector('.comment-list');
+    const temp = { author:'You', text, timestamp:new Date().toISOString() };
+    ul.appendChild(renderStackComment(temp));
+    input.value = '';
+
+    try{
+      const res = await fetch(`${getApiBase()}/api/stack/${stackId}/comment`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ text })
+      });
+      const out = await res.json();
+      // bump count
+      const cnt = block.querySelector('.comment-pill .count');
+      cnt.textContent = (+cnt.textContent || 0) + 1;
+    }catch{
+      // rollback UI on error
+      ul.lastElementChild.remove();
+    }
+  });
+}
+
+// ----- Comments Block Helpers (Legacy) -----
+
+// Render comments into a block
+async function loadAndRenderComments(stackId, block){
+  try {
+    // GET interactions (your backend already returns {reactions, comments})
+    const res = await fetch(`${getApiBase()}/api/stack/${stackId}/interactions`);
+    const data = res.ok ? await res.json() : {reactions:{}, comments:[]};
+    const ul = block.querySelector('.comment-list');
+    const countEl = block.querySelector('.comment-count');
+    countEl.textContent = (data.comments?.length || 0);
+
+    ul.innerHTML = '';
+    (data.comments || []).forEach(c=>{
+      ul.appendChild(renderCommentItem(c));
+    });
+    if ((data.comments?.length || 0) > 0) ul.hidden = false;
+
+    // like count (sum stack reactions)
+    const likeCount = Object.values(data.reactions || {}).reduce((a,b)=>a+b,0);
+    block.querySelector('.like-count').textContent = likeCount;
+  } catch(e) {
+    // fallback on error
+    block.querySelector('.like-count').textContent = '0';
+    block.querySelector('.comment-count').textContent = '0';
+  }
+}
+
+function renderCommentItem(c){
+  const li = document.createElement('li');
+  li.className = 'comment-item';
+  const initials = (c.author || 'A').trim()[0]?.toUpperCase() || 'A';
+  li.innerHTML = `
+    <div class="comment-avatar">${initials}</div>
+    <div class="comment-bubble">
+      <div class="comment-head">
+        <span class="comment-author">${escapeHtml(c.author || 'Anonymous')}</span>
+        <span class="comment-time">${new Date(c.timestamp || c.edited || Date.now()).toLocaleString([], {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short'})}</span>
+      </div>
+      <div class="comment-text">${escapeHtml(c.text || '')}</div>
+    </div>`;
+  return li;
+}
+
+function escapeHtml(s){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+function likeKey(kind, id){ return `liked:${kind}:${id}`; }
+
+function initLikeChip(block, kind, id){
+  const api = getApiBase();
+  const btn = block.querySelector('.chip-like') || block.querySelector('.like-pill');
+  const countEl = block.querySelector('.like-count') || block.querySelector('.like-pill .count');
+  if(!btn) return;
+
+  // restore local state
+  let liked = localStorage.getItem(likeKey(kind, id)) === '1';
+  const likedClass = btn.classList.contains('like-pill') ? 'liked' : 'active';
+  btn.classList.toggle(likedClass, liked);
+  btn.setAttribute('aria-pressed', liked);
+
+  btn.addEventListener('click', async ()=>{
+    if (btn._busy) return;
+    btn._busy = true;
+
+    liked = !liked;
+    btn.classList.toggle(likedClass, liked);
+    btn.setAttribute('aria-pressed', liked);
+    localStorage.setItem(likeKey(kind, id), liked ? '1' : '0');
+
+    try{
+      const res = await fetch(`${api}/api/${kind}/${id}/react`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ emoji:'♥', action: liked ? 'add' : 'remove' })
+      });
+      const out = await res.json();
+      if (typeof out.count === 'number') countEl.textContent = out.count;
+    }catch(e){
+      // rollback UI if request fails
+      liked = !liked;
+      btn.classList.toggle('active', liked);
+      btn.setAttribute('aria-pressed', liked);
+      localStorage.setItem(likeKey(kind, id), liked ? '1' : '0');
+    }finally{
+      btn._busy = false;
+    }
+  });
+}
+
+// Bind events for one block
+function bindCommentsBlock(stackId, block){
+  // chip toggles visibility
+  block.querySelector('.chip-cmt')?.addEventListener('click', ()=>{
+    const ul = block.querySelector('.comment-list');
+    ul.hidden = !ul.hidden;
+  });
+
+  // composer
+  const form = block.querySelector('.comment-composer');
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const input = form.querySelector('.comment-input');
+    const text = input.value.trim(); if (!text) return;
+    // optimistic add
+    const temp = { id: 'temp-'+Date.now(), author: 'You', text, timestamp: new Date().toISOString() };
+    const ul = block.querySelector('.comment-list'); ul.hidden = false;
+    ul.appendChild(renderCommentItem(temp));
+    input.value = '';
+
+    try{
+      const res = await fetch(`${getApiBase()}/api/stack/${stackId}/comment`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ text })
+      });
+      const out = await res.json();
+      // replace the temp node with server one (optional: re-render)
+      ul.lastElementChild.replaceWith(renderCommentItem(out.comment || temp));
+      // bump counter
+      const cnt = block.querySelector('.comment-count');
+      cnt.textContent = (+cnt.textContent || 0) + 1;
+    }catch{
+      // rollback UI on error
+      ul.lastElementChild.remove();
+    }
+  });
+}
+
+
 // ---------- lightbox (new photo-focused viewer) ----------
+function closeLightbox(){
+  // Handle global lbRoot reference
+  if (window.lbRoot) {
+    window.lbRoot.remove();
+    window.lbRoot = null;
+  }
+  
+  // Handle local lbRoot reference
+  if (lbRoot) {
+    lbRoot.remove();
+    lbRoot = null;
+  }
+  
+  // Clean up event handlers
+  if (window.lbEscHandler) {
+    document.removeEventListener('keydown', window.lbEscHandler);
+    window.lbEscHandler = null;
+  }
+  if (lbEscHandler) {
+    document.removeEventListener('keydown', lbEscHandler);
+    lbEscHandler = null;
+  }
+  
+  // unlock page scroll
+  document.documentElement.style.overflow = '';
+  document.body.style.overflow = '';
+}
+
 function openLightboxForStack(stack, startIndex=0){
   // Convert stack photos to the format expected by the new lightbox
   const photos = stack.photos.map(photo => ({
@@ -553,3 +723,65 @@ function setupStickyMiniMap(){
     setTimeout(()=>miniMap.invalidateSize(), 250);
   };
 }
+
+// ---------- full-screen map overlay ----------
+let _mapOverlayEl = null;
+let _mapOverlayMap = null;
+
+function closeMapOverlay(){
+  if (_mapOverlayMap) { _mapOverlayMap.remove(); _mapOverlayMap = null; }
+  if (_mapOverlayEl)   { _mapOverlayEl.remove(); _mapOverlayEl = null; }
+  // unlock scroll if you lock it elsewhere
+  document.documentElement.style.overflow = '';
+  document.body.style.overflow = '';
+}
+
+function openMapOverlayAt(lat, lon, title=''){
+  // build overlay DOM
+  _mapOverlayEl = document.createElement('div');
+  _mapOverlayEl.className = 'map-overlay';
+  _mapOverlayEl.innerHTML = `
+    <div class="map-overlay__bar">
+      <div class="map-overlay__title">${title ? title : 'Photo location'}</div>
+      <button class="map-overlay__close" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div id="overlay-map" role="region" aria-label="Map"></div>
+  `;
+  document.body.appendChild(_mapOverlayEl);
+
+  // close interactions
+  _mapOverlayEl.querySelector('.map-overlay__close').onclick = closeMapOverlay;
+  document.addEventListener('keydown', function esc(e){ if(e.key==='Escape'){ closeMapOverlay(); document.removeEventListener('keydown', esc);} });
+
+  // (optional) lock page scroll
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+
+  // create Leaflet map
+  const center = [lat, lon];
+  _mapOverlayMap = L.map('overlay-map', { zoomControl: true });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution:'&copy; OSM contributors', maxZoom: 19
+  }).addTo(_mapOverlayMap);
+
+  L.marker(center).addTo(_mapOverlayMap).bindPopup(title || `${lat.toFixed(4)}, ${lon.toFixed(4)}`).openPopup();
+  _mapOverlayMap.setView(center, 14);
+}
+
+// expose if you call from other modules
+window.openMapOverlayAt = openMapOverlayAt;
+window.closeMapOverlay   = closeMapOverlay;
+
+// Patch close function to dispatch event for page map panning
+(function patchClose(){
+  const old = closeMapOverlay;
+  window.closeMapOverlay = function(){
+    old();
+    const evt = new Event('map:closed');
+    document.dispatchEvent(evt);
+  };
+})();
+
+

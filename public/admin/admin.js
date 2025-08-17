@@ -161,78 +161,28 @@ function renderTripsTab(panel) {
     const dateVal = /** @type {HTMLInputElement} */(document.getElementById('trip-date')).value;
     if (!dateVal) return alert('Choose date first');
 
-    const s = loadSettings();
-    if (!s.dawarichUrl || !s.immichUrl) {
-      return alert('Configure Dawarich/Immich endpoints in Settings first');
-    }
+    // Ask once for the curated Immich album title (preselected photos live there)
+    const defaultTitle = `Trip ${dateVal}`; // change this to your real naming pattern
+    const albumTitle = prompt('Immich album title to publish:', defaultTitle) || defaultTitle;
 
     try {
-      dayData = dayData || {
-        date: dateVal,
-        slug: dateVal,
-        segment: 'day',
-        title: `Day — ${dateVal}`,
-        stats: {},
-        polyline: { type: 'LineString', coordinates: [] },
-        points: [],
-        photos: [],
-      };
-
-      // Track (placeholder)
-      const trackUrl = `${s.dawarichUrl}/api/track?date=${dateVal}`;
-      const tRes = await fetch(trackUrl, { headers: { Authorization: `Bearer ${s.dawarichToken || ''}` } });
-      if (tRes.ok) {
-        const track = await tRes.json();
-        dayData.polyline = track.polyline || dayData.polyline;
-        dayData.points = track.points || dayData.points;
-      } else {
-        console.warn('Track fetch failed, using dummy');
-        dayData.polyline = { type: 'LineString', coordinates: [[14.42, 50.09], [14.43, 50.10], [14.44, 50.11]] };
-        dayData.points = [
-          { t: `${dateVal}T08:00:00Z`, lat: 50.09, lon: 14.42 },
-          { t: `${dateVal}T08:30:00Z`, lat: 50.10, lon: 14.43 },
-          { t: `${dateVal}T09:00:00Z`, lat: 50.11, lon: 14.44 },
-        ];
+      const res = await fetch(`${apiBase}/api/import/immich-day`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: dateVal, albumTitle, radiusMeters: 500 })
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(()=>({}));
+        throw new Error(e.error || `HTTP ${res.status}`);
       }
-
-      // Photos (placeholder)
-      dayData.photos = [];
-      if (Array.isArray(s.immichTokens) && s.immichTokens.length) {
-        for (const tok of s.immichTokens) {
-          const photosUrl = `${s.immichUrl}/api/album/Public-Trip/photos?date=${dateVal}`;
-          const pRes = await fetch(photosUrl, { headers: { 'x-api-key': tok } });
-          if (pRes.ok) {
-            const arr = await pRes.json();
-            if (Array.isArray(arr)) dayData.photos.push(...arr);
-          } else {
-            console.warn('Photo fetch failed for token', tok);
-          }
-        }
-      }
-
-      if (!dayData.photos.length) {
-        console.warn('No photos imported, using placeholder');
-        dayData.photos = [{
-          id: 'demo1',
-          url: 'https://picsum.photos/seed/demo1/1600/900',
-          thumb: 'https://picsum.photos/seed/demo1/400/225',
-          taken_at: `${dateVal}T08:30:00Z`,
-          lat: 50.10, lon: 14.43,
-          caption: 'Placeholder',
-        }];
-      }
-
-      dayData.date = dateVal;
-      dayData.slug = dateVal;
-      dayData.segment = 'day';
-      dayData.title = dayData.title || `Day — ${dateVal}`;
-
+      dayData = await res.json();  // server returns the final day JSON
       renderDay();
-      controls.querySelector('#save-day').disabled = false;
-      controls.querySelector('#preview-day').disabled = false;
+      document.getElementById('save-day').disabled = false; // you can still tweak captions/cover, then Save
+      document.getElementById('preview-day').disabled = false;
+      alert('Imported & published from Immich');
     } catch (err) {
       console.error(err);
-      alert('Import failed – see console.');
+      alert('Import failed: ' + err.message);
     }
   }
 
