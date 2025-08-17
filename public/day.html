@@ -9,20 +9,19 @@
 </head>
 <body>
   <header class="container">
-    <p><a href="index.html">← Back to index</a> · <a href="blog/index.html">Blog</a></p>
+    <p><a href="index.html">← Back to index</a></p>
     <h1 id="day-title">Loading…</h1>
-    <p id="day-stats"></p>
   </header>
   <main class="container">
     <section id="map" style="height:50vh;"></section>
-    <div style="margin:1rem 0; display:flex; align-items:center; gap:0.5rem;">
-      <button id="play-btn" aria-label="Play" style="padding:0.4rem 0.6rem; font-size:1rem;">▶︎</button>
-      <input type="range" id="time-slider" min="0" value="0" step="1" style="flex:1;" />
-    </div>
-    <p id="time-label" style="text-align:center; margin:0.5rem 0 0; font-size:0.9rem; opacity:0.8;">00:00</p>
-    <section id="gallery" class="gallery"></section>
+    
+    <!-- Social Media Style Post -->
+    <div id="photo-post" class="photo-post"></div>
+    
+    <!-- Traditional Gallery (fallback) -->
+    <section id="gallery" class="gallery" style="display: none;"></section>
 
-    <section id="day-diary" style="margin-top:2rem; max-width:700px;"></section>
+
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script type="module" src="js/day.js"></script>

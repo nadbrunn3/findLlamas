@@ -1,0 +1,80 @@
+{
+  "date": "2025-08-15",
+  "segment": "day",
+  "slug": "2025-08-15",
+  "title": "Day 4 — Prague Exploration",
+  "photos": [
+    {
+      "id": "p7",
+      "url": "https://picsum.photos/id/102/1600/900",
+      "thumb": "https://picsum.photos/id/102/400/225",
+      "taken_at": "2025-08-15T09:15:00Z",
+      "lat": 50.0755,
+      "lon": 14.4378,
+      "caption": "Charles Bridge sunrise"
+    },
+    {
+      "id": "p8",
+      "url": "https://picsum.photos/id/103/1600/900",
+      "thumb": "https://picsum.photos/id/103/400/225",
+      "taken_at": "2025-08-15T09:17:00Z",
+      "lat": 50.0756,
+      "lon": 14.4379,
+      "caption": "Street musician performance"
+    },
+    {
+      "id": "p9",
+      "url": "https://picsum.photos/id/104/1600/900",
+      "thumb": "https://picsum.photos/id/104/400/225",
+      "taken_at": "2025-08-15T09:20:00Z",
+      "lat": 50.0757,
+      "lon": 14.4380,
+      "caption": "Historic bridge details"
+    },
+    {
+      "id": "p10",
+      "url": "https://picsum.photos/id/145/1600/900",
+      "thumb": "https://picsum.photos/id/145/400/225",
+      "taken_at": "2025-08-15T11:30:00Z",
+      "lat": 50.0901,
+      "lon": 14.4017,
+      "caption": "Prague Castle entrance"
+    },
+    {
+      "id": "p11",
+      "url": "https://picsum.photos/id/146/1600/900",
+      "thumb": "https://picsum.photos/id/146/400/225",
+      "taken_at": "2025-08-15T11:35:00Z",
+      "lat": 50.0902,
+      "lon": 14.4018,
+      "caption": "Castle courtyard"
+    },
+    {
+      "id": "p12",
+      "url": "https://picsum.photos/id/189/1600/900",
+      "thumb": "https://picsum.photos/id/189/400/225",
+      "taken_at": "2025-08-15T14:45:00Z",
+      "lat": 50.0849,
+      "lon": 14.4214,
+      "caption": "Old Town Square"
+    },
+    {
+      "id": "p13",
+      "url": "https://picsum.photos/id/190/1600/900",
+      "thumb": "https://picsum.photos/id/190/400/225",
+      "taken_at": "2025-08-15T14:47:00Z",
+      "lat": 50.0850,
+      "lon": 14.4215,
+      "caption": "Astronomical Clock"
+    },
+    {
+      "id": "p14",
+      "url": "https://picsum.photos/id/219/1600/900",
+      "thumb": "https://picsum.photos/id/219/400/225",
+      "taken_at": "2025-08-15T19:20:00Z",
+      "lat": 50.0780,
+      "lon": 14.4250,
+      "caption": "Traditional Czech dinner"
+    }
+  ]
+}

@@ -8,30 +8,45 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
-  <header class="container">
-    <h1>My Trip</h1>
-    <nav style="margin-top:0.5rem;">
-      <a href="blog/index.html">Blog</a>
-    </nav>
-  </header>
-  <main>
-    <section id="trip-map" style="height:50vh;"></section>
-    <div class="container" style="margin-top:1rem;">
-      <h2>Trip days</h2>
-      <div id="days-list" class="cards-grid"></div>
+  <!-- Header -->
+  <header class="trip-header">
+    <div class="container">
+      <h1 class="trip-title">My Trip — Photo Journey</h1>
     </div>
-    <section class="container" style="margin-top:2rem;">
-      <h2>Photo highlights</h2>
-      <div id="sample-photos" class="gallery"></div>
-    </section>
+  </header>
 
-    <section class="container" style="margin-top:2rem;">
-      <h2>Diary &amp; Blog</h2>
-      <div id="home-blog-list" class="cards-grid"></div>
-      <p style="margin-top:0.5rem;"><a href="blog/index.html">View all posts →</a></p>
-    </section>
+  <!-- Top map that stays at the top -->
+  <section class="top-map-wrap">
+    <div id="top-map" class="top-map"></div>
+    <!-- Optional expand button on mobile -->
+    <button class="map-expand" aria-label="Expand map">🗺️</button>
+  </section>
+
+  <!-- Sticky Mini-Map -->
+  <div id="mini-map-container" class="mini-map-container hidden">
+    <div class="mini-map-header">
+      <span class="mini-map-title">Trip Map</span>
+      <button id="mini-map-toggle" class="mini-map-toggle" aria-label="Toggle mini map">
+        <span class="toggle-icon">−</span>
+      </button>
+    </div>
+    <div id="mini-map" class="mini-map"></div>
+  </div>
+
+  <!-- Stack Feed -->
+  <main class="stack-feed-container">
+    <div class="stack-feed" id="stack-feed">
+      <!-- Photo stack cards will be generated here -->
+    </div>
   </main>
+
+
+
+  
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
+  <script src="js/photo-lightbox.js"></script>
   <script type="module" src="js/index.js"></script>
 </body>
 </html>
