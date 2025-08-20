@@ -1,0 +1,27 @@
+{
+  "reactions": {
+    "❤️": 12,
+    "👍": 8,
+    "😊": 5
+  },
+  "comments": [
+    {
+      "id": "1692123456789",
+      "text": "Beautiful shot! Love the morning light reflecting on the water.",
+      "author": "Sarah_travels",
+      "timestamp": "2025-08-14T10:30:00Z"
+    },
+    {
+      "id": "1692123456790",
+      "text": "Prague is absolutely magical, especially in the morning! 🌅",
+      "author": "Marco_explorer",
+      "timestamp": "2025-08-14T12:15:00Z"
+    },
+    {
+      "id": "1692123456791",
+      "text": "Which camera did you use? The quality is amazing!",
+      "author": "PhotoGuru22",
+      "timestamp": "2025-08-14T14:20:00Z"
+    }
+  ]
+}

@@ -2,26 +2,45 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Admin — Trip Manager</title>
-  <link rel="stylesheet" href="../css/styles.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- App styles (optional; use your main stylesheet if you want) -->
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin=""
+  />
+
   <style>
-    #tabs button { margin-right:0.5rem; padding:0.4rem 0.8rem; }
-    #tabs button.active { background: steelblue; color:#fff; }
+    /* tiny admin-only tweaks */
+    #tabs { margin-top: 0.5rem; }
+    #tabs button { margin-right: .5rem; padding: .4rem .8rem; border-radius: 6px; border: 1px solid #e5e7eb; cursor: pointer; }
+    #tabs button.active { background: steelblue; color: #fff; border-color: steelblue; }
+    .gallery { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+    .gallery > div { border-radius: 8px; overflow: hidden; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+    .gallery img { display:block; width: 100%; height: 120px; object-fit: cover; }
+    .chip { position:absolute; right:8px; top:8px; background:#0009; color:#fff; font-size:.75rem; padding:.15rem .4rem; border-radius: 999px; }
   </style>
 </head>
 <body>
   <header class="container">
     <h1>Admin</h1>
-    <p style="opacity:0.8; font-size:0.9rem;">Local editor — changes are saved directly to your repo</p>
+    <p style="opacity:.8; font-size:.9rem;">Local editor — changes are saved directly to your repo</p>
   </header>
+
   <main class="container" id="app">
-    <!-- password prompt will replace content -->
+    <!-- password prompt or app will render here -->
   </main>
 
-  <script type="module" src="admin.js"></script>
+  <!-- Load Leaflet first so the global L is ready before our module uses it -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    crossorigin=""
+  ></script>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Your admin app -->
+  <script type="module" src="/admin/admin.js"></script>
 </body>
 </html>

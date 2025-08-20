@@ -1,640 +1,512 @@
+// server.js (Fastify v4, no Git, file-based storage)
+
 import fastify from 'fastify';
+import fastifyStatic from '@fastify/static';
 import cors from '@fastify/cors';
-import staticFiles from '@fastify/static';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import path from 'path';
-import simpleGit from 'simple-git';
 import dotenv from 'dotenv';
-import Sharp from 'sharp';
 
 dotenv.config();
 
-/* ------------ Config ------------ */
+// ---- Config / Paths ---------------------------------------------------------
 const PORT = Number(process.env.PORT) || 4000;
 const REPO_DIR = process.env.REPO_DIR || process.cwd();
-const DAYS_DIR = path.join(REPO_DIR, 'public', 'days');
-const INTERACTIONS_DIR = path.join(REPO_DIR, 'public', 'interactions');
-const SHOULD_PUSH = String(process.env.GIT_PUSH).toLowerCase() === 'true';
 
-// Immich integration constants
-const IMMICH_URL = process.env.IMMICH_URL || '';
+// data lives under public/data
+const DATA_DIR = path.join(REPO_DIR, 'public', 'data');
+const DAYS_DIR = path.join(DATA_DIR, 'days');
+const INTERACTIONS_DIR = path.join(DATA_DIR, 'interactions');
+
+// Immich
+const IMMICH_URL = (process.env.IMMICH_URL || '').replace(/\/$/, '');
 const IMMICH_API_KEYS = (process.env.IMMICH_API_KEYS || '')
-  .split(',').map(s => s.trim()).filter(Boolean);
-const IMG_DIR = path.join(REPO_DIR, 'public', 'img');
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
 
-const git = simpleGit(REPO_DIR);
+// optional admin token for protected endpoints (publish, edit/delete comments)
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 
-/* ------------ Fastify ------------ */
+// helpers
 const app = fastify({ logger: true });
 app.register(cors, { origin: true });
 
-// Serve static files from public directory
-app.register(staticFiles, {
-  root: path.join(REPO_DIR, 'public'),
-  prefix: '/', // optional: default '/'
+// serve /public so /day.html, /js/day.js, /css etc. work
+app.register(fastifyStatic, {
+  root: path.join(process.cwd(), 'public'),
+  prefix: '/', // so /day.html, /admin/index.html, /js/*
 });
 
-/* ------------ Immich Integration Helpers ------------ */
+// optional: root to index.html
+app.get('/', (req, reply) => reply.sendFile('index.html'));
 
-async function immichFetch(pathname, { method='GET', headers={}, signal } = {}) {
-  if (!IMMICH_URL || !IMMICH_API_KEYS.length) {
-    throw new Error('IMMICH_URL or IMMICH_API_KEYS not configured');
-  }
-  let lastErr;
-  for (const key of IMMICH_API_KEYS) {
-    try {
-      const res = await fetch(`${IMMICH_URL}${pathname}`, {
-        method,
-        headers: { 'x-api-key': key, ...headers },
-        signal
-      });
-      if (res.ok) return res;
-      lastErr = new Error(`Immich ${method} ${pathname} -> ${res.status}`);
-    } catch (e) { lastErr = e; }
-  }
-  throw lastErr || new Error('Immich request failed');
+async function ensureDir(d) { await fs.mkdir(d, { recursive: true }); }
+async function readJson(file, def=null) {
+  try { return JSON.parse(await fs.readFile(file, 'utf8')); }
+  catch { return def; }
+}
+async function writeJson(file, obj) {
+  await ensureDir(path.dirname(file));
+  await fs.writeFile(file, JSON.stringify(obj, null, 2));
 }
 
-async function immichJson(pathname, opts) {
-  const res = await immichFetch(pathname, opts);
+// Simple auth guard (for admin-only ops)
+function requireAdmin(req, reply) {
+  if (!ADMIN_TOKEN) return true; // disabled
+  const h = req.headers['x-admin-token'] || req.headers['authorization'] || '';
+  const ok =
+    (typeof h === 'string' && h.replace(/^Bearer\s+/i, '') === ADMIN_TOKEN) ||
+    false;
+  if (!ok) {
+    reply.code(401).send({ error: 'Unauthorized' });
+    return false;
+  }
+  return true;
+}
+
+// ---- Immich helpers ---------------------------------------------------------
+function pickImmichKey() {
+  return IMMICH_API_KEYS[0] || process.env.IMMICH_API_KEY || '';
+}
+
+async function immichFetchJSON(route, init = {}) {
+  if (!IMMICH_URL) throw new Error('IMMICH_URL not set');
+  const key = pickImmichKey();
+  const url = `${IMMICH_URL}${route}`;
+  const headers = {
+    ...(init.headers || {}),
+    ...(key ? { 'x-api-key': key } : {}),
+    'content-type': 'application/json'
+  };
+  const res = await fetch(url, { ...init, headers });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Immich ${res.status} ${res.statusText}: ${text}`);
+  }
   return res.json();
 }
 
-function pick(obj, ...keys){ const o={}; for(const k of keys){ if(obj && obj[k]!==undefined) o[k]=obj[k]; } return o; }
+// Try search API first; fallback to album listing (older builds differ)
+async function getAssetsForDay({ date, albumId }) {
+  const start = new Date(date + 'T00:00:00.000Z');
+  const end = new Date(start.getTime() + 24 * 3600 * 1000);
 
-function safeExif(asset) {
-  const ex = asset.exifInfo || asset.exif || {};
-  const lat = ex.latitude ?? ex.lat ?? ex.GPSLatitude ?? asset.latitude ?? asset.lat;
-  const lon = ex.longitude ?? ex.lng ?? ex.GPSLongitude ?? asset.longitude ?? asset.lon;
-  const taken = ex.dateTimeOriginal ?? ex.DateTimeOriginal ?? asset.fileCreatedAt ?? asset.createdAt;
-  return { lat: lat != null ? Number(lat) : null, lon: lon != null ? Number(lon) : null, taken_at: taken || new Date().toISOString() };
-}
-
-async function ensureImgSizes(buf, baseOutPathNoExt) {
-  const large = `${baseOutPathNoExt}_1600.jpg`;
-  const small = `${baseOutPathNoExt}_400.jpg`;
-  await fs.mkdir(path.dirname(large), { recursive: true });
-  await Sharp(buf).rotate().resize({ width: 1600, withoutEnlargement: true })
-    .jpeg({ quality: 82, mozjpeg: true }).toFile(large);
-  await Sharp(buf).rotate().resize({ width: 400, withoutEnlargement: true })
-    .jpeg({ quality: 80, mozjpeg: true }).toFile(small);
-  return { large, small };
-}
-
-async function updateDaysIndex({ slug, date, title, coverThumbRel }) {
-  const idxPath = path.join(DAYS_DIR, 'index.json');
-  const list = await readJson(idxPath, []);
-  const filtered = list.filter((d) => d.slug !== slug);
-  filtered.push({ slug, date, title, cover: coverThumbRel });
-  filtered.sort((a, b) => a.date.localeCompare(b.date));
-  await writeJson(idxPath, filtered);
-  await git.add([idxPath]);
-}
-
-/* ------------ Small utils ------------ */
-
-// Per-file mutex to avoid concurrent writes clobbering each other
-const locks = new Map();
-async function withFileLock(key, fn) {
-  const prev = locks.get(key) || Promise.resolve();
-  let release;
-  const p = new Promise((res) => (release = res));
-  locks.set(key, prev.then(() => p));
+  // 1) Try getting random assets and filter by date (works for your Immich version)
   try {
-    return await fn();
-  } finally {
-    release();
-    // Clean up if this promise is the tail
-    if (locks.get(key) === p) locks.delete(key);
-  }
-}
+    // First, let's get available buckets to see if this date has photos
+    const buckets = await immichFetchJSON('/api/timeline/buckets?size=DAY');
+    const targetBucket = date; // YYYY-MM-DD format
+    const hasBucket = Array.isArray(buckets) && buckets.some(b => 
+      b.timeBucket && b.timeBucket.startsWith(targetBucket)
+    );
+    
+    if (!hasBucket) {
+      app.log.info(`No photos found for date ${date} in timeline buckets`);
+      return [];
+    }
 
-// Atomic JSON write (write to .tmp then rename)
-async function writeJsonAtomic(filePath, obj) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const tmp = filePath + '.tmp';
-  await fs.writeFile(tmp, JSON.stringify(obj, null, 2), 'utf8');
-  await fs.rename(tmp, filePath);
-}
-
-async function readJson(filePath, def = []) {
-  try {
-    const txt = await fs.readFile(filePath, 'utf8');
-    return JSON.parse(txt);
-  } catch {
-    return def;
-  }
-}
-
-// Safe join that ensures the resolved path stays under base
-function safeJoin(base, ...segs) {
-  const target = path.resolve(base, ...segs);
-  if (!target.startsWith(path.resolve(base) + path.sep)) {
-    throw new Error('Path traversal detected');
-  }
-  return target;
-}
-
-/* ------------ Validation helpers ------------ */
-const DAY_SLUG_RE = /^\d{4}-\d{2}-\d{2}$/;         // e.g., 2025-08-14
-const ID_RE = /^[A-Za-z0-9_\-]+$/;                 // simple ids like p1, stack-123_abc
-
-function assertDaySlug(slug) {
-  if (!DAY_SLUG_RE.test(slug)) {
-    const e = new Error('Invalid slug');
-    e.statusCode = 400;
-    throw e;
-  }
-}
-
-function assertId(id, label = 'id') {
-  if (!ID_RE.test(id)) {
-    const e = new Error(`Invalid ${label}`);
-    e.statusCode = 400;
-    throw e;
-  }
-}
-
-/* ------------ Git helpers ------------ */
-async function gitStageCommitPush(files, message) {
-  try {
-    await git.add(files);
-    await git.commit(message);
-    if (SHOULD_PUSH) {
+    // Get a larger sample of random assets and filter
+    // This is not ideal but works for your Immich version
+    const BATCH_SIZE = 100;
+    const MAX_ATTEMPTS = 5;
+    const found = [];
+    
+    for (let attempt = 0; attempt < MAX_ATTEMPTS && found.length < 50; attempt++) {
       try {
-        await git.push();
-      } catch (err) {
-        // Don’t fail the request if push fails (remote may not be set)
-        console.warn('Git push failed:', err?.message || err);
+        const randomAssets = await immichFetchJSON('/api/assets/random?count=' + BATCH_SIZE);
+        const assetsArray = Array.isArray(randomAssets) ? randomAssets : [];
+        
+        const dayAssets = assetsArray.filter(a => {
+          const t = a?.exifInfo?.dateTimeOriginal || a?.localDateTime || a?.fileCreatedAt || a?.createdAt;
+          if (!t) return false;
+          
+          const ts = new Date(t).getTime();
+          const inRange = !Number.isNaN(ts) && ts >= +start && ts < +end;
+          
+          // If albumId specified, check if asset belongs to that album
+          // Note: This is a limitation - random API doesn't filter by album
+          // For album filtering, we'd need different API endpoints
+          if (albumId && inRange) {
+            app.log.warn('Album filtering not fully supported with random API approach');
+          }
+          
+          return inRange;
+        });
+        
+        // Add unique assets (avoid duplicates)
+        dayAssets.forEach(asset => {
+          if (!found.some(f => f.id === asset.id)) {
+            found.push(asset);
+          }
+        });
+        
+        app.log.info(`Attempt ${attempt + 1}: Found ${dayAssets.length} assets for ${date}, total: ${found.length}`);
+      } catch (e) {
+        app.log.warn(`Random assets attempt ${attempt + 1} failed:`, e.message);
       }
     }
-  } catch (err) {
-    console.warn('Git commit failed:', err?.message || err);
-    // still allow the request to succeed; file is written already
+
+    if (found.length > 0) {
+      app.log.info(`Successfully found ${found.length} assets for ${date}`);
+      return found;
+    }
+  } catch (e) {
+    app.log.warn({ msg: 'Timeline buckets check failed', err: String(e) });
   }
-}
 
-/* ------------ Paths ------------ */
-function dayFile(slug) {
-  assertDaySlug(slug);
-  return safeJoin(DAYS_DIR, `${slug}.json`);
-}
-function photoInteractionsFile(photoId) {
-  assertId(photoId, 'photoId');
-  return safeJoin(INTERACTIONS_DIR, `${photoId}.json`);
-}
-function stackInteractionsFile(stackId) {
-  assertId(stackId, 'stackId');
-  return safeJoin(INTERACTIONS_DIR, `stack_${stackId}.json`);
-}
-
-/* ------------ Health ------------ */
-app.get('/api/health', async () => ({ ok: true }));
-
-/* ------------ Day JSON ------------ */
-app.get('/api/day/:slug', async (req, reply) => {
+  // 2) Fallback: Try timeline bucket API (may work better in future)
   try {
-    const filePath = dayFile(req.params.slug);
-    const content = await fs.readFile(filePath, 'utf8');
-    reply.type('application/json').send(JSON.parse(content));
-  } catch (err) {
-    reply.code(404).send({ error: 'Not found' });
+    const bucketData = await immichFetchJSON(`/api/timeline/bucket?size=DAY&timeBucket=${date}`);
+    if (bucketData && bucketData.id && Array.isArray(bucketData.id) && bucketData.id.length > 0) {
+      // Get individual assets by ID
+      const assets = [];
+      for (const assetId of bucketData.id.slice(0, 100)) { // Limit to first 100
+        try {
+          const asset = await immichFetchJSON(`/api/assets/${assetId}`);
+          if (asset) assets.push(asset);
+        } catch (e) {
+          app.log.warn(`Failed to fetch asset ${assetId}:`, e.message);
+        }
+      }
+      if (assets.length > 0) {
+        app.log.info(`Timeline bucket approach found ${assets.length} assets for ${date}`);
+        return assets;
+      }
+    }
+  } catch (e) {
+    app.log.warn({ msg: 'Timeline bucket approach failed', err: String(e) });
   }
+
+  app.log.warn(`No assets found for date ${date}`);
+  return [];
+}
+
+function mapAssetToPhoto(a) {
+  const id = a.id || a.assetId || a._id;
+  const takenAt = a?.exifInfo?.dateTimeOriginal || a?.localDateTime || a?.fileCreatedAt || a?.createdAt;
+  const lat = a?.exifInfo?.latitude ?? a?.exif?.latitude ?? null;
+  const lon = a?.exifInfo?.longitude ?? a?.exif?.longitude ?? null;
+  return {
+    id,
+    url: `/api/immich/assets/${id}/original`,
+    thumb: `/api/immich/assets/${id}/thumb`,
+    taken_at: takenAt,
+    lat, lon,
+    caption: a?.exifInfo?.description || a?.originalFileName || ''
+  };
+}
+
+// ---- Routes: Health ---------------------------------------------------------
+app.get('/api/health', async () => ({ ok: true, dataRoot: DATA_DIR }));
+
+// ---- Routes: Local Testing --------------------------------------------------
+
+// Local testing route: simulate Immich assets
+app.get('/api/local/day', async (req, reply) => {
+  const { date } = req.query;
+  if (!date) return reply.code(400).send({ error: 'date required' });
+
+  const dir = path.join(process.cwd(), 'public', 'test-photos');
+  const files = fsSync.readdirSync(dir).filter(f => /\.(jpg|jpeg|png)$/i.test(f));
+
+  const photos = files.map((f, i) => ({
+    id: `${date}-${i}`,
+    url: `/test-photos/${f}`,
+    thumb: `/test-photos/${f}`,
+    taken_at: date + 'T12:00:00.000Z',
+    lat: null,
+    lon: null,
+    caption: f
+  }));
+
+  reply.send({ date, count: photos.length, photos });
 });
 
-app.put('/api/day/:slug', async (req, reply) => {
+// ---- Routes: Immich ---------------------------------------------------------
+
+// Fetch day's photos from Immich (server-side), optional albumId to scope
+app.get('/api/immich/day', async (req, reply) => {
   try {
-    const slug = req.params.slug;
-    assertDaySlug(slug);
-    const body = req.body;
-    if (!body || typeof body !== 'object') {
-      return reply.code(400).send({ error: 'Invalid JSON' });
-    }
-    const filePath = dayFile(slug);
+    const { date, albumId } = req.query;
+    if (!date) return reply.code(400).send({ error: 'date required (YYYY-MM-DD)' });
 
-    await withFileLock(filePath, async () => {
-      await writeJsonAtomic(filePath, body);
-      await gitStageCommitPush([filePath], `Update day ${slug}`);
-    });
+    const assets = await getAssetsForDay({ date, albumId });
+    const photos = assets.map(mapAssetToPhoto);
 
-    reply.send({ ok: true });
+    reply.send({ date, albumId: albumId || null, count: photos.length, photos });
   } catch (err) {
     req.log.error(err);
-    reply.code(err.statusCode || 500).send({ error: err.message || 'Save failed' });
+    reply.code(500).send({ error: `Failed to fetch photos from Immich: ${String(err.message || err)}` });
   }
 });
 
-/* ------------ Photo interactions ------------ */
-app.get('/api/photo/:photoId/interactions', async (req, reply) => {
+// Proxy original (keeps API key server-side; avoids CORS)
+app.get('/api/immich/assets/:id/original', async (req, reply) => {
   try {
-    const filePath = photoInteractionsFile(req.params.photoId);
-    const interactions = await readJson(filePath, { reactions: {}, comments: [] });
-    reply.send(interactions);
-  } catch {
-    reply.send({ reactions: {}, comments: [] });
+    const key = pickImmichKey();
+    const url = `${IMMICH_URL}/api/assets/${req.params.id}/original`;
+    const res = await fetch(url, { headers: key ? { 'x-api-key': key } : {} });
+    if (!res.ok) return reply.code(res.status).send(await res.text());
+
+    // Pass through headers we care about
+    reply.header('content-type', res.headers.get('content-type') || 'application/octet-stream');
+    reply.header('cache-control', res.headers.get('cache-control') || 'public, max-age=604800');
+    return reply.send(res.body);
+  } catch (e) {
+    reply.code(500).send('immich proxy failed');
   }
+});
+
+// Proxy thumbnail (Immich supports /thumbnail and size param on newer builds)
+app.get('/api/immich/assets/:id/thumb', async (req, reply) => {
+  try {
+    const key = pickImmichKey();
+    // try size=thumbnail; some builds accept ?size=tiny/thumbnail/preview
+    const url = `${IMMICH_URL}/api/assets/${req.params.id}/thumbnail?size=thumbnail`;
+    const res = await fetch(url, { headers: key ? { 'x-api-key': key } : {} });
+    if (!res.ok) return reply.code(res.status).send(await res.text());
+    reply.header('content-type', res.headers.get('content-type') || 'image/jpeg');
+    reply.header('cache-control', res.headers.get('cache-control') || 'public, max-age=604800');
+    return reply.send(res.body);
+  } catch (e) {
+    reply.code(500).send('immich thumb proxy failed');
+  }
+});
+
+// ---- Routes: Day JSON --------------------------------------------------------
+
+function dayFile(slug) {
+  return path.join(DAYS_DIR, `${slug}.json`);
+}
+
+// read a day
+app.get('/api/day/:slug', async (req, reply) => {
+  try {
+    const file = dayFile(req.params.slug);
+    const json = await readJson(file);
+    if (!json) return reply.code(404).send({ error: 'Not found' });
+    reply.type('application/json').send(json);
+  } catch (e) {
+    reply.code(500).send({ error: 'read failed' });
+  }
+});
+
+// full overwrite (editor)
+app.put('/api/day/:slug', async (req, reply) => {
+  try {
+    if (!requireAdmin(req, reply)) return;
+    const body = req.body;
+    if (!body || typeof body !== 'object') return reply.code(400).send({ error: 'Invalid JSON' });
+    await writeJson(dayFile(req.params.slug), body);
+    reply.send({ ok: true });
+  } catch (e) {
+    reply.code(500).send({ error: 'save failed' });
+  }
+});
+
+// append-only publish (safer for two people)
+app.post('/api/publish', async (req, reply) => {
+  try {
+    if (!requireAdmin(req, reply)) return;
+    const { date, title, photos = [] } = req.body || {};
+    if (!date || !Array.isArray(photos)) {
+      return reply.code(400).send({ error: 'date and photos[] required' });
+    }
+    const file = dayFile(date);
+    const existing = (await readJson(file)) || {
+      date,
+      segment: 'day',
+      slug: date,
+      title: title || `Day — ${date}`,
+      stats: {},
+      polyline: { type: 'LineString', coordinates: [] },
+      points: [],
+      photos: []
+    };
+
+    // de-dup by id (prefer id, fall back to url)
+    const seen = new Set(existing.photos.map(p => p.id || p.url));
+    for (const p of photos) {
+      const key = p.id || p.url;
+      if (!key || seen.has(key)) continue;
+      existing.photos.push(p);
+      seen.add(key);
+    }
+
+    // optional title override
+    if (title && !existing.title) existing.title = title;
+
+    await writeJson(file, existing);
+    reply.send({ ok: true, added: photos.length, total: existing.photos.length });
+  } catch (e) {
+    req.log.error(e);
+    reply.code(500).send({ error: 'publish failed' });
+  }
+});
+
+// ---- Routes: Interactions (likes/comments) ----------------------------------
+
+// helpers
+function interactionsPathForPhoto(photoId) {
+  return path.join(INTERACTIONS_DIR, `${photoId}.json`);
+}
+function interactionsPathForStack(stackId) {
+  return path.join(INTERACTIONS_DIR, `stack_${stackId}.json`);
+}
+
+// Photo interactions
+app.get('/api/photo/:photoId/interactions', async (req, reply) => {
+  const def = { reactions: {}, comments: [] };
+  const data = await readJson(interactionsPathForPhoto(req.params.photoId), def);
+  reply.send(data || def);
 });
 
 app.post('/api/photo/:photoId/react', async (req, reply) => {
   try {
-    const photoId = req.params.photoId;
     const { emoji, action } = req.body || {};
     if (!emoji) return reply.code(400).send({ error: 'emoji required' });
+    const file = interactionsPathForPhoto(req.params.photoId);
+    const data = (await readJson(file)) || { reactions: {}, comments: [] };
 
-    const filePath = photoInteractionsFile(photoId);
-
-    const result = await withFileLock(filePath, async () => {
-      const interactions = await readJson(filePath, { reactions: {}, comments: [] });
-
-      const current = interactions.reactions[emoji] || 0;
-      let removed = false;
-
-      if (action === 'remove' || current > 0) {
-        interactions.reactions[emoji] = Math.max(0, current - 1);
-        if (interactions.reactions[emoji] === 0) delete interactions.reactions[emoji];
-        removed = true;
+    if (action === 'remove') {
+      if (data.reactions[emoji]) data.reactions[emoji] = Math.max(0, data.reactions[emoji] - 1);
+      if (data.reactions[emoji] === 0) delete data.reactions[emoji];
       } else {
-        interactions.reactions[emoji] = current + 1;
-        removed = false;
-      }
+      data.reactions[emoji] = (data.reactions[emoji] || 0) + 1;
+    }
 
-      await writeJsonAtomic(filePath, interactions);
-      await gitStageCommitPush([filePath], `React ${emoji} to photo ${photoId}`);
-
-      return { count: interactions.reactions[emoji] || 0, removed };
-    });
-
-    reply.send({ ok: true, ...result });
-  } catch (err) {
-    req.log.error(err);
-    reply.code(500).send({ error: 'react failed' });
-  }
+    await writeJson(file, data);
+    reply.send({ ok: true, count: data.reactions[emoji] || 0, removed: action === 'remove' });
+  } catch { reply.code(500).send({ error: 'react failed' }); }
 });
 
 app.post('/api/photo/:photoId/comment', async (req, reply) => {
   try {
-    const photoId = req.params.photoId;
     const { text, author } = req.body || {};
-    if (!text || !String(text).trim()) return reply.code(400).send({ error: 'text required' });
-
-    const filePath = photoInteractionsFile(photoId);
-
+    if (!text) return reply.code(400).send({ error: 'text required' });
+    const file = interactionsPathForPhoto(req.params.photoId);
+    const data = (await readJson(file)) || { reactions: {}, comments: [] };
     const comment = {
       id: Date.now().toString(),
       text: String(text).trim(),
       author: author || 'Anonymous',
-      timestamp: new Date().toISOString(),
+      timestamp: new Date().toISOString()
     };
-
-    await withFileLock(filePath, async () => {
-      const interactions = await readJson(filePath, { reactions: {}, comments: [] });
-      interactions.comments.push(comment);
-      await writeJsonAtomic(filePath, interactions);
-      await gitStageCommitPush([filePath], `Comment on photo ${photoId}`);
-    });
-
+    data.comments.push(comment);
+    await writeJson(file, data);
     reply.send({ ok: true, comment });
-  } catch (err) {
-    req.log.error(err);
-    reply.code(500).send({ error: 'comment failed' });
-  }
+  } catch { reply.code(500).send({ error: 'comment failed' }); }
 });
 
 app.put('/api/photo/:photoId/comment/:commentId', async (req, reply) => {
   try {
-    const { photoId, commentId } = req.params;
+    if (!requireAdmin(req, reply)) return;
     const { text } = req.body || {};
-    if (!text || !String(text).trim()) return reply.code(400).send({ error: 'text required' });
-
-    const filePath = photoInteractionsFile(photoId);
-
-    await withFileLock(filePath, async () => {
-      const interactions = await readJson(filePath, { reactions: {}, comments: [] });
-      const comment = interactions.comments.find((c) => c.id === commentId);
-      if (!comment) return reply.code(404).send({ error: 'comment not found' });
-
-      comment.text = String(text).trim();
-      comment.edited = new Date().toISOString();
-
-      await writeJsonAtomic(filePath, interactions);
-      await gitStageCommitPush([filePath], `Edit comment on photo ${photoId}`);
-      reply.send({ ok: true, comment });
-    });
-  } catch (err) {
-    req.log.error(err);
-    if (!reply.sent) reply.code(500).send({ error: 'edit failed' });
-  }
+    if (!text) return reply.code(400).send({ error: 'text required' });
+    const file = interactionsPathForPhoto(req.params.photoId);
+    const data = (await readJson(file)) || { reactions: {}, comments: [] };
+    const c = data.comments.find(x => x.id === req.params.commentId);
+    if (!c) return reply.code(404).send({ error: 'comment not found' });
+    c.text = String(text).trim();
+    c.edited = new Date().toISOString();
+    await writeJson(file, data);
+    reply.send({ ok: true, comment: c });
+  } catch { reply.code(500).send({ error: 'edit failed' }); }
 });
 
 app.delete('/api/photo/:photoId/comment/:commentId', async (req, reply) => {
   try {
-    const { photoId, commentId } = req.params;
-    const filePath = photoInteractionsFile(photoId);
-
-    await withFileLock(filePath, async () => {
-      const interactions = await readJson(filePath, { reactions: {}, comments: [] });
-      const index = interactions.comments.findIndex((c) => c.id === commentId);
-      if (index === -1) return reply.code(404).send({ error: 'comment not found' });
-
-      interactions.comments.splice(index, 1);
-      await writeJsonAtomic(filePath, interactions);
-      await gitStageCommitPush([filePath], `Delete comment on photo ${photoId}`);
-      reply.code(204).send();
-    });
-  } catch (err) {
-    req.log.error(err);
-    if (!reply.sent) reply.code(500).send({ error: 'delete failed' });
-  }
+    if (!requireAdmin(req, reply)) return;
+    const file = interactionsPathForPhoto(req.params.photoId);
+    const data = (await readJson(file)) || { reactions: {}, comments: [] };
+    const idx = data.comments.findIndex(x => x.id === req.params.commentId);
+    if (idx === -1) return reply.code(404).send({ error: 'comment not found' });
+    data.comments.splice(idx, 1);
+    await writeJson(file, data);
+    reply.send({ ok: true });
+  } catch { reply.code(500).send({ error: 'delete failed' }); }
 });
 
-/* ------------ Stack interactions ------------ */
+// Stack interactions (same shape)
 app.get('/api/stack/:stackId/interactions', async (req, reply) => {
-  try {
-    const stackId = req.params.stackId;
-    const stackFile = stackInteractionsFile(stackId);
-    const stackInteractions = await readJson(stackFile, { reactions: {}, comments: [] });
-
-    // Roll-up mode
-    if (req.query.includeRollup === 'true') {
-      let photos = [];
-      try {
-        if (typeof req.query.photos === 'string') {
-          photos = JSON.parse(req.query.photos);
-        }
-      } catch {
-        // ignore bad JSON; treat as empty
-      }
-
-      // Ensure list contains only safe ids
-      photos = Array.isArray(photos) ? photos.filter((id) => ID_RE.test(id)) : [];
-
-      const totalReactions = { ...stackInteractions.reactions };
-      let totalComments = [...(stackInteractions.comments || [])];
-
-      for (const photoId of photos) {
-        const pFile = photoInteractionsFile(photoId);
-        const p = await readJson(pFile, { reactions: {}, comments: [] });
-
-        for (const [emoji, count] of Object.entries(p.reactions || {})) {
-          totalReactions[emoji] = (totalReactions[emoji] || 0) + (count || 0);
-        }
-        totalComments = totalComments.concat(p.comments || []);
-      }
-
-      return reply.send({
-        stack: stackInteractions,
-        rollup: {
-          reactions: totalReactions,
-          comments: totalComments,
-          totalCommentCount: totalComments.length,
-          totalReactionCount: Object.values(totalReactions).reduce((a, b) => a + b, 0),
-        },
-      });
-    }
-
-    reply.send(stackInteractions);
-  } catch (err) {
-    console.error('Error reading stack interactions:', err);
-    reply.send({ reactions: {}, comments: [] });
-  }
+  const def = { reactions: {}, comments: [] };
+  const data = await readJson(interactionsPathForStack(req.params.stackId), def);
+  reply.send(data || def);
 });
 
 app.post('/api/stack/:stackId/react', async (req, reply) => {
   try {
-    const stackId = req.params.stackId;
     const { emoji, action } = req.body || {};
     if (!emoji) return reply.code(400).send({ error: 'emoji required' });
+    const file = interactionsPathForStack(req.params.stackId);
+    const data = (await readJson(file)) || { reactions: {}, comments: [] };
 
-    const filePath = stackInteractionsFile(stackId);
-
-    const result = await withFileLock(filePath, async () => {
-      const interactions = await readJson(filePath, { reactions: {}, comments: [] });
-
-      const current = interactions.reactions[emoji] || 0;
-      let removed = false;
-
-      if (action === 'remove' || current > 0) {
-        interactions.reactions[emoji] = Math.max(0, current - 1);
-        if (interactions.reactions[emoji] === 0) delete interactions.reactions[emoji];
-        removed = true;
+    if (action === 'remove') {
+      if (data.reactions[emoji]) data.reactions[emoji] = Math.max(0, data.reactions[emoji] - 1);
+      if (data.reactions[emoji] === 0) delete data.reactions[emoji];
       } else {
-        interactions.reactions[emoji] = current + 1;
-      }
+      data.reactions[emoji] = (data.reactions[emoji] || 0) + 1;
+    }
 
-      await writeJsonAtomic(filePath, interactions);
-      await gitStageCommitPush([filePath], `React to stack ${stackId} with ${emoji}`);
-
-      return { count: interactions.reactions[emoji] || 0, removed };
-    });
-
-    reply.send({ ok: true, ...result });
-  } catch (err) {
-    req.log.error(err);
-    reply.code(500).send({ error: 'react failed' });
-  }
+    await writeJson(file, data);
+    reply.send({ ok: true, count: data.reactions[emoji] || 0, removed: action === 'remove' });
+  } catch { reply.code(500).send({ error: 'react failed' }); }
 });
 
 app.post('/api/stack/:stackId/comment', async (req, reply) => {
   try {
-    const stackId = req.params.stackId;
     const { text, author } = req.body || {};
-    if (!text || !String(text).trim()) return reply.code(400).send({ error: 'text required' });
-
-    const filePath = stackInteractionsFile(stackId);
+    if (!text) return reply.code(400).send({ error: 'text required' });
+    const file = interactionsPathForStack(req.params.stackId);
+    const data = (await readJson(file)) || { reactions: {}, comments: [] };
     const comment = {
       id: Date.now().toString(),
       text: String(text).trim(),
       author: author || 'Anonymous',
-      timestamp: new Date().toISOString(),
+      timestamp: new Date().toISOString()
     };
-
-    await withFileLock(filePath, async () => {
-      const interactions = await readJson(filePath, { reactions: {}, comments: [] });
-      interactions.comments.push(comment);
-      await writeJsonAtomic(filePath, interactions);
-      await gitStageCommitPush([filePath], `Comment on stack ${stackId}`);
-    });
-
+    data.comments.push(comment);
+    await writeJson(file, data);
     reply.send({ ok: true, comment });
-  } catch (err) {
-    req.log.error(err);
-    reply.code(500).send({ error: 'comment failed' });
-  }
+  } catch { reply.code(500).send({ error: 'comment failed' }); }
 });
 
 app.put('/api/stack/:stackId/comment/:commentId', async (req, reply) => {
   try {
-    const { stackId, commentId } = req.params;
+    if (!requireAdmin(req, reply)) return;
     const { text } = req.body || {};
-    if (!text || !String(text).trim()) return reply.code(400).send({ error: 'text required' });
-
-    const filePath = stackInteractionsFile(stackId);
-
-    await withFileLock(filePath, async () => {
-      const interactions = await readJson(filePath, { reactions: {}, comments: [] });
-      const comment = interactions.comments.find((c) => c.id === commentId);
-      if (!comment) return reply.code(404).send({ error: 'comment not found' });
-
-      comment.text = String(text).trim();
-      comment.edited = new Date().toISOString();
-
-      await writeJsonAtomic(filePath, interactions);
-      await gitStageCommitPush([filePath], `Edit comment on stack ${stackId}`);
-      reply.send({ ok: true, comment });
-    });
-  } catch (err) {
-    req.log.error(err);
-    if (!reply.sent) reply.code(500).send({ error: 'edit failed' });
-  }
+    if (!text) return reply.code(400).send({ error: 'text required' });
+    const file = interactionsPathForStack(req.params.stackId);
+    const data = (await readJson(file)) || { reactions: {}, comments: [] };
+    const c = data.comments.find(x => x.id === req.params.commentId);
+    if (!c) return reply.code(404).send({ error: 'comment not found' });
+    c.text = String(text).trim();
+    c.edited = new Date().toISOString();
+    await writeJson(file, data);
+    reply.send({ ok: true, comment: c });
+  } catch { reply.code(500).send({ error: 'edit failed' }); }
 });
 
 app.delete('/api/stack/:stackId/comment/:commentId', async (req, reply) => {
   try {
-    const { stackId, commentId } = req.params;
-    const filePath = stackInteractionsFile(stackId);
-
-    await withFileLock(filePath, async () => {
-      const interactions = await readJson(filePath, { reactions: {}, comments: [] });
-      const index = interactions.comments.findIndex((c) => c.id === commentId);
-      if (index === -1) return reply.code(404).send({ error: 'comment not found' });
-
-      interactions.comments.splice(index, 1);
-      await writeJsonAtomic(filePath, interactions);
-      await gitStageCommitPush([filePath], `Delete comment on stack ${stackId}`);
-      reply.code(204).send();
-    });
-  } catch (err) {
-    req.log.error(err);
-    if (!reply.sent) reply.code(500).send({ error: 'delete failed' });
-  }
+    if (!requireAdmin(req, reply)) return;
+    const file = interactionsPathForStack(req.params.stackId);
+    const data = (await readJson(file)) || { reactions: {}, comments: [] };
+    const idx = data.comments.findIndex(x => x.id === req.params.commentId);
+    if (idx === -1) return reply.code(404).send({ error: 'comment not found' });
+    data.comments.splice(idx, 1);
+    await writeJson(file, data);
+    reply.send({ ok: true });
+  } catch { reply.code(500).send({ error: 'delete failed' }); }
 });
 
-/* ------------ Immich Import ------------ */
-
-// POST /api/import/immich-day
-app.post('/api/import/immich-day', async (req, reply) => {
-  try {
-    const { date, albumTitle, albumId, radiusMeters = 500 } = req.body || {};
-    if (!date) return reply.code(400).send({ error: 'date required (YYYY-MM-DD)' });
-    if (!albumTitle && !albumId) return reply.code(400).send({ error: 'albumTitle or albumId required' });
-    if (!IMMICH_URL || !IMMICH_API_KEYS.length) return reply.code(400).send({ error: 'Immich not configured on server' });
-
-    // 1) Find album
-    let album;
-    if (albumId) {
-      album = await immichJson(`/api/albums/${albumId}`);
-    } else {
-      // try to find by exact or fuzzy title
-      const albums = await immichJson('/api/albums');
-      album = albums.find(a =>
-        a.albumName === albumTitle ||
-        a.title === albumTitle ||
-        a.name === albumTitle ||
-        (a.albumName || a.title || a.name || '').includes(albumTitle)
-      );
-      if (!album) return reply.code(404).send({ error: 'Album not found in Immich' });
-      // fetch full album (some installs need this to include assets)
-      try { album = await immichJson(`/api/albums/${album.id}`); } catch {}
-    }
-
-    // 2) Get assets in album (varies by Immich version)
-    let assets = [];
-    if (Array.isArray(album.assets) && album.assets.length) {
-      assets = album.assets;
-    } else if (Array.isArray(album.assetIds) && album.assetIds.length) {
-      // fetch each asset detail
-      assets = await Promise.all(album.assetIds.map(async (id) => immichJson(`/api/assets/${id}`)));
-    } else {
-      // fallback (older API): try /api/albums/:id/assets
-      try {
-        const res = await immichJson(`/api/albums/${album.id}/assets`);
-        if (Array.isArray(res)) assets = res;
-      } catch {}
-    }
-
-    if (!assets.length) return reply.code(404).send({ error: 'Album has no assets' });
-
-    // 3) Download originals -> generate sizes -> build photos[]
-    const dayDir = path.join(IMG_DIR, date);
-    const photos = [];
-    for (const a of assets) {
-      const assetId = a.id || a.assetId;
-      if (!assetId) continue;
-
-      const origRes = await immichFetch(`/api/assets/${assetId}/original`);
-      const buf = Buffer.from(await origRes.arrayBuffer());
-
-      const baseNoExt = path.join(dayDir, assetId);
-      const { large, small } = await ensureImgSizes(buf, baseNoExt);
-
-      const relLarge = `img/${date}/${path.basename(large)}`;
-      const relSmall = `img/${date}/${path.basename(small)}`;
-
-      const { lat, lon, taken_at } = safeExif(a);
-      photos.push({
-        id: assetId,
-        url: relLarge,
-        thumb: relSmall,
-        taken_at,
-        lat, lon,
-        caption: a.description || a.exifInfo?.imageDescription || ''
-      });
-    }
-
-    // 4) Sort photos by time
-    photos.sort((x, y) => (+new Date(x.taken_at)) - (+new Date(y.taken_at)));
-
-    // 5) Merge / write day JSON
-    const slug = date;
-    const djPath = dayFile(slug);
-    const existing = await readJson(djPath, null);
-
-    const day = {
-      date: slug,
-      segment: 'day',
-      slug,
-      title: existing?.title || album.title || album.albumName || `Day — ${slug}`,
-      stats: existing?.stats || {},
-      polyline: existing?.polyline || { type: 'LineString', coordinates: [] },
-      points: existing?.points || [],
-      photos,
-      cover: existing?.cover || photos[0]?.id
-    };
-
-    await writeJson(djPath, day);
-
-    // 6) Update index.json (cover -> 400px version of cover id)
-    const coverId = day.cover || photos[0]?.id;
-    const coverThumbRel = coverId ? `img/${date}/${coverId}_400.jpg` : (photos[0]?.thumb || '');
-    await updateDaysIndex({ slug, date, title: day.title, coverThumbRel });
-
-    // 7) Git add/commit/push
-    const filesToAdd = [
-      djPath,
-      path.join(DAYS_DIR, 'index.json'),
-      ...photos.flatMap(p => [
-        path.join(REPO_DIR, 'public', p.url),
-        path.join(REPO_DIR, 'public', p.thumb)
-      ])
-    ];
-    await git.add(filesToAdd);
-    await git.commit(`Publish day ${slug} from Immich album ${album.title || album.albumName || albumId || albumTitle}`);
-    if (process.env.GIT_PUSH !== 'false') {
-      try { await git.push(); } catch (e) { req.log.warn('git push failed (skipped): ' + e.message); }
-    }
-
-    reply.send(day);
-  } catch (err) {
-    req.log.error(err);
-    reply.code(500).send({ error: err.message || 'import failed' });
-  }
-});
-
-/* ------------ Start ------------ */
-app
-  .listen({ port: PORT, host: '0.0.0.0' })
-  .then((address) => app.log.info(`Travel-share backend running at ${address}`))
-  .catch((err) => {
+// ---- Boot -------------------------------------------------------------------
+app.listen({ port: PORT, host: '0.0.0.0' }, (err, address) => {
+  if (err) {
     app.log.error(err);
     process.exit(1);
+  }
+  app.log.info(`Backend running at ${address}`);
   });

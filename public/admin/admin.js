@@ -97,6 +97,7 @@ function renderTripsTab(panel) {
     <label>Date: <input type="date" id="trip-date" /></label>
     <button id="load-day">Load</button>
     <button id="import-day">Import</button>
+    <button id="publish-day" disabled>Publish selected</button>
     <button id="save-day" disabled>Save</button>
     <button id="preview-day" disabled>Preview</button>
   `;
@@ -161,29 +162,31 @@ function renderTripsTab(panel) {
     const dateVal = /** @type {HTMLInputElement} */(document.getElementById('trip-date')).value;
     if (!dateVal) return alert('Choose date first');
 
-    // Ask once for the curated Immich album title (preselected photos live there)
-    const defaultTitle = `Trip ${dateVal}`; // change this to your real naming pattern
-    const albumTitle = prompt('Immich album title to publish:', defaultTitle) || defaultTitle;
+    const s = loadSettings();
+    if (!s.apiBase) return alert('Set Backend API Base URL in Settings first');
+    // optionally read s.immichAlbumId if you added that field to settings
 
-    try {
-      const res = await fetch(`${apiBase}/api/import/immich-day`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: dateVal, albumTitle, radiusMeters: 500 })
-      });
-      if (!res.ok) {
-        const e = await res.json().catch(()=>({}));
-        throw new Error(e.error || `HTTP ${res.status}`);
-      }
-      dayData = await res.json();  // server returns the final day JSON
-      renderDay();
-      document.getElementById('save-day').disabled = false; // you can still tweak captions/cover, then Save
-      document.getElementById('preview-day').disabled = false;
-      alert('Imported & published from Immich');
-    } catch (err) {
-      console.error(err);
-      alert('Import failed: ' + err.message);
+    dayData = dayData || {
+      date: dateVal, slug: dateVal, segment: 'day',
+      title: `Day — ${dateVal}`, stats:{}, polyline:{type:'LineString', coordinates:[]}, points:[], photos:[]
+    };
+
+    // Ask our backend to fetch photos for that calendar day (TEMPORARY: using local test route)
+    const url = `${s.apiBase}/api/local/day?date=${dateVal}`;
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      const err = await resp.json().catch(()=> ({}));
+      console.warn('Local import failed', err);
+      return alert('Local import failed. Check the server logs.');
     }
+    const data = await resp.json();
+    dayData.photos = data.photos || [];
+
+    renderDay();
+    controls.querySelector('#save-day').disabled = false;
+    controls.querySelector('#preview-day').disabled = false;
+    controls.querySelector('#publish-day').disabled = false;
+    alert(`Imported ${dayData.photos.length} photos from Immich for ${dateVal}`);
   }
 
   function renderDay() {
@@ -225,6 +228,35 @@ function renderTripsTab(panel) {
       Object.assign(chk.style, { position: 'absolute', top: '8px', left: '8px' });
       chk.addEventListener('change', () => { p._include = chk.checked; });
       wrap.appendChild(chk);
+
+      // delete icon (only makes sense for already-published photos)
+      const del = document.createElement('button');
+      del.textContent = '🗑';
+      Object.assign(del.style, {
+        position: 'absolute', right: '8px', top: '8px',
+        background: '#000a', color: '#fff', border: '0',
+        borderRadius: '6px', padding: '2px 6px', cursor: 'pointer'
+      });
+      del.title = 'Delete photo';
+      del.onclick = async (e) => {
+        e.stopPropagation();
+        if (!confirm('Delete this photo from the day?')) return;
+        try {
+          const s = loadSettings();
+          const token = s.apiToken || '';
+          const id = p.id || p.url; // backend uses id OR url
+          const res = await fetch(`${(s.apiBase||'')}/api/day/${dayData.slug}/photo/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: token ? { 'x-admin-token': token } : {}
+          });
+          if (!res.ok) throw new Error('delete failed');
+          wrap.remove();
+        } catch (err) {
+          console.error(err);
+          alert('Delete failed');
+        }
+      };
+      wrap.appendChild(del);
 
       // cover chip
       if (dayData.cover === p.id) {
@@ -276,14 +308,38 @@ function renderTripsTab(panel) {
   function openPhotoEditor(photo, wrapperEl) {
     const current = photo.caption || '';
     const edited = prompt('Edit caption (leave blank to clear):', current);
-    if (edited !== null) {
-      photo.caption = edited.trim();
-    }
-    const makeCover = confirm('Set this photo as the cover for the day?');
-    if (makeCover) {
-      dayData.cover = photo.id || photo.url; // prefer stable id
-    }
-    renderDay(); // refresh chips/captions
+    if (edited === null) return;
+    const newCaption = edited.trim();
+
+    (async () => {
+      try {
+        const s = loadSettings();
+        const token = s.apiToken || '';
+        const id = photo.id || photo.url;
+        // optimistic UI
+        photo.caption = newCaption;
+        await fetch(`${(s.apiBase||'')}/api/day/${dayData.slug}/photo/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'x-admin-token': token } : {})
+          },
+          body: JSON.stringify({ caption: newCaption })
+        });
+      } catch (e) {
+        console.error(e);
+        alert('Caption update failed');
+      } finally {
+        const makeCover = confirm('Set this photo as the cover for the day?');
+        if (makeCover) {
+          dayData.cover = photo.id || photo.url;
+          // save day cover via full PUT so the index picks it up immediately
+          await saveDay();
+        } else {
+          renderDay();
+        }
+      }
+    })();
   }
 
   async function saveDay() {
@@ -294,16 +350,20 @@ function renderTripsTab(panel) {
     }
 
     try {
+      const adminToken = (loadSettings().apiToken || '').trim();
       const res = await fetch(`${apiBase}/api/day/${dayData.slug}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(adminToken ? { 'x-admin-token': adminToken } : {})
+        },
         body: JSON.stringify(dayData),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         return alert('Save failed: ' + (err.error || res.status));
       }
-      alert('Saved & committed');
+      alert('Saved');
     } catch (err) {
       console.error(err);
       alert('Network error');
@@ -316,9 +376,48 @@ function renderTripsTab(panel) {
     iframe.focus();
   }
 
+  async function publishSelected() {
+    const s = loadSettings();
+    const adminToken = (s.apiToken || '').trim();
+    if (!adminToken) return alert('Set Admin API Token in Settings first');
+
+    const sel = (dayData.photos || []).filter(p => p._include !== false);
+    if (!sel.length) return alert('Nothing selected');
+
+    const body = {
+      date: dayData.slug,
+      title: dayData.title || `Day — ${dayData.slug}`,
+      photos: sel.map(p => ({
+        id: p.id,
+        url: p.url,
+        thumb: p.thumb,
+        taken_at: p.taken_at,
+        lat: p.lat,
+        lon: p.lon,
+        caption: p.caption || ''
+      }))
+    };
+
+    const res = await fetch(`${s.apiBase}/api/publish`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': adminToken
+      },
+      body: JSON.stringify(body)
+    });
+    const j = await res.json().catch(()=> ({}));
+    if (res.ok) {
+      alert(`Published. Total photos for ${dayData.slug}: ${j.total}`);
+    } else {
+      alert('Publish failed: ' + (j.error || res.status));
+    }
+  }
+
   // hook up buttons
   controls.querySelector('#load-day').addEventListener('click', loadDay);
   controls.querySelector('#import-day').addEventListener('click', importDay);
+  controls.querySelector('#publish-day').addEventListener('click', publishSelected);
   controls.querySelector('#save-day').addEventListener('click', saveDay);
   controls.querySelector('#preview-day').addEventListener('click', previewDay);
 }
@@ -343,16 +442,24 @@ function renderSettingsTab(panel) {
     <label style="display:block; margin-top:0.5rem;">Immich Tokens (one per line)
       <textarea id="set-immich-tokens" style="width:100%; height:80px;">${(s.immichTokens || []).join('\n')}</textarea>
     </label>
+    <label style="display:block; margin-top:0.5rem;">Immich Album ID
+      <input type="text" id="set-immich-album" value="${s.immichAlbumId || ''}" style="width:100%;" />
+    </label>
+    <label style="display:block; margin-top:0.5rem;">Admin API Token
+      <input type="text" id="set-api-token" value="${s.apiToken || ''}" style="width:100%;" />
+    </label>
     <button id="save-settings" style="margin-top:1rem;">Save Settings</button>
   `;
   panel.querySelector('#save-settings').addEventListener('click', () => {
     const newSet = {
       apiBase: panel.querySelector('#set-api-base').value.trim(),
+      apiToken: panel.querySelector('#set-api-token').value.trim(),
       dawarichUrl: panel.querySelector('#set-dawarich-url').value.trim(),
       dawarichToken: panel.querySelector('#set-dawarich-token').value.trim(),
       immichUrl: panel.querySelector('#set-immich-url').value.trim(),
       immichTokens: panel.querySelector('#set-immich-tokens').value
-        .split('\n').map((t) => t.trim()).filter(Boolean),
+        .split('\n').map(t => t.trim()).filter(Boolean),
+      immichAlbumId: panel.querySelector('#set-immich-album').value.trim()
     };
     saveSettings(newSet);
     alert('Saved');

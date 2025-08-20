@@ -1,4 +1,4 @@
-import { getApiBase, haversineKm, debounce, urlParam, pushUrlParam, replaceUrlParam, fmtTime } from "./utils.js";
+import { dataUrl, getApiBase, haversineKm, debounce, urlParam, pushUrlParam, replaceUrlParam, fmtTime } from "./utils.js";
 
 const isMobile = matchMedia('(max-width:768px)').matches;
 let topMap; // no mini-map when sticky hero map is always visible
@@ -146,10 +146,10 @@ function makeDragScrollable(el) {
 }
 
 async function loadStacks(){
-  const days = await (await fetch("days/index.json")).json();
+  const days = await (await fetch(dataUrl("days", "index.json"))).json();
   const all = [];
   await Promise.all(days.map(async d=>{
-    const dj = await (await fetch(`days/${d.slug}.json`)).json();
+    const dj = await (await fetch(dataUrl("days", `${d.slug}.json`))).json();
     (dj.photos||[]).forEach(p=> all.push({ ...p, dayTitle:dj.title, ts:+new Date(p.taken_at) }));
   }));
   all.sort((a,b)=>a.ts-b.ts);

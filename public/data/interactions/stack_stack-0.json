@@ -1,0 +1,34 @@
+{
+  "reactions": {
+    "❤️": 16,
+    "👍": 18,
+    "😊": 12,
+    "🤩": 7
+  },
+  "comments": [
+    {
+      "id": "1692223456789",
+      "text": "This entire series from Prague is breathtaking! Can't wait to visit myself.",
+      "author": "WanderlustJen",
+      "timestamp": "2025-08-15T08:45:00Z"
+    },
+    {
+      "id": "1692223456790",
+      "text": "Love how you captured the journey from Berlin to Prague. The transition shots are perfect!",
+      "author": "TravelBlogger_Mike",
+      "timestamp": "2025-08-15T11:30:00Z"
+    },
+    {
+      "id": "1692223456791",
+      "text": "The morning coffee shot is giving me serious travel envy! ☕",
+      "author": "CoffeeAndTravel",
+      "timestamp": "2025-08-15T16:20:00Z"
+    },
+    {
+      "id": "1692223456792",
+      "text": "Great documentation of the border crossing experience!",
+      "author": "EuroTrip2024",
+      "timestamp": "2025-08-16T09:10:00Z"
+    }
+  ]
+}

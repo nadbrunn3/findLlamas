@@ -1,3 +1,7 @@
+// --- Data paths (single source of truth) ---
+export const DATA_ROOT = 'data';
+export const dataUrl = (...parts) => [DATA_ROOT, ...parts].join('/');
+
 // --- URL helpers ---
 export const qs = (k, s = window.location.search) => new URLSearchParams(s).get(k);
 export const urlParam = qs;
