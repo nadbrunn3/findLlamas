@@ -1,6 +1,8 @@
 /* global L */
 // admin/admin.js
 
+import { groupIntoStacks } from "../js/utils.js";
+
 const PASS_KEY = 'tripAdminPass';
 const SETTINGS_KEY = 'tripAdminSettings';
 const app = document.getElementById('app');
@@ -115,17 +117,16 @@ function renderTripsTab(panel) {
   galleryEl.style.marginTop = '1rem';
   panel.appendChild(galleryEl);
 
-  const iframe = document.createElement('iframe');
-  iframe.id = 'preview-frame';
-  iframe.style.width = '100%';
-  iframe.style.height = '60vh';
-  iframe.style.marginTop = '1rem';
-  iframe.style.display = 'none';
-  iframe.setAttribute('title', 'Day Preview');
-  panel.appendChild(iframe);
+  const previewEl = document.createElement('div');
+  previewEl.id = 'stack-preview';
+  previewEl.className = 'gallery';
+  previewEl.style.marginTop = '1rem';
+  previewEl.style.display = 'none';
+  panel.appendChild(previewEl);
 
   let dayData = null;
   let map = null;
+  let dayStacks = [];
 
   const settings = loadSettings();
   const apiBase = settings.apiBase || '';
@@ -298,9 +299,32 @@ function renderTripsTab(panel) {
           });
           dayData.photos = newOrder;
           // reset idx
-          galleryEl.querySelectorAll('[draggable]').forEach((c, i) => { c.dataset.idx = String(i); });
-        }
-      });
+    galleryEl.querySelectorAll('[draggable]').forEach((c, i) => { c.dataset.idx = String(i); });
+      }
+    });
+  });
+
+    dayStacks = groupIntoStacks(dayData.photos || [], 50);
+    renderPreview();
+  }
+
+  function renderPreview() {
+    previewEl.innerHTML = '';
+    dayStacks.forEach((s) => {
+      const wrap = document.createElement('div');
+      wrap.style.position = 'relative';
+      const img = document.createElement('img');
+      const first = s.photos[0] || {};
+      img.src = first.thumb || first.url;
+      img.alt = s.title || '';
+      wrap.appendChild(img);
+      if (s.photos.length > 1) {
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.textContent = String(s.photos.length);
+        wrap.appendChild(chip);
+      }
+      previewEl.appendChild(wrap);
     });
   }
 
@@ -371,9 +395,7 @@ function renderTripsTab(panel) {
   }
 
   function previewDay() {
-    iframe.src = `../day.html?date=${encodeURIComponent(dayData.slug)}`;
-    iframe.style.display = 'block';
-    iframe.focus();
+    previewEl.style.display = previewEl.style.display === 'none' ? 'grid' : 'none';
   }
 
   async function publishSelected() {

@@ -1,4 +1,4 @@
-import { dataUrl, getApiBase, haversineKm, debounce, urlParam, pushUrlParam, replaceUrlParam, fmtTime } from "./utils.js";
+import { dataUrl, getApiBase, groupIntoStacks, debounce, urlParam, pushUrlParam, replaceUrlParam, fmtTime } from "./utils.js";
 
 const isMobile = matchMedia('(max-width:768px)').matches;
 let topMap; // no mini-map when sticky hero map is always visible
@@ -87,39 +87,6 @@ async function init(){
 }
 
 // ---------- data ----------
-function groupIntoStacks(photos, radiusMeters) {
-  const stacks = [];
-  const used = new Set();
-  const radiusKm = radiusMeters / 1000; // convert meters to kilometers
-  let idx = 0;
-
-  for (let i = 0; i < photos.length; i++) {
-    if (used.has(i)) continue;
-    const a = photos[i];
-    const group = [a];
-    used.add(i);
-
-    for (let j = i + 1; j < photos.length; j++) {
-      if (used.has(j)) continue;
-      const b = photos[j];
-      if (haversineKm(a.lat, a.lon, b.lat, b.lon) <= radiusKm) {
-        group.push(b);
-        used.add(j);
-      }
-    }
-
-    stacks.push({
-      id: `stack-${idx++}`,
-      title: a.caption || a.dayTitle,
-      location: { lat: a.lat, lng: a.lon, label: `${a.lat.toFixed(4)}, ${a.lon.toFixed(4)}` },
-      photos: group,
-      takenAt: a.taken_at
-    });
-  }
-
-  return stacks;
-}
-
 // Drag-to-scroll helper function
 function makeDragScrollable(el) {
   let isDown = false, startX = 0, startScroll = 0;
