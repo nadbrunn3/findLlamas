@@ -19,6 +19,7 @@ const REPO_DIR = process.env.REPO_DIR || process.cwd();
 const DATA_DIR = path.join(REPO_DIR, 'public', 'data');
 const DAYS_DIR = path.join(DATA_DIR, 'days');
 const INTERACTIONS_DIR = path.join(DATA_DIR, 'interactions');
+const DAY_INDEX_FILE = path.join(DAYS_DIR, 'index.json');
 
 // Immich
 const IMMICH_URL = (process.env.IMMICH_URL || '').replace(/\/$/, '');
@@ -55,6 +56,25 @@ async function readJson(file, def=null) {
 async function writeJson(file, obj) {
   await ensureDir(path.dirname(file));
   await fs.writeFile(file, JSON.stringify(obj, null, 2));
+}
+
+async function upsertDayIndex(day) {
+  if (!day || !day.slug) return;
+  const list = await readJson(DAY_INDEX_FILE, []);
+  const entry = {
+    slug: day.slug,
+    date: day.date || day.slug,
+    title: day.title || `Day — ${day.slug}`,
+    cover:
+      day.cover ||
+      (Array.isArray(day.photos) && day.photos[0] && (day.photos[0].thumb || day.photos[0].url)) ||
+      ''
+  };
+  const idx = list.findIndex(d => d.slug === entry.slug);
+  if (idx >= 0) list[idx] = { ...list[idx], ...entry };
+  else list.push(entry);
+  list.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  await writeJson(DAY_INDEX_FILE, list);
 }
 
 // Simple auth guard (for admin-only ops)
@@ -461,6 +481,7 @@ app.put('/api/day/:slug', async (req, reply) => {
     const body = req.body;
     if (!body || typeof body !== 'object') return reply.code(400).send({ error: 'Invalid JSON' });
     await writeJson(dayFile(req.params.slug), body);
+    await upsertDayIndex({ ...body, slug: req.params.slug });
     reply.send({ ok: true });
   } catch (e) {
     reply.code(500).send({ error: 'save failed' });
@@ -557,6 +578,7 @@ app.post('/api/publish', async (req, reply) => {
     if (title && !existing.title) existing.title = title;
 
     await writeJson(file, existing);
+    await upsertDayIndex(existing);
     reply.send({ ok: true, added: photos.length, total: existing.photos.length });
   } catch (e) {
     req.log.error(e);
