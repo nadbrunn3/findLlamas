@@ -30,7 +30,6 @@ const DEFAULT_ALBUM_ID = process.env.DEFAULT_ALBUM_ID || '';
 
 // optional admin token for protected endpoints (publish, edit/delete comments)
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
-const DEFAULT_ALBUM_ID = process.env.DEFAULT_ALBUM_ID || '';
 const AUTOLOAD_INTERVAL = 60 * 60 * 1000; // 1 hour
 
 // helpers
@@ -103,41 +102,56 @@ async function getAssetsForDay({ date, albumId }) {
 
   if (effectiveAlbumId) {
     try {
-      // Newer Immich builds support searching by album and date via the
-      // search API. Older builds may simply return the album with embedded
-      // assets; we handle both here.
-      const searchBody = {
-        albumId: effectiveAlbumId,
-        createdAfter: start.toISOString(),
-        createdBefore: end.toISOString(),
-      };
-
-      const res = await immichFetchJSON('/api/search/metadata', {
-        method: 'POST',
-        body: JSON.stringify(searchBody),
+      app.log.info(`Fetching all assets from album ${effectiveAlbumId}, then filtering by date ${date}`);
+      
+      // First, get all assets from the specific album
+      let albumAssets = [];
+      
+      // Try to get album with embedded assets first
+      try {
+        const album = await immichFetchJSON(`/api/albums/${effectiveAlbumId}`);
+        if (Array.isArray(album?.assets)) {
+          albumAssets = album.assets;
+          app.log.info(`Got ${albumAssets.length} assets from album.assets`);
+        }
+      } catch (e) {
+        app.log.warn(`Failed to get album with assets: ${e.message}`);
+      }
+      
+      // If no assets found, try the assets endpoint
+      if (albumAssets.length === 0) {
+        try {
+          const assetsRes = await immichFetchJSON(`/api/albums/${effectiveAlbumId}/assets`);
+          albumAssets = Array.isArray(assetsRes) ? assetsRes : assetsRes?.items || assetsRes?.assets || [];
+          app.log.info(`Got ${albumAssets.length} assets from /assets endpoint`);
+        } catch (e) {
+          app.log.warn(`Failed to get album assets: ${e.message}`);
+        }
+      }
+      
+      if (albumAssets.length === 0) {
+        app.log.info(`No assets found in album ${effectiveAlbumId}`);
+        return [];
+      }
+      
+      // Filter assets by the specific date range
+      const dayAssets = albumAssets.filter(a => {
+        const asset = a?.asset || a; // Handle wrapped assets
+        const t = asset?.exifInfo?.dateTimeOriginal || asset?.localDateTime || asset?.fileCreatedAt || asset?.createdAt;
+        if (!t) return false;
+        
+        const ts = new Date(t).getTime();
+        const inRange = !Number.isNaN(ts) && ts >= +start && ts < +end;
+        
+        if (inRange) {
+          app.log.info(`Asset ${asset?.id} matches date ${date}: ${t}`);
+        }
+        
+        return inRange;
       });
 
-      const assetsArray = Array.isArray(res)
-        ? res
-        : Array.isArray(res.items)
-        ? res.items
-        : Array.isArray(res.assets)
-        ? res.assets
-        : Array.isArray(res.results)
-        ? res.results
-        : [];
-
-      const dayAssets = assetsArray
-        .map(a => a?.asset || a)
-        .filter(a => {
-          const t = a?.exifInfo?.dateTimeOriginal || a?.localDateTime || a?.fileCreatedAt || a?.createdAt;
-          if (!t) return false;
-          const ts = new Date(t).getTime();
-          return !Number.isNaN(ts) && ts >= +start && ts < +end;
-        });
-
       if (dayAssets.length > 0) {
-        const photos = dayAssets.map(mapAssetToPhoto);
+        const photos = dayAssets.map(a => mapAssetToPhoto(a?.asset || a));
         app.log.info(`Album ${effectiveAlbumId}: found ${photos.length} assets for ${date}`);
         return photos;
       }

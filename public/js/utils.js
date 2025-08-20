@@ -55,10 +55,16 @@ export function groupIntoStacks(photos, radiusMeters) {
       }
     }
 
+    // Handle missing GPS coordinates
+    const hasGPS = typeof a.lat === 'number' && typeof a.lon === 'number';
+    const location = hasGPS 
+      ? { lat: a.lat, lng: a.lon, label: `${a.lat.toFixed(4)}, ${a.lon.toFixed(4)}` }
+      : { lat: null, lng: null, label: 'Location unknown' };
+
     stacks.push({
       id: `stack-${idx++}`,
       title: a.caption || a.dayTitle,
-      location: { lat: a.lat, lng: a.lon, label: `${a.lat.toFixed(4)}, ${a.lon.toFixed(4)}` },
+      location,
       photos: group,
       takenAt: a.taken_at
     });
@@ -70,3 +76,28 @@ export function groupIntoStacks(photos, radiusMeters) {
 // --- misc ---
 export const debounce = (fn, ms=120) => { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
 export const fmtTime = (iso) => new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false});
+
+// --- text formatting ---
+export function escapeHtml(text) {
+  if (!text) return '';
+  return text.replace(/[&<>"']/g, (match) => {
+    const entities = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    };
+    return entities[match];
+  });
+}
+
+export function formatTime(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+
+export function formatDateTime(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleString();
+}

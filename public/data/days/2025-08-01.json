@@ -1,0 +1,33 @@
+{
+  "date": "2025-08-01",
+  "segment": "day",
+  "slug": "2025-08-01",
+  "title": "Day — 2025-08-01",
+  "stats": {},
+  "polyline": {
+    "type": "LineString",
+    "coordinates": []
+  },
+  "points": [],
+  "photos": [
+    {
+      "id": "97a3593d-d046-46ea-9b52-e66e68babeb6",
+      "url": "/api/immich/assets/97a3593d-d046-46ea-9b52-e66e68babeb6/original",
+      "thumb": "/api/immich/assets/97a3593d-d046-46ea-9b52-e66e68babeb6/thumb",
+      "taken_at": "2025-08-01T12:38:32+00:00",
+      "lat": null,
+      "lon": null,
+      "caption": "IMG_5812.jpg"
+    },
+    {
+      "id": "bf9d8a0c-3084-4081-add9-97437c65a886",
+      "url": "/api/immich/assets/bf9d8a0c-3084-4081-add9-97437c65a886/original",
+      "thumb": "/api/immich/assets/bf9d8a0c-3084-4081-add9-97437c65a886/thumb",
+      "taken_at": "2025-08-01T12:38:32+00:00",
+      "lat": null,
+      "lon": null,
+      "caption": "IMG_5809.jpg"
+    }
+  ],
+  "stackCaptions": {}
+}

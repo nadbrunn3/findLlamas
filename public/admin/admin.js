@@ -49,28 +49,7 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-function groupIntoStacks(photos, radiusMeters) {
-  const stacks = [];
-  const used = new Set();
-  const radiusKm = radiusMeters / 1000;
-  let idx = 0;
-  for (let i = 0; i < photos.length; i++) {
-    if (used.has(i)) continue;
-    const a = photos[i];
-    const group = [a];
-    used.add(i);
-    for (let j = i + 1; j < photos.length; j++) {
-      if (used.has(j)) continue;
-      const b = photos[j];
-      if (haversineKm(a.lat, a.lon, b.lat, b.lon) <= radiusKm) {
-        group.push(b);
-        used.add(j);
-      }
-    }
-    stacks.push({ id: `stack-${idx++}`, photos: group });
-  }
-  return stacks;
-}
+
 
 let rootHandle; // FileSystemDirectoryHandle (optional; not required for basic use)
 
@@ -222,13 +201,13 @@ function renderTripsTab(panel) {
       title: `Day — ${dateVal}`, stats:{}, polyline:{type:'LineString', coordinates:[]}, points:[], photos:[]
     };
 
-    // Ask backend to import any new photos for that calendar day
-    const url = `${s.apiBase}/api/local/day?date=${dateVal}`;
+    // Ask backend to import any new photos for that calendar day from Immich
+    const url = `${s.apiBase}/api/immich/day?date=${dateVal}${s.immichAlbumId ? `&albumId=${encodeURIComponent(s.immichAlbumId)}` : ''}`;
     const resp = await fetch(url);
     if (!resp.ok) {
       const err = await resp.json().catch(()=> ({}));
-      console.warn('Local import failed', err);
-      return alert('Local import failed. Check the server logs.');
+      console.warn('Immich import failed', err);
+      return alert('Immich import failed. Check the server logs.');
     }
     const data = await resp.json();
     dayData.photos = dayData.photos || [];

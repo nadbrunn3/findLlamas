@@ -1,0 +1,13 @@
+{
+  "date": "test",
+  "segment": "day",
+  "slug": "test",
+  "title": "test",
+  "stats": {},
+  "polyline": {
+    "type": "LineString",
+    "coordinates": []
+  },
+  "points": [],
+  "photos": []
+}
