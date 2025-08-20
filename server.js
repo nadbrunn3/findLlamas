@@ -7,6 +7,7 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 
 dotenv.config();
 
@@ -209,17 +210,38 @@ app.get('/api/local/day', async (req, reply) => {
   if (!date) return reply.code(400).send({ error: 'date required' });
 
   const dir = path.join(process.cwd(), 'public', 'test-photos');
+  const manifestPath = path.join(process.cwd(), 'public', 'data', 'imported.json');
+  const imported = await readJson(manifestPath, []);
+  const importedSet = new Set(imported);
+
   const files = fsSync.readdirSync(dir).filter(f => /\.(jpg|jpeg|png)$/i.test(f));
 
-  const photos = files.map((f, i) => ({
-    id: `${date}-${i}`,
-    url: `/test-photos/${f}`,
-    thumb: `/test-photos/${f}`,
-    taken_at: date + 'T12:00:00.000Z',
-    lat: null,
-    lon: null,
-    caption: f
-  }));
+  const newHashes = [];
+  const photos = [];
+
+  for (const f of files) {
+    const filePath = path.join(dir, f);
+    const hash = crypto
+      .createHash('sha1')
+      .update(fsSync.readFileSync(filePath))
+      .digest('hex');
+    if (importedSet.has(hash)) continue;
+    importedSet.add(hash);
+    newHashes.push(hash);
+    photos.push({
+      id: hash,
+      url: `/test-photos/${f}`,
+      thumb: `/test-photos/${f}`,
+      taken_at: date + 'T12:00:00.000Z',
+      lat: null,
+      lon: null,
+      caption: f,
+    });
+  }
+
+  if (newHashes.length) {
+    await writeJson(manifestPath, [...imported, ...newHashes]);
+  }
 
   reply.send({ date, count: photos.length, photos });
 });
