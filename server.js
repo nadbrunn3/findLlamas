@@ -26,7 +26,9 @@ const IMMICH_API_KEYS = (process.env.IMMICH_API_KEYS || '')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
-const DEFAULT_ALBUM_ID = process.env.DEFAULT_ALBUM_ID || '';
+// Optional album ID to scope imports; matches README's IMMICH_ALBUM_ID
+// fallback to legacy DEFAULT_ALBUM_ID for backwards compat
+const IMMICH_ALBUM_ID = process.env.IMMICH_ALBUM_ID || process.env.DEFAULT_ALBUM_ID || '';
 
 // optional admin token for protected endpoints (publish, edit/delete comments)
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
@@ -98,7 +100,7 @@ async function getAssetsForDay({ date, albumId }) {
   const start = new Date(date + 'T00:00:00.000Z');
   const end = new Date(start.getTime() + 24 * 3600 * 1000);
 
-  const effectiveAlbumId = albumId || DEFAULT_ALBUM_ID;
+  const effectiveAlbumId = albumId || IMMICH_ALBUM_ID;
 
   if (effectiveAlbumId) {
     try {
@@ -263,15 +265,15 @@ function mapAssetToPhoto(a) {
 }
 
 async function autoLoadAlbum() {
-  if (!DEFAULT_ALBUM_ID) {
-    app.log.warn('DEFAULT_ALBUM_ID not set; autoLoadAlbum disabled');
+  if (!IMMICH_ALBUM_ID) {
+    app.log.warn('IMMICH_ALBUM_ID not set; autoLoadAlbum disabled');
     return;
   }
   try {
-    app.log.info(`autoLoadAlbum: fetching album ${DEFAULT_ALBUM_ID}`);
+    app.log.info(`autoLoadAlbum: fetching album ${IMMICH_ALBUM_ID}`);
     let album;
     try {
-      album = await immichFetchJSON(`/api/albums/${DEFAULT_ALBUM_ID}`);
+      album = await immichFetchJSON(`/api/albums/${IMMICH_ALBUM_ID}`);
     } catch (err) {
       app.log.error({ msg: 'autoLoadAlbum fetch album failed', err: String(err) });
       return;
@@ -282,7 +284,7 @@ async function autoLoadAlbum() {
       assets = album.assets;
     } else {
       try {
-        const res = await immichFetchJSON(`/api/albums/${DEFAULT_ALBUM_ID}/assets`);
+        const res = await immichFetchJSON(`/api/albums/${IMMICH_ALBUM_ID}/assets`);
         assets = Array.isArray(res) ? res : res?.items || [];
       } catch (err) {
         app.log.error({ msg: 'autoLoadAlbum fetch assets failed', err: String(err) });
@@ -291,7 +293,7 @@ async function autoLoadAlbum() {
     }
 
     if (!assets.length) {
-      app.log.warn(`autoLoadAlbum: no assets in album ${DEFAULT_ALBUM_ID}`);
+      app.log.warn(`autoLoadAlbum: no assets in album ${IMMICH_ALBUM_ID}`);
       return;
     }
 
@@ -718,7 +720,7 @@ app.delete('/api/stack/:stackId/comment/:commentId', async (req, reply) => {
   } catch { reply.code(500).send({ error: 'delete failed' }); }
 });
 
-if (DEFAULT_ALBUM_ID) {
+if (IMMICH_ALBUM_ID) {
   autoLoadAlbum().catch(err =>
     app.log.error({ msg: 'autoLoadAlbum initial run failed', err: String(err) })
   );
