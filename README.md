@@ -140,6 +140,22 @@ Since the admin calls your Immich/Dawarich directly, enable CORS on both:
 - Immich: Set `ENABLE_CORS=true` in environment
 - Dawarich: Enable CORS in configuration
 
+### Immich Album & Auto-Loader
+
+- `IMMICH_ALBUM_ID` (optional): limit imports to a single Immich album. Leave unset to scan all assets visible to your API keys.
+- The auto-loader groups assets by the day they were taken and writes JSON files like `public/data/days/2025-08-14.json`.
+- Scheduling: there is no built-in scheduler. Run the loader manually or via an external cron job; each run processes one day and will overwrite that day's file on subsequent runs.
+
+Minimal `.env` example:
+
+```env
+IMMICH_URL=https://photos.example.com
+IMMICH_API_KEY=your_api_key
+IMMICH_ALBUM_ID=your_album_id
+```
+
+Running the loader for `2025-08-14` with the above settings creates `public/data/days/2025-08-14.json` containing only photos from the specified album.
+
 ## 📝 Daily Workflow
 
 ### Creating a Trip Day
