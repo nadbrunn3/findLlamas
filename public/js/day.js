@@ -101,7 +101,7 @@ function initMap() {
     const marker = L.marker([photo.lat, photo.lon]).addTo(map);
     marker.bindPopup(`
       <img src="${photo.thumb || photo.url}" style="width:100px;height:75px;object-fit:cover;border-radius:4px;" alt="">
-      <br><strong>${escapeHtml(photo.caption || 'Photo')}</strong>
+      <br><strong>${escapeHtml(photo.title || photo.caption || 'Photo')}</strong>
       <br><small>${formatTime(photo.taken_at)}</small>
     `);
     
@@ -135,7 +135,8 @@ function renderPhotoPost() {
       </div>
       
       <div class="photo-main">
-        <img src="${mainPhoto.url}" alt="${escapeHtml(mainPhoto.caption || '')}" onclick="openLightbox(0)">
+        <img src="${mainPhoto.url}" alt="${escapeHtml(mainPhoto.title || mainPhoto.caption || '')}" onclick="openLightbox(0)">
+        ${mainPhoto.title ? `<p class="photo-caption">${escapeHtml(mainPhoto.title)}</p>` : ''}
         ${mainPhoto.caption ? `<p class="photo-caption">${escapeHtml(mainPhoto.caption)}</p>` : ''}
       </div>
       
@@ -143,7 +144,7 @@ function renderPhotoPost() {
         <div class="photo-thumbnails">
           ${photos.slice(1, 5).map((photo, index) => `
             <img src="${photo.thumb || photo.url}" 
-                 alt="${escapeHtml(photo.caption || '')}" 
+                 alt="${escapeHtml(photo.title || photo.caption || '')}"
                  onclick="openLightbox(${index + 1})"
                  class="thumbnail">
           `).join('')}
@@ -184,7 +185,7 @@ function openLightbox(index = 0) {
   const photo = dayData.photos[currentPhotoIndex];
   
   document.getElementById('lightbox-image').src = photo.url;
-  document.getElementById('lightbox-caption').textContent = photo.caption || '';
+  document.getElementById('lightbox-caption').textContent = photo.caption || photo.title || '';
   document.getElementById('lightbox-counter').textContent = `${currentPhotoIndex + 1} / ${dayData.photos.length}`;
   
   lightbox.classList.add('open');

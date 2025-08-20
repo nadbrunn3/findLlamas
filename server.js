@@ -488,11 +488,11 @@ app.put('/api/day/:slug', async (req, reply) => {
   }
 });
 
-// update a single photo's caption
+// update a single photo's title and/or caption
 app.patch('/api/day/:slug/photo/:id', async (req, reply) => {
   try {
     if (!requireAdmin(req, reply)) return;
-    const { caption, description } = req.body || {};
+    const { caption, description, title } = req.body || {};
     const file = dayFile(req.params.slug);
     const day = await readJson(file);
     if (!day || !Array.isArray(day.photos)) {
@@ -501,7 +501,12 @@ app.patch('/api/day/:slug/photo/:id', async (req, reply) => {
     const pid = decodeURIComponent(req.params.id);
     const p = day.photos.find(ph => (ph.id || ph.url) === pid);
     if (!p) return reply.code(404).send({ error: 'photo not found' });
-    p.caption = String(caption ?? description ?? '').trim();
+    const cap = caption ?? description;
+    if (cap !== undefined) p.caption = String(cap).trim();
+    if (title !== undefined) {
+      p.title = String(title).trim();
+      if (!p.title) delete p.title;
+    }
     await writeJson(file, day);
     reply.send({ ok: true });
   } catch (e) {
@@ -513,7 +518,7 @@ app.patch('/api/day/:slug/photo/:id', async (req, reply) => {
 app.patch('/api/day/:slug/stack/:stackId', async (req, reply) => {
   try {
     if (!requireAdmin(req, reply)) return;
-    const { caption, title } = req.body || {};
+    const { caption, description, title } = req.body || {};
     const file = dayFile(req.params.slug);
     const day = await readJson(file);
     if (!day) return reply.code(404).send({ error: 'day not found' });
@@ -532,7 +537,8 @@ app.patch('/api/day/:slug/stack/:stackId', async (req, reply) => {
     day.stackMeta = day.stackMeta || {};
     const meta = day.stackMeta[key] || { title: '', caption: '' };
     if (typeof title === 'string') meta.title = title.trim();
-    if (typeof caption === 'string') meta.caption = caption.trim();
+    const cap = caption ?? description;
+    if (cap !== undefined) meta.caption = String(cap).trim();
 
     // remove empty meta, otherwise persist
     if (!meta.title && !meta.caption) delete day.stackMeta[key];

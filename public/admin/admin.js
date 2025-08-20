@@ -45,14 +45,14 @@ function saveSettings(obj) {
   }
   function apiBase() { return window.location.origin; }
 
-  async function patchPhotoCaption(slug, photoId, caption) {
+  async function patchPhotoMeta(slug, photoId, meta) {
     const res = await fetch(`${apiBase()}/api/day/${encodeURIComponent(slug)}/photo/${encodeURIComponent(photoId)}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         'x-admin-token': getAdminToken()
       },
-      body: JSON.stringify({ caption })
+      body: JSON.stringify(meta) // { title, caption }
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
@@ -170,147 +170,6 @@ function renderAdminMapMarkers(photos) {
 
 // --- helpers for stack grouping ---
 
-function formatDateTime(iso) {
-  if (!iso) return '';
-  return new Date(iso).toLocaleString();
-}
-
-// --- Admin Preview Renderer ---
-function renderAdminPreview(day) {
-  const preview = document.getElementById('stack-preview');
-  if (!preview) return;
-
-  // Container classes to pick up the theme
-  preview.className = 'stack-feed-container';
-  preview.style.display = 'block';
-
-  const photos = day?.photos || [];
-  if (!photos.length) {
-    preview.innerHTML = `<div class="card" style="padding:16px">No photos for this day.</div>`;
-    return;
-  }
-
-  const title = day.title || `Day — ${day.slug || day.date || ''}`;
-  const first = photos[0];
-
-  // Build one stylish stack card. Expand to multiple stacks if you group them.
-  preview.innerHTML = `
-    <div class="stack-feed">
-      <article class="stack-card" tabindex="0">
-        <header class="stack-card-header">
-          <h3 class="stack-card-title">${htmlesc(title)}</h3>
-          <div class="stack-location-time card-sub">
-            <span>${formatDateTime(first.taken_at)}</span>
-            <span class="dot"></span>
-            <span>${photos.length} photo${photos.length > 1 ? 's' : ''}</span>
-            ${day.stackMeta && Object.keys(day.stackMeta).length ? `<span class="stack-pill">Stack</span>` : ''}
-          </div>
-        </header>
-
-        <div class="stack-media-container media-gradient">
-          <img class="stack-main-photo" id="admin-main-photo" src="${first.url}" alt="${htmlesc(first.caption || '')}">
-          <button class="stack-photo-nav prev" id="admin-prev" aria-label="Previous">‹</button>
-          <button class="stack-photo-nav next" id="admin-next" aria-label="Next">›</button>
-          <div class="photo-counter">${photos.length}</div>
-        </div>
-
-        <div class="stack-thumbnail-drawer">
-          <div class="drawer-thumbnails" id="admin-thumbs">
-            ${photos.map((p, i) => `
-              <img class="drawer-thumbnail${i===0?' active':''}" 
-                   src="${p.thumb || p.url}" 
-                   alt="${htmlesc(p.caption || '')}" 
-                   data-index="${i}">
-            `).join('')}
-          </div>
-        </div>
-
-        ${first.caption ? `<div class="caption" id="admin-caption">${htmlesc(first.caption)}</div>` : `<div class="caption" id="admin-caption"></div>`}
-
-        <footer class="stack-actions">
-          <div class="action-left">
-            <button class="stack-action-btn" id="admin-like">
-              <span class="heart-icon">♥</span><span class="like-count">0</span>
-            </button>
-            <button class="stack-action-btn" id="admin-comment-btn">
-              💬 <span class="comment-count">0</span>
-            </button>
-          </div>
-        </footer>
-
-        <div class="comments-block" id="admin-comments" style="display:none;">
-          <div class="comments-toolbar">
-            <button class="chip chip-like" id="admin-like-chip">
-              <span class="icon">♥</span>
-              <span class="count">0</span>
-            </button>
-            <span class="chip"><span class="icon">💬</span><span class="count" id="admin-cnt">0</span></span>
-          </div>
-          <ul class="comment-list" id="admin-comment-list"></ul>
-          <form class="comment-form" id="admin-comment-form">
-            <input class="comment-input" id="admin-comment-input" placeholder="Add a comment…" required />
-            <button class="send-btn" type="submit">Post</button>
-          </form>
-        </div>
-      </article>
-    </div>
-  `;
-
-  // Wire up simple preview interactions (client-side only)
-  let idx = 0;
-  const mainImg = document.getElementById('admin-main-photo');
-  const captionEl = document.getElementById('admin-caption');
-
-  function show(i) {
-    idx = Math.max(0, Math.min(photos.length - 1, i));
-    const p = photos[idx];
-    mainImg.src = p.url;
-    captionEl.textContent = p.caption || '';
-    // Update active thumb
-    document.querySelectorAll('#admin-thumbs .drawer-thumbnail').forEach(el => el.classList.remove('active'));
-    const active = document.querySelector(`#admin-thumbs .drawer-thumbnail[data-index="${idx}"]`);
-    if (active) active.classList.add('active');
-  }
-
-  document.getElementById('admin-prev').addEventListener('click', () => show(idx - 1));
-  document.getElementById('admin-next').addEventListener('click', () => show(idx + 1));
-  document.getElementById('admin-thumbs').addEventListener('click', (e) => {
-    const t = e.target.closest('.drawer-thumbnail');
-    if (t) show(Number(t.dataset.index));
-  });
-
-  // Comments toggle (pure preview; integrate with your /api/... later if you want)
-  const comments = document.getElementById('admin-comments');
-  document.getElementById('admin-comment-btn').addEventListener('click', () => {
-    comments.style.display = comments.style.display === 'none' ? 'block' : 'none';
-  });
-  document.getElementById('admin-comment-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const input = document.getElementById('admin-comment-input');
-    const list = document.getElementById('admin-comment-list');
-    const text = input.value.trim();
-    if (!text) return;
-    const li = document.createElement('li');
-    li.className = 'comment-item';
-    li.innerHTML = `
-      <div class="comment-avatar">U</div>
-      <div class="comment-bubble">
-        <div class="comment-head">
-          <span class="comment-author">You</span>
-          <span class="comment-time">now</span>
-        </div>
-        <div class="comment-text">${htmlesc(text)}</div>
-      </div>`;
-    list.appendChild(li);
-    const cnt = document.getElementById('admin-cnt');
-    cnt.textContent = String(Number(cnt.textContent || 0) + 1);
-    input.value = '';
-  });
-
-  // Start on first photo
-  show(0);
-}
-
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -418,14 +277,7 @@ function renderTripsTab(panel) {
   iframe.setAttribute('title', 'Day Preview');
   panel.appendChild(iframe);
 
-  const previewEl = document.createElement('div');
-  previewEl.id = 'stack-preview';
-  previewEl.style.marginTop = '1rem';
-  previewEl.style.display = 'none';
-  panel.appendChild(previewEl);
-
   let dayData = null;
-  let dayStacks = [];
 
   const settings = loadSettings();
 
@@ -471,8 +323,7 @@ function renderTripsTab(panel) {
 
     renderDay();
     
-    // Update preview and map after loading photos
-    renderAdminPreview(dayData);
+    // Update map after loading photos
     ensureAdminMap();
     renderAdminMapMarkers(dayData.photos || []);
 
@@ -532,8 +383,7 @@ function renderTripsTab(panel) {
 
     renderDay();
     
-    // Update preview and map after importing photos
-    renderAdminPreview(dayData);
+    // Update map after importing photos
     ensureAdminMap();
     renderAdminMapMarkers(dayData.photos || []);
     
@@ -562,7 +412,7 @@ function renderTripsTab(panel) {
 
       const img = document.createElement('img');
       img.src = p.thumb || p.url;
-      img.alt = p.caption || '';
+      img.alt = p.title || p.caption || '';
       wrap.appendChild(img);
 
       // include checkbox
@@ -617,7 +467,7 @@ function renderTripsTab(panel) {
       }
 
       // double-click editor
-      wrap.addEventListener('dblclick', () => openPhotoEditor(p, wrap));
+      wrap.addEventListener('dblclick', () => openPhotoEditor(p));
       galleryEl.appendChild(wrap);
     });
 
@@ -658,23 +508,24 @@ function renderTripsTab(panel) {
     });
   });
 
-    dayStacks = groupIntoStacks(dayData.photos || [], 50);
+    renderStacks();
   }
 
   function renderStacks() {
-    stackEl.innerHTML = '';
+    stackEditorEl.innerHTML = '';
     const stacks = groupIntoStacks(dayData.photos || [], 50);
     stacks.forEach((st) => {
       const div = document.createElement('div');
       div.className = 'stack-item';
       const first = st.photos[0];
       const meta = dayData.stackMeta?.[st.id] || { title: '', caption: '' };
-      const caption = meta.caption || meta.title || '';
+      const title = meta.title || '';
+      const desc = meta.caption || '';
       div.innerHTML = `
         <img src="${first.thumb || first.url}" alt="" style="width:120px;height:auto;display:block;">
-        <div class="stack-caption">${caption}</div>`;
+        <div class="stack-caption">${title ? htmlesc(title) + (desc ? ' — ' : '') : ''}${htmlesc(desc)}</div>`;
       div.addEventListener('dblclick', () => openStackEditor(st));
-      stackEl.appendChild(div);
+      stackEditorEl.appendChild(div);
     });
   }
 
@@ -685,7 +536,7 @@ function renderTripsTab(panel) {
     const newTitle = prompt('Edit stack title (leave blank to clear):', currentTitle);
     if (newTitle === null) return;
     
-    const newCaption = prompt('Edit stack caption (leave blank to clear):', currentCaption);
+    const newCaption = prompt('Edit stack description (leave blank to clear):', currentCaption);
     if (newCaption === null) return;
 
     (async () => {
@@ -711,7 +562,6 @@ function renderTripsTab(panel) {
         
         // Re-render everything to show updates
         renderStacks();
-        renderAdminPreview(dayData);
         ensureAdminMap();
         renderAdminMapMarkers(dayData.photos || []);
       } catch (e) {
@@ -721,22 +571,25 @@ function renderTripsTab(panel) {
     })();
   }
 
-  // Small inline editor for captions & cover
-  function openPhotoEditor(photo, wrapperEl) {
-    const current = photo.caption || '';
-    const edited = prompt('Edit caption (leave blank to clear):', current);
-    if (edited === null) return;
-    const newCaption = edited.trim();
+  // Small inline editor for photo title/description & cover
+  function openPhotoEditor(photo) {
+    const currentTitle = photo.title || '';
+    const currentCaption = photo.caption || '';
+    const newTitle = prompt('Edit photo title (leave blank to clear):', currentTitle);
+    if (newTitle === null) return;
+    const newCaption = prompt('Edit photo description (leave blank to clear):', currentCaption);
+    if (newCaption === null) return;
 
     (async () => {
       try {
         const id = photo.id || photo.url;
         // optimistic UI
-        photo.caption = newCaption;
-        await patchPhotoCaption(dayData.slug, id, newCaption);
+        photo.title = newTitle.trim();
+        photo.caption = newCaption.trim();
+        await patchPhotoMeta(dayData.slug, id, { title: photo.title, caption: photo.caption });
       } catch (e) {
         console.error(e);
-        alert('Caption update failed');
+        alert('Photo metadata update failed');
       } finally {
         const makeCover = confirm('Set this photo as the cover for the day?');
         if (makeCover) {
@@ -782,12 +635,9 @@ function renderTripsTab(panel) {
   }
 
   function previewDay() {
-    const show = previewEl.style.display === 'none';
-    previewEl.style.display = show ? 'block' : 'none';
+    const show = iframe.style.display === 'none';
     iframe.style.display = show ? 'block' : 'none';
     if (show && dayData) {
-      // Refresh the preview with current dayData
-      renderAdminPreview(dayData);
       iframe.src = `../day.html?date=${encodeURIComponent(dayData.slug)}`;
       iframe.focus();
     }
@@ -810,6 +660,7 @@ function renderTripsTab(panel) {
         taken_at: p.taken_at,
         lat: p.lat,
         lon: p.lon,
+        title: p.title || '',
         caption: p.caption || ''
       }))
     };
