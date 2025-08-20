@@ -25,6 +25,7 @@ const IMMICH_API_KEYS = (process.env.IMMICH_API_KEYS || '')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
+const DEFAULT_ALBUM_ID = process.env.DEFAULT_ALBUM_ID || '';
 
 // optional admin token for protected endpoints (publish, edit/delete comments)
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
@@ -88,20 +89,73 @@ async function immichFetchJSON(route, init = {}) {
   return res.json();
 }
 
-// Try search API first; fallback to album listing (older builds differ)
+// Try album-specific search first. When an album ID is provided we do not
+// fall back to the random asset approach because it could leak assets from
+// other albums.
 async function getAssetsForDay({ date, albumId }) {
   const start = new Date(date + 'T00:00:00.000Z');
   const end = new Date(start.getTime() + 24 * 3600 * 1000);
+
+  const effectiveAlbumId = albumId || DEFAULT_ALBUM_ID;
+
+  if (effectiveAlbumId) {
+    try {
+      // Newer Immich builds support searching by album and date via the
+      // search API. Older builds may simply return the album with embedded
+      // assets; we handle both here.
+      const searchBody = {
+        albumId: effectiveAlbumId,
+        createdAfter: start.toISOString(),
+        createdBefore: end.toISOString(),
+      };
+
+      const res = await immichFetchJSON('/api/search/metadata', {
+        method: 'POST',
+        body: JSON.stringify(searchBody),
+      });
+
+      const assetsArray = Array.isArray(res)
+        ? res
+        : Array.isArray(res.items)
+        ? res.items
+        : Array.isArray(res.assets)
+        ? res.assets
+        : Array.isArray(res.results)
+        ? res.results
+        : [];
+
+      const dayAssets = assetsArray
+        .map(a => a?.asset || a)
+        .filter(a => {
+          const t = a?.exifInfo?.dateTimeOriginal || a?.localDateTime || a?.fileCreatedAt || a?.createdAt;
+          if (!t) return false;
+          const ts = new Date(t).getTime();
+          return !Number.isNaN(ts) && ts >= +start && ts < +end;
+        });
+
+      if (dayAssets.length > 0) {
+        const photos = dayAssets.map(mapAssetToPhoto);
+        app.log.info(`Album ${effectiveAlbumId}: found ${photos.length} assets for ${date}`);
+        return photos;
+      }
+
+      app.log.info(`No assets found for album ${effectiveAlbumId} on ${date}`);
+      return [];
+    } catch (e) {
+      app.log.warn(`Album fetch failed for ${effectiveAlbumId}: ${e.message}`);
+      return [];
+    }
+  }
 
   // 1) Try getting random assets and filter by date (works for your Immich version)
   try {
     // First, let's get available buckets to see if this date has photos
     const buckets = await immichFetchJSON('/api/timeline/buckets?size=DAY');
     const targetBucket = date; // YYYY-MM-DD format
-    const hasBucket = Array.isArray(buckets) && buckets.some(b => 
+    const hasBucket = Array.isArray(buckets) && buckets.some(b =>
       b.timeBucket && b.timeBucket.startsWith(targetBucket)
     );
-    
+
     if (!hasBucket) {
       app.log.info(`No photos found for date ${date} in timeline buckets`);
       return [];
@@ -112,36 +166,29 @@ async function getAssetsForDay({ date, albumId }) {
     const BATCH_SIZE = 100;
     const MAX_ATTEMPTS = 5;
     const found = [];
-    
+
     for (let attempt = 0; attempt < MAX_ATTEMPTS && found.length < 50; attempt++) {
       try {
         const randomAssets = await immichFetchJSON('/api/assets/random?count=' + BATCH_SIZE);
         const assetsArray = Array.isArray(randomAssets) ? randomAssets : [];
-        
+
         const dayAssets = assetsArray.filter(a => {
           const t = a?.exifInfo?.dateTimeOriginal || a?.localDateTime || a?.fileCreatedAt || a?.createdAt;
           if (!t) return false;
-          
+
           const ts = new Date(t).getTime();
           const inRange = !Number.isNaN(ts) && ts >= +start && ts < +end;
-          
-          // If albumId specified, check if asset belongs to that album
-          // Note: This is a limitation - random API doesn't filter by album
-          // For album filtering, we'd need different API endpoints
-          if (albumId && inRange) {
-            app.log.warn('Album filtering not fully supported with random API approach');
-          }
-          
+
           return inRange;
         });
-        
+
         // Add unique assets (avoid duplicates)
         dayAssets.forEach(asset => {
           if (!found.some(f => f.id === asset.id)) {
             found.push(asset);
           }
         });
-        
+
         app.log.info(`Attempt ${attempt + 1}: Found ${dayAssets.length} assets for ${date}, total: ${found.length}`);
       } catch (e) {
         app.log.warn(`Random assets attempt ${attempt + 1} failed:`, e.message);
@@ -150,7 +197,7 @@ async function getAssetsForDay({ date, albumId }) {
 
     if (found.length > 0) {
       app.log.info(`Successfully found ${found.length} assets for ${date}`);
-      return found;
+      return found.map(mapAssetToPhoto);
     }
   } catch (e) {
     app.log.warn({ msg: 'Timeline buckets check failed', err: String(e) });
@@ -172,7 +219,7 @@ async function getAssetsForDay({ date, albumId }) {
       }
       if (assets.length > 0) {
         app.log.info(`Timeline bucket approach found ${assets.length} assets for ${date}`);
-        return assets;
+        return assets.map(mapAssetToPhoto);
       }
     }
   } catch (e) {
@@ -232,10 +279,10 @@ app.get('/api/immich/day', async (req, reply) => {
     const { date, albumId } = req.query;
     if (!date) return reply.code(400).send({ error: 'date required (YYYY-MM-DD)' });
 
-    const assets = await getAssetsForDay({ date, albumId });
-    const photos = assets.map(mapAssetToPhoto);
+    const photos = await getAssetsForDay({ date, albumId });
+    const sorted = photos.sort((a, b) => new Date(a.taken_at) - new Date(b.taken_at));
 
-    reply.send({ date, albumId: albumId || null, count: photos.length, photos });
+    reply.send({ date, albumId: albumId || null, count: sorted.length, photos: sorted });
   } catch (err) {
     req.log.error(err);
     reply.code(500).send({ error: `Failed to fetch photos from Immich: ${String(err.message || err)}` });
