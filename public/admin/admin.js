@@ -127,6 +127,33 @@ function renderTripsTab(panel) {
   let dayData = null;
   let map = null;
 
+  const INCLUDE_PREFIX = 'adminInclude-';
+
+  function loadIncludeState(slug) {
+    try { return JSON.parse(localStorage.getItem(INCLUDE_PREFIX + slug) || '{}'); }
+    catch { return {}; }
+  }
+
+  function persistIncludeState() {
+    if (!dayData || !dayData.slug) return;
+    const state = {};
+    (dayData.photos || []).forEach((p) => {
+      const key = p.id || p.url;
+      state[key] = p._include !== false;
+    });
+    try { localStorage.setItem(INCLUDE_PREFIX + dayData.slug, JSON.stringify(state)); }
+    catch {}
+  }
+
+  function applyIncludeState() {
+    if (!dayData || !dayData.slug) return;
+    const state = loadIncludeState(dayData.slug);
+    (dayData.photos || []).forEach((p) => {
+      const key = p.id || p.url;
+      if (state[key] === false) p._include = false;
+    });
+  }
+
   const settings = loadSettings();
   const apiBase = settings.apiBase || '';
 
@@ -152,7 +179,7 @@ function renderTripsTab(panel) {
         photos: [],
       };
     }
-
+    applyIncludeState();
     renderDay();
     controls.querySelector('#save-day').disabled = false;
     controls.querySelector('#preview-day').disabled = false;
@@ -181,7 +208,7 @@ function renderTripsTab(panel) {
     }
     const data = await resp.json();
     dayData.photos = data.photos || [];
-
+    applyIncludeState();
     renderDay();
     controls.querySelector('#save-day').disabled = false;
     controls.querySelector('#preview-day').disabled = false;
@@ -224,9 +251,9 @@ function renderTripsTab(panel) {
       // include checkbox
       const chk = document.createElement('input');
       chk.type = 'checkbox';
-      chk.checked = true;
+      chk.checked = p._include !== false;
       Object.assign(chk.style, { position: 'absolute', top: '8px', left: '8px' });
-      chk.addEventListener('change', () => { p._include = chk.checked; });
+      chk.addEventListener('change', () => { p._include = chk.checked; persistIncludeState(); });
       wrap.appendChild(chk);
 
       // delete icon (only makes sense for already-published photos)
