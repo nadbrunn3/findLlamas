@@ -3,6 +3,7 @@ import { dataUrl, getApiBase, groupIntoStacks, debounce, urlParam, pushUrlParam,
 const isMobile = matchMedia('(max-width:768px)').matches;
 let topMap; // no mini-map when sticky hero map is always visible
 let photoStacks = [];
+let allPhotos = [];
 let activeStackId = null;
 let scrollLocked = false;
 
@@ -114,15 +115,17 @@ function makeDragScrollable(el) {
 
 async function loadStacks(){
   const days = await (await fetch(dataUrl("days", "index.json"))).json();
-  const all = [];
+  allPhotos = [];
   await Promise.all(days.map(async d=>{
     const dj = await (await fetch(dataUrl("days", `${d.slug}.json`))).json();
-    (dj.photos||[]).forEach(p=> all.push({ ...p, dayTitle:dj.title, ts:+new Date(p.taken_at) }));
+    (dj.photos||[]).forEach(p=> allPhotos.push({ ...p, dayTitle:dj.title, ts:+new Date(p.taken_at) }));
   }));
-  all.sort((a,b)=>a.ts-b.ts);
+  allPhotos.sort((a,b)=>a.ts-b.ts);
 
-  // group photos into stacks by proximity
-  photoStacks = groupIntoStacks(all, 50);
+  // group photos into stacks by proximity (used for feed only)
+  photoStacks = groupIntoStacks(allPhotos, 50);
+  // tag photos with stack id for map interactions
+  photoStacks.forEach(s => s.photos.forEach(p => p.stackId = s.id));
 }
 
 // ---------- maps ----------
@@ -143,7 +146,11 @@ function initMaps(){
 
   // Fit once everything is known
   const b = L.latLngBounds([[currentLocation.lat,currentLocation.lng]]);
-  photoStacks.forEach(s=>b.extend([s.location.lat,s.location.lng]));
+  allPhotos.forEach(p=> {
+    if (typeof p.lat === 'number' && typeof p.lon === 'number') {
+      b.extend([p.lat, p.lon]);
+    }
+  });
   topMap.fitBounds(b, { padding:[20,20] });
 
   // Important when sticky containers change size / orientation
@@ -162,29 +169,30 @@ function addMarkersAndPath(map){
     })
   }).addTo(map);
 
+  const gpsPhotos = allPhotos.filter(p=> typeof p.lat === 'number' && typeof p.lon === 'number');
+
   // path (chronological)
-  if (photoStacks.length>1){
-    const coords = photoStacks.map(s=>[s.location.lat, s.location.lng]);
+  if (gpsPhotos.length>1){
+    const coords = gpsPhotos.map(p=>[p.lat, p.lon]);
     L.polyline(coords, { color:"#3b82f6", weight:3, opacity:.7 }).addTo(map);
   }
 
   // photo markers with zoom-responsive sizing
-  photoStacks.forEach(stack=>{
-    const rep = stack.photos[0];
-    const thumb = rep.thumb || rep.url;
+  gpsPhotos.forEach(photo=>{
+    const thumb = photo.thumb || photo.url;
     const markerSize = getMarkerSize(map.getZoom(), isTopMap);
-    
-    const m = L.marker([stack.location.lat, stack.location.lng], {
+
+    const m = L.marker([photo.lat, photo.lon], {
       icon: L.divIcon({
-        className: `photo-marker${stack.id===activeStackId?' active':''}`,
+        className: `photo-marker${photo.stackId===activeStackId?' active':''}`,
         html: `<div class="pm__wrap"><img src="${thumb}" alt=""></div>`,
-        iconSize:[markerSize, markerSize], 
+        iconSize:[markerSize, markerSize],
         iconAnchor:[markerSize/2, markerSize/2]
       })
     }).addTo(map);
-    m.on("click", ()=>onMarkerClick(stack.id));
+    m.on("click", ()=>onMarkerClick(photo.stackId));
     // store id and map reference for updates
-    m.stackId = stack.id;
+    m.stackId = photo.stackId;
     m.isTopMap = isTopMap;
   });
 

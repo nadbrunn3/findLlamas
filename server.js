@@ -19,6 +19,7 @@ const REPO_DIR = process.env.REPO_DIR || process.cwd();
 const DATA_DIR = path.join(REPO_DIR, 'public', 'data');
 const DAYS_DIR = path.join(DATA_DIR, 'days');
 const INTERACTIONS_DIR = path.join(DATA_DIR, 'interactions');
+const DAY_INDEX_FILE = path.join(DAYS_DIR, 'index.json');
 
 // Immich
 const IMMICH_URL = (process.env.IMMICH_URL || '').replace(/\/$/, '');
@@ -55,6 +56,25 @@ async function readJson(file, def=null) {
 async function writeJson(file, obj) {
   await ensureDir(path.dirname(file));
   await fs.writeFile(file, JSON.stringify(obj, null, 2));
+}
+
+async function upsertDayIndex(day) {
+  if (!day || !day.slug) return;
+  const list = await readJson(DAY_INDEX_FILE, []);
+  const entry = {
+    slug: day.slug,
+    date: day.date || day.slug,
+    title: day.title || `Day — ${day.slug}`,
+    cover:
+      day.cover ||
+      (Array.isArray(day.photos) && day.photos[0] && (day.photos[0].thumb || day.photos[0].url)) ||
+      ''
+  };
+  const idx = list.findIndex(d => d.slug === entry.slug);
+  if (idx >= 0) list[idx] = { ...list[idx], ...entry };
+  else list.push(entry);
+  list.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  await writeJson(DAY_INDEX_FILE, list);
 }
 
 // Simple auth guard (for admin-only ops)
@@ -461,17 +481,18 @@ app.put('/api/day/:slug', async (req, reply) => {
     const body = req.body;
     if (!body || typeof body !== 'object') return reply.code(400).send({ error: 'Invalid JSON' });
     await writeJson(dayFile(req.params.slug), body);
+    await upsertDayIndex({ ...body, slug: req.params.slug });
     reply.send({ ok: true });
   } catch (e) {
     reply.code(500).send({ error: 'save failed' });
   }
 });
 
-// update a single photo's caption
+// update a single photo's title and/or caption
 app.patch('/api/day/:slug/photo/:id', async (req, reply) => {
   try {
     if (!requireAdmin(req, reply)) return;
-    const { caption, description } = req.body || {};
+    const { caption, description, title } = req.body || {};
     const file = dayFile(req.params.slug);
     const day = await readJson(file);
     if (!day || !Array.isArray(day.photos)) {
@@ -480,7 +501,12 @@ app.patch('/api/day/:slug/photo/:id', async (req, reply) => {
     const pid = decodeURIComponent(req.params.id);
     const p = day.photos.find(ph => (ph.id || ph.url) === pid);
     if (!p) return reply.code(404).send({ error: 'photo not found' });
-    p.caption = String(caption ?? description ?? '').trim();
+    const cap = caption ?? description;
+    if (cap !== undefined) p.caption = String(cap).trim();
+    if (title !== undefined) {
+      p.title = String(title).trim();
+      if (!p.title) delete p.title;
+    }
     await writeJson(file, day);
     reply.send({ ok: true });
   } catch (e) {
@@ -492,7 +518,7 @@ app.patch('/api/day/:slug/photo/:id', async (req, reply) => {
 app.patch('/api/day/:slug/stack/:stackId', async (req, reply) => {
   try {
     if (!requireAdmin(req, reply)) return;
-    const { caption, title } = req.body || {};
+    const { caption, description, title } = req.body || {};
     const file = dayFile(req.params.slug);
     const day = await readJson(file);
     if (!day) return reply.code(404).send({ error: 'day not found' });
@@ -511,7 +537,8 @@ app.patch('/api/day/:slug/stack/:stackId', async (req, reply) => {
     day.stackMeta = day.stackMeta || {};
     const meta = day.stackMeta[key] || { title: '', caption: '' };
     if (typeof title === 'string') meta.title = title.trim();
-    if (typeof caption === 'string') meta.caption = caption.trim();
+    const cap = caption ?? description;
+    if (cap !== undefined) meta.caption = String(cap).trim();
 
     // remove empty meta, otherwise persist
     if (!meta.title && !meta.caption) delete day.stackMeta[key];
@@ -557,6 +584,7 @@ app.post('/api/publish', async (req, reply) => {
     if (title && !existing.title) existing.title = title;
 
     await writeJson(file, existing);
+    await upsertDayIndex(existing);
     reply.send({ ok: true, added: photos.length, total: existing.photos.length });
   } catch (e) {
     req.log.error(e);
