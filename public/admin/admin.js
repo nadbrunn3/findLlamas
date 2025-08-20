@@ -38,7 +38,279 @@ function saveSettings(obj) {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(obj));
 }
 
+  // ----- Admin Helper Functions -----
+  function getAdminToken() {
+    const settings = loadSettings();
+    return settings.apiToken || '';
+  }
+  function apiBase() { return window.location.origin; }
+
+  async function patchPhotoCaption(slug, photoId, caption) {
+    const res = await fetch(`${apiBase()}/api/day/${encodeURIComponent(slug)}/photo/${encodeURIComponent(photoId)}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': getAdminToken()
+      },
+      body: JSON.stringify({ caption })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+  async function patchStackMeta(slug, stackId, meta) {
+    const res = await fetch(`${apiBase()}/api/day/${encodeURIComponent(slug)}/stack/${encodeURIComponent(stackId)}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': getAdminToken()
+      },
+      body: JSON.stringify(meta) // { title, caption }
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+  function htmlesc(s='') {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  }
+
+  // ----- Admin map state -----
+  let adminMap, adminMapLayer, adminMarkers = [];
+
+// Call this once when your admin panel mounts (or right before Preview shows)
+function ensureAdminMap() {
+  const mapEl = document.getElementById('trip-map-admin');
+  if (!mapEl) return;
+
+  // Give the container your styled class so it picks up the theme heights/border radius
+  mapEl.classList.add('top-map');
+
+  if (!adminMap) {
+    adminMap = L.map(mapEl, {
+      zoomControl: true,
+      dragging: true,
+      scrollWheelZoom: true,
+      touchZoom: true
+    });
+
+    // Primary: Esri imagery; Fallback: OSM tiles if Esri errors/rate-limits
+    const esri = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { attribution: '&copy; Esri', maxZoom: 18 }
+    );
+    const osm = L.tileLayer(
+      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      { attribution: '&copy; OpenStreetMap', maxZoom: 19 }
+    );
+
+    adminMapLayer = esri.addTo(adminMap);
+    esri.on('tileerror', () => {
+      if (adminMapLayer) adminMap.removeLayer(adminMapLayer);
+      adminMapLayer = osm.addTo(adminMap);
+    });
+
+    // When the panel becomes visible, Leaflet needs a size recompute
+    queueMicrotask(() => adminMap.invalidateSize(true));
+    window.addEventListener('resize', () => adminMap.invalidateSize());
+  }
+}
+
+// Render GPS markers (call every time after you load/import/preview)
+function renderAdminMapMarkers(photos) {
+  const mapEl = document.getElementById('trip-map-admin');
+  if (!mapEl || !adminMap) return;
+
+  // Clear old markers
+  adminMarkers.forEach(m => m.remove());
+  adminMarkers = [];
+
+  const withGPS = (photos || []).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon));
+
+  if (!withGPS.length) {
+    // Replace with a friendly banner if nothing has GPS
+    mapEl.innerHTML = `
+      <div style="
+        display:flex;align-items:center;justify-content:center;height:100%;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 12px; color: #9aa3af; font-weight:600;">
+        📍 No location data available for these photos
+      </div>`;
+    return;
+  }
+
+  // Ensure map is initialized before adding markers
+  ensureAdminMap();
+
+  // Custom thumb markers styled by your CSS (.photo-marker etc.)
+  const bounds = L.latLngBounds();
+  withGPS.forEach((p, i) => {
+    const icon = L.divIcon({
+      className: 'photo-marker',
+      html: `<div class="pm__wrap"><img src="${p.thumb || p.url}" alt=""></div>`,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16]
+    });
+
+    const m = L.marker([p.lat, p.lon], { icon }).addTo(adminMap);
+    m.on('click', () => {
+      // If you have a lightbox in admin, hook it here:
+      if (typeof openLightbox === 'function') openLightbox(i);
+    });
+
+    adminMarkers.push(m);
+    bounds.extend([p.lat, p.lon]);
+  });
+
+  adminMap.fitBounds(bounds, { padding: [20, 20] });
+  // If the panel has just transitioned from hidden to visible:
+  setTimeout(() => adminMap.invalidateSize(true), 0);
+}
+
 // --- helpers for stack grouping ---
+
+function formatDateTime(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleString();
+}
+
+// --- Admin Preview Renderer ---
+function renderAdminPreview(day) {
+  const preview = document.getElementById('stack-preview');
+  if (!preview) return;
+
+  // Container classes to pick up the theme
+  preview.className = 'stack-feed-container';
+  preview.style.display = 'block';
+
+  const photos = day?.photos || [];
+  if (!photos.length) {
+    preview.innerHTML = `<div class="card" style="padding:16px">No photos for this day.</div>`;
+    return;
+  }
+
+  const title = day.title || `Day — ${day.slug || day.date || ''}`;
+  const first = photos[0];
+
+  // Build one stylish stack card. Expand to multiple stacks if you group them.
+  preview.innerHTML = `
+    <div class="stack-feed">
+      <article class="stack-card" tabindex="0">
+        <header class="stack-card-header">
+          <h3 class="stack-card-title">${htmlesc(title)}</h3>
+          <div class="stack-location-time card-sub">
+            <span>${formatDateTime(first.taken_at)}</span>
+            <span class="dot"></span>
+            <span>${photos.length} photo${photos.length > 1 ? 's' : ''}</span>
+            ${day.stackMeta && Object.keys(day.stackMeta).length ? `<span class="stack-pill">Stack</span>` : ''}
+          </div>
+        </header>
+
+        <div class="stack-media-container media-gradient">
+          <img class="stack-main-photo" id="admin-main-photo" src="${first.url}" alt="${htmlesc(first.caption || '')}">
+          <button class="stack-photo-nav prev" id="admin-prev" aria-label="Previous">‹</button>
+          <button class="stack-photo-nav next" id="admin-next" aria-label="Next">›</button>
+          <div class="photo-counter">${photos.length}</div>
+        </div>
+
+        <div class="stack-thumbnail-drawer">
+          <div class="drawer-thumbnails" id="admin-thumbs">
+            ${photos.map((p, i) => `
+              <img class="drawer-thumbnail${i===0?' active':''}" 
+                   src="${p.thumb || p.url}" 
+                   alt="${htmlesc(p.caption || '')}" 
+                   data-index="${i}">
+            `).join('')}
+          </div>
+        </div>
+
+        ${first.caption ? `<div class="caption" id="admin-caption">${htmlesc(first.caption)}</div>` : `<div class="caption" id="admin-caption"></div>`}
+
+        <footer class="stack-actions">
+          <div class="action-left">
+            <button class="stack-action-btn" id="admin-like">
+              <span class="heart-icon">♥</span><span class="like-count">0</span>
+            </button>
+            <button class="stack-action-btn" id="admin-comment-btn">
+              💬 <span class="comment-count">0</span>
+            </button>
+          </div>
+        </footer>
+
+        <div class="comments-block" id="admin-comments" style="display:none;">
+          <div class="comments-toolbar">
+            <button class="chip chip-like" id="admin-like-chip">
+              <span class="icon">♥</span>
+              <span class="count">0</span>
+            </button>
+            <span class="chip"><span class="icon">💬</span><span class="count" id="admin-cnt">0</span></span>
+          </div>
+          <ul class="comment-list" id="admin-comment-list"></ul>
+          <form class="comment-form" id="admin-comment-form">
+            <input class="comment-input" id="admin-comment-input" placeholder="Add a comment…" required />
+            <button class="send-btn" type="submit">Post</button>
+          </form>
+        </div>
+      </article>
+    </div>
+  `;
+
+  // Wire up simple preview interactions (client-side only)
+  let idx = 0;
+  const mainImg = document.getElementById('admin-main-photo');
+  const captionEl = document.getElementById('admin-caption');
+
+  function show(i) {
+    idx = Math.max(0, Math.min(photos.length - 1, i));
+    const p = photos[idx];
+    mainImg.src = p.url;
+    captionEl.textContent = p.caption || '';
+    // Update active thumb
+    document.querySelectorAll('#admin-thumbs .drawer-thumbnail').forEach(el => el.classList.remove('active'));
+    const active = document.querySelector(`#admin-thumbs .drawer-thumbnail[data-index="${idx}"]`);
+    if (active) active.classList.add('active');
+  }
+
+  document.getElementById('admin-prev').addEventListener('click', () => show(idx - 1));
+  document.getElementById('admin-next').addEventListener('click', () => show(idx + 1));
+  document.getElementById('admin-thumbs').addEventListener('click', (e) => {
+    const t = e.target.closest('.drawer-thumbnail');
+    if (t) show(Number(t.dataset.index));
+  });
+
+  // Comments toggle (pure preview; integrate with your /api/... later if you want)
+  const comments = document.getElementById('admin-comments');
+  document.getElementById('admin-comment-btn').addEventListener('click', () => {
+    comments.style.display = comments.style.display === 'none' ? 'block' : 'none';
+  });
+  document.getElementById('admin-comment-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = document.getElementById('admin-comment-input');
+    const list = document.getElementById('admin-comment-list');
+    const text = input.value.trim();
+    if (!text) return;
+    const li = document.createElement('li');
+    li.className = 'comment-item';
+    li.innerHTML = `
+      <div class="comment-avatar">U</div>
+      <div class="comment-bubble">
+        <div class="comment-head">
+          <span class="comment-author">You</span>
+          <span class="comment-time">now</span>
+        </div>
+        <div class="comment-text">${htmlesc(text)}</div>
+      </div>`;
+    list.appendChild(li);
+    const cnt = document.getElementById('admin-cnt');
+    cnt.textContent = String(Number(cnt.textContent || 0) + 1);
+    input.value = '';
+  });
+
+  // Start on first photo
+  show(0);
+}
+
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -130,10 +402,12 @@ function renderTripsTab(panel) {
   galleryEl.style.marginTop = '1rem';
   panel.appendChild(galleryEl);
 
-  const stackEl = document.createElement('div');
-  stackEl.id = 'stack-preview';
-  stackEl.style.marginTop = '1rem';
-  panel.appendChild(stackEl);
+  // Stack Editor (inline title/description + per-photo captions)
+  const stackEditorEl = document.createElement('div');
+  stackEditorEl.id = 'stack-editor';
+  stackEditorEl.className = 'stack-feed-container';
+  stackEditorEl.style.marginTop = '1rem';
+  panel.appendChild(stackEditorEl);
 
   const iframe = document.createElement('iframe');
   iframe.id = 'preview-frame';
@@ -146,28 +420,32 @@ function renderTripsTab(panel) {
 
   const previewEl = document.createElement('div');
   previewEl.id = 'stack-preview';
-  previewEl.className = 'gallery';
   previewEl.style.marginTop = '1rem';
   previewEl.style.display = 'none';
   panel.appendChild(previewEl);
 
   let dayData = null;
-  let map = null;
   let dayStacks = [];
 
   const settings = loadSettings();
-  const apiBase = settings.apiBase || '';
 
   async function loadDay() {
+    console.log('🚀 LoadDay function called');
     const dateVal = /** @type {HTMLInputElement} */(document.getElementById('trip-date')).value;
+    console.log('📅 Selected date:', dateVal);
     if (!dateVal) return alert('Choose date');
 
     const slug = dateVal;
+    console.log('🔗 API URL:', `${apiBase()}/api/day/${slug}`);
     try {
-      const res = await fetch(`${apiBase}/api/day/${slug}`);
+      const res = await fetch(`${apiBase()}/api/day/${slug}`);
+      console.log('📡 API response status:', res.status);
       if (!res.ok) throw new Error('not found');
       dayData = await res.json();
-    } catch {
+      console.log('📦 Loaded day data:', dayData);
+      console.log('📸 Photos in day:', dayData.photos?.length || 0);
+    } catch (error) {
+      console.warn('⚠️ Load failed:', error);
       // create a blank shell if missing
       dayData = {
         date: slug,
@@ -181,28 +459,44 @@ function renderTripsTab(panel) {
       };
     }
 
-    dayData.stackCaptions = dayData.stackCaptions || {};
+    // Ensure backward compatibility for stack metadata
+    if (dayData.stackCaptions && !dayData.stackMeta) {
+      dayData.stackMeta = {};
+      for (const [k, v] of Object.entries(dayData.stackCaptions)) {
+        dayData.stackMeta[k] = { title: '', caption: String(v || '') };
+      }
+      delete dayData.stackCaptions;
+    }
+    dayData.stackMeta = dayData.stackMeta || {};
 
     renderDay();
+    
+    // Update preview and map after loading photos
+    renderAdminPreview(dayData);
+    ensureAdminMap();
+    renderAdminMapMarkers(dayData.photos || []);
+    
     controls.querySelector('#save-day').disabled = false;
     controls.querySelector('#preview-day').disabled = false;
   }
 
   async function importDay() {
+    console.log('📥 ImportDay function called');
     const dateVal = /** @type {HTMLInputElement} */(document.getElementById('trip-date')).value;
+    console.log('📅 Selected date:', dateVal);
     if (!dateVal) return alert('Choose date first');
 
     const s = loadSettings();
-    if (!s.apiBase) return alert('Set Backend API Base URL in Settings first');
-    // optionally read s.immichAlbumId if you added that field to settings
-
+    console.log('⚙️ Settings:', s);
+    
     dayData = dayData || {
       date: dateVal, slug: dateVal, segment: 'day',
       title: `Day — ${dateVal}`, stats:{}, polyline:{type:'LineString', coordinates:[]}, points:[], photos:[]
     };
 
     // Ask backend to import any new photos for that calendar day from Immich
-    const url = `${s.apiBase}/api/immich/day?date=${dateVal}${s.immichAlbumId ? `&albumId=${encodeURIComponent(s.immichAlbumId)}` : ''}`;
+    const url = `${apiBase()}/api/immich/day?date=${dateVal}${s.immichAlbumId ? `&albumId=${encodeURIComponent(s.immichAlbumId)}` : ''}`;
+    console.log('🔗 Immich URL:', url);
     const resp = await fetch(url);
     if (!resp.ok) {
       const err = await resp.json().catch(()=> ({}));
@@ -210,6 +504,9 @@ function renderTripsTab(panel) {
       return alert('Immich import failed. Check the server logs.');
     }
     const data = await resp.json();
+    console.log('📦 API Response:', data);
+    console.log('📸 Photos in response:', data.photos?.length || 0);
+    
     dayData.photos = dayData.photos || [];
     const existing = new Set(dayData.photos.map((p) => p.id || p.url));
     let newCount = 0;
@@ -221,9 +518,24 @@ function renderTripsTab(panel) {
         newCount++;
       }
     });
-    dayData.stackCaptions = dayData.stackCaptions || {};
+    console.log('✨ Added', newCount, 'new photos. Total:', dayData.photos.length);
+    // Ensure backward compatibility for stack metadata
+    if (dayData.stackCaptions && !dayData.stackMeta) {
+      dayData.stackMeta = {};
+      for (const [k, v] of Object.entries(dayData.stackCaptions)) {
+        dayData.stackMeta[k] = { title: '', caption: String(v || '') };
+      }
+      delete dayData.stackCaptions;
+    }
+    dayData.stackMeta = dayData.stackMeta || {};
 
     renderDay();
+    
+    // Update preview and map after importing photos
+    renderAdminPreview(dayData);
+    ensureAdminMap();
+    renderAdminMapMarkers(dayData.photos || []);
+    
     controls.querySelector('#save-day').disabled = false;
     controls.querySelector('#preview-day').disabled = false;
     controls.querySelector('#publish-day').disabled = false;
@@ -231,20 +543,10 @@ function renderTripsTab(panel) {
   }
 
   function renderDay() {
-    // Map
+    // Map - Use the improved admin map functions
     try {
-      if (map) map.remove();
-      map = L.map(mapEl);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OSM', maxZoom: 19,
-      }).addTo(map);
-
-      const coords = (dayData?.polyline?.coordinates || []);
-      const latlngs = coords.map(([lon, lat]) => [lat, lon]);
-      if (latlngs.length) {
-        const poly = L.polyline(latlngs, { color: 'steelblue', weight: 4 }).addTo(map);
-        map.fitBounds(poly.getBounds(), { padding: [20, 20] });
-      }
+      ensureAdminMap();
+      renderAdminMapMarkers(dayData?.photos || []);
     } catch (e) {
       console.error('Map render error', e);
     }
@@ -283,15 +585,21 @@ function renderTripsTab(panel) {
         e.stopPropagation();
         if (!confirm('Delete this photo from the day?')) return;
         try {
-          const s = loadSettings();
-          const token = s.apiToken || '';
           const id = p.id || p.url; // backend uses id OR url
-          const res = await fetch(`${(s.apiBase||'')}/api/day/${dayData.slug}/photo/${encodeURIComponent(id)}`, {
+          const res = await fetch(`${apiBase()}/api/day/${dayData.slug}/photo/${encodeURIComponent(id)}`, {
             method: 'DELETE',
-            headers: token ? { 'x-admin-token': token } : {}
+            headers: { 'x-admin-token': getAdminToken() }
           });
           if (!res.ok) throw new Error('delete failed');
           wrap.remove();
+          
+          // Remove from dayData.photos array and update map
+          const photoIndex = dayData.photos.findIndex(photo => (photo.id || photo.url) === id);
+          if (photoIndex !== -1) {
+            dayData.photos.splice(photoIndex, 1);
+            ensureAdminMap();
+            renderAdminMapMarkers(dayData.photos || []);
+          }
         } catch (err) {
           console.error(err);
           alert('Delete failed');
@@ -338,6 +646,11 @@ function renderTripsTab(panel) {
             return dayData.photos[i];
           });
           dayData.photos = newOrder;
+          
+          // Update map after reordering photos
+          ensureAdminMap();
+          renderAdminMapMarkers(dayData.photos || []);
+          
           // reset idx
     galleryEl.querySelectorAll('[draggable]').forEach((c, i) => { c.dataset.idx = String(i); });
       }
@@ -345,29 +658,6 @@ function renderTripsTab(panel) {
   });
 
     dayStacks = groupIntoStacks(dayData.photos || [], 50);
-    renderPreview();
-  }
-
-  function renderPreview() {
-    previewEl.innerHTML = '';
-    dayStacks.forEach((s) => {
-      const wrap = document.createElement('div');
-      wrap.style.position = 'relative';
-      const img = document.createElement('img');
-      const first = s.photos[0] || {};
-      img.src = first.thumb || first.url;
-      img.alt = s.title || '';
-      wrap.appendChild(img);
-      if (s.photos.length > 1) {
-        const chip = document.createElement('div');
-        chip.className = 'chip';
-        chip.textContent = String(s.photos.length);
-        wrap.appendChild(chip);
-      }
-      previewEl.appendChild(wrap);
-    });
-
-    renderStacks();
   }
 
   function renderStacks() {
@@ -377,7 +667,8 @@ function renderTripsTab(panel) {
       const div = document.createElement('div');
       div.className = 'stack-item';
       const first = st.photos[0];
-      const caption = dayData.stackCaptions?.[st.id] || '';
+      const meta = dayData.stackMeta?.[st.id] || { title: '', caption: '' };
+      const caption = meta.caption || meta.title || '';
       div.innerHTML = `
         <img src="${first.thumb || first.url}" alt="" style="width:120px;height:auto;display:block;">
         <div class="stack-caption">${caption}</div>`;
@@ -387,31 +678,44 @@ function renderTripsTab(panel) {
   }
 
   function openStackEditor(stack) {
-    const current = dayData.stackCaptions?.[stack.id] || '';
-    const edited = prompt('Edit stack caption (leave blank to clear):', current);
-    if (edited === null) return;
-    const newCaption = edited.trim();
+    const meta = dayData.stackMeta?.[stack.id] || { title: '', caption: '' };
+    const currentTitle = meta.title || '';
+    const currentCaption = meta.caption || '';
+    const newTitle = prompt('Edit stack title (leave blank to clear):', currentTitle);
+    if (newTitle === null) return;
+    
+    const newCaption = prompt('Edit stack caption (leave blank to clear):', currentCaption);
+    if (newCaption === null) return;
 
     (async () => {
       try {
-        const s = loadSettings();
-        const token = s.apiToken || '';
-        await fetch(`${(s.apiBase||'')}/api/day/${dayData.slug}/stack/${encodeURIComponent(stack.id)}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'x-admin-token': token } : {})
-          },
-          body: JSON.stringify({ caption: newCaption })
+        await patchStackMeta(dayData.slug, stack.id, {
+          title: newTitle.trim(),
+          caption: newCaption.trim()
         });
-        dayData.stackCaptions = dayData.stackCaptions || {};
-        if (newCaption) dayData.stackCaptions[stack.id] = newCaption;
-        else delete dayData.stackCaptions[stack.id];
+        
+        // Update local data
+        dayData.stackMeta = dayData.stackMeta || {};
+        const trimmedTitle = newTitle.trim();
+        const trimmedCaption = newCaption.trim();
+        
+        if (!trimmedTitle && !trimmedCaption) {
+          delete dayData.stackMeta[stack.id];
+        } else {
+          dayData.stackMeta[stack.id] = { 
+            title: trimmedTitle, 
+            caption: trimmedCaption 
+          };
+        }
+        
+        // Re-render everything to show updates
+        renderStacks();
+        renderAdminPreview(dayData);
+        ensureAdminMap();
+        renderAdminMapMarkers(dayData.photos || []);
       } catch (e) {
         console.error(e);
-        alert('Stack caption update failed');
-      } finally {
-        renderStacks();
+        alert('Stack metadata update failed');
       }
     })();
   }
@@ -425,19 +729,10 @@ function renderTripsTab(panel) {
 
     (async () => {
       try {
-        const s = loadSettings();
-        const token = s.apiToken || '';
         const id = photo.id || photo.url;
         // optimistic UI
         photo.caption = newCaption;
-        await fetch(`${(s.apiBase||'')}/api/day/${dayData.slug}/photo/${encodeURIComponent(id)}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'x-admin-token': token } : {})
-          },
-          body: JSON.stringify({ caption: newCaption })
-        });
+        await patchPhotoCaption(dayData.slug, id, newCaption);
       } catch (e) {
         console.error(e);
         alert('Caption update failed');
@@ -459,15 +754,18 @@ function renderTripsTab(panel) {
     if (Array.isArray(dayData.photos)) {
       dayData.photos = dayData.photos.filter((p) => p._include !== false);
       dayData.photos.forEach((p) => delete p._include);
+      
+      // Update map after filtering photos
+      ensureAdminMap();
+      renderAdminMapMarkers(dayData.photos || []);
     }
 
     try {
-      const adminToken = (loadSettings().apiToken || '').trim();
-      const res = await fetch(`${apiBase}/api/day/${dayData.slug}`, {
+      const res = await fetch(`${apiBase()}/api/day/${dayData.slug}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          ...(adminToken ? { 'x-admin-token': adminToken } : {})
+          'x-admin-token': getAdminToken()
         },
         body: JSON.stringify(dayData),
       });
@@ -484,17 +782,18 @@ function renderTripsTab(panel) {
 
   function previewDay() {
     const show = previewEl.style.display === 'none';
-    previewEl.style.display = show ? 'grid' : 'none';
+    previewEl.style.display = show ? 'block' : 'none';
     iframe.style.display = show ? 'block' : 'none';
     if (show && dayData) {
+      // Refresh the preview with current dayData
+      renderAdminPreview(dayData);
       iframe.src = `../day.html?date=${encodeURIComponent(dayData.slug)}`;
       iframe.focus();
     }
   }
 
   async function publishSelected() {
-    const s = loadSettings();
-    const adminToken = (s.apiToken || '').trim();
+    const adminToken = getAdminToken();
     if (!adminToken) return alert('Set Admin API Token in Settings first');
 
     const sel = (dayData.photos || []).filter(p => p._include !== false);
@@ -514,7 +813,7 @@ function renderTripsTab(panel) {
       }))
     };
 
-    const res = await fetch(`${s.apiBase}/api/publish`, {
+    const res = await fetch(`${apiBase()}/api/publish`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -531,11 +830,13 @@ function renderTripsTab(panel) {
   }
 
   // hook up buttons
+  console.log('🔗 Attaching event listeners...');
   controls.querySelector('#load-day').addEventListener('click', loadDay);
   controls.querySelector('#import-day').addEventListener('click', importDay);
   controls.querySelector('#publish-day').addEventListener('click', publishSelected);
   controls.querySelector('#save-day').addEventListener('click', saveDay);
   controls.querySelector('#preview-day').addEventListener('click', previewDay);
+  console.log('✅ Event listeners attached successfully');
 }
 
 // -------------------- Settings Tab --------------------

@@ -469,7 +469,7 @@ app.put('/api/day/:slug', async (req, reply) => {
 app.patch('/api/day/:slug/photo/:id', async (req, reply) => {
   try {
     if (!requireAdmin(req, reply)) return;
-    const { caption } = req.body || {};
+    const { caption, description } = req.body || {};
     const file = dayFile(req.params.slug);
     const day = await readJson(file);
     if (!day || !Array.isArray(day.photos)) {
@@ -478,7 +478,7 @@ app.patch('/api/day/:slug/photo/:id', async (req, reply) => {
     const pid = decodeURIComponent(req.params.id);
     const p = day.photos.find(ph => (ph.id || ph.url) === pid);
     if (!p) return reply.code(404).send({ error: 'photo not found' });
-    p.caption = (caption || '').trim();
+    p.caption = String(caption ?? description ?? '').trim();
     await writeJson(file, day);
     reply.send({ ok: true });
   } catch (e) {
@@ -486,7 +486,7 @@ app.patch('/api/day/:slug/photo/:id', async (req, reply) => {
   }
 });
 
-// update or clear a stack caption/title
+// update stack metadata: title and/or caption (with migration)
 app.patch('/api/day/:slug/stack/:stackId', async (req, reply) => {
   try {
     if (!requireAdmin(req, reply)) return;
@@ -494,10 +494,27 @@ app.patch('/api/day/:slug/stack/:stackId', async (req, reply) => {
     const file = dayFile(req.params.slug);
     const day = await readJson(file);
     if (!day) return reply.code(404).send({ error: 'day not found' });
-    const key = req.params.stackId;
-    const val = (caption ?? title ?? '').trim();
-    day.stackCaptions = day.stackCaptions || {};
-    if (val) day.stackCaptions[key] = val; else delete day.stackCaptions[key];
+
+    const key = String(req.params.stackId);
+
+    // ---- migrate old format if present ----
+    if (day.stackCaptions && !day.stackMeta) {
+      day.stackMeta = {};
+      for (const [k, v] of Object.entries(day.stackCaptions)) {
+        day.stackMeta[k] = { title: '', caption: String(v || '') };
+      }
+      delete day.stackCaptions;
+    }
+
+    day.stackMeta = day.stackMeta || {};
+    const meta = day.stackMeta[key] || { title: '', caption: '' };
+    if (typeof title === 'string') meta.title = title.trim();
+    if (typeof caption === 'string') meta.caption = caption.trim();
+
+    // remove empty meta, otherwise persist
+    if (!meta.title && !meta.caption) delete day.stackMeta[key];
+    else day.stackMeta[key] = meta;
+
     await writeJson(file, day);
     reply.send({ ok: true });
   } catch (e) {
