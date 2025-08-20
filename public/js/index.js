@@ -121,8 +121,8 @@ async function loadStacks(){
   }));
   all.sort((a,b)=>a.ts-b.ts);
 
-  // group photos into stacks by proximity
-  photoStacks = groupIntoStacks(all, 50);
+  // group photos into stacks by proximity (500m radius)
+  photoStacks = groupIntoStacks(all, 500);
 }
 
 // ---------- maps ----------

@@ -508,23 +508,44 @@ function renderTripsTab(panel) {
     });
   });
 
-    renderStacks();
+ // Group photos into stacks first
+  dayStacks = groupIntoStacks(dayData.photos || [], 500);
+
+    // Render all stacks
+  renderStacks();
   }
 
   function renderStacks() {
+    // Clear the editor container before rendering
     stackEditorEl.innerHTML = '';
-    const stacks = groupIntoStacks(dayData.photos || [], 50);
+
+    // Use the already-computed stacks
+    const stacks = dayStacks;
+
     stacks.forEach((st) => {
       const div = document.createElement('div');
       div.className = 'stack-item';
+
+      // First photo of the stack is used as the thumbnail
       const first = st.photos[0];
+
+      // Get saved metadata (title + caption) if available
       const meta = dayData.stackMeta?.[st.id] || { title: '', caption: '' };
       const title = meta.title || '';
       const desc = meta.caption || '';
+
+      // Build HTML for the stack thumbnail + caption
       div.innerHTML = `
         <img src="${first.thumb || first.url}" alt="" style="width:120px;height:auto;display:block;">
-        <div class="stack-caption">${title ? htmlesc(title) + (desc ? ' — ' : '') : ''}${htmlesc(desc)}</div>`;
+        <div class="stack-caption">
+          ${title ? htmlesc(title) + (desc ? ' — ' : '') : ''}${htmlesc(desc)}
+        </div>
+      `;
+
+      // Open the stack editor when double-clicked
       div.addEventListener('dblclick', () => openStackEditor(st));
+
+      // Append this stack to the container
       stackEditorEl.appendChild(div);
     });
   }
