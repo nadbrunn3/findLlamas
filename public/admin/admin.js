@@ -508,25 +508,118 @@ function renderTripsTab(panel) {
     });
   });
 
-    renderStacks();
+   // Group photos into stacks first (distance-based, 500 m)
+  dayStacks = groupIntoStacks(dayData.photos || [], 500);
+
+    // Render all stacks with inline editors
+  renderStacks();
   }
 
   function renderStacks() {
+    // Clear the editor container before rendering
     stackEditorEl.innerHTML = '';
-    const stacks = groupIntoStacks(dayData.photos || [], 50);
+
+    // Use the already-computed stacks
+    const stacks = dayStacks;
+
     stacks.forEach((st) => {
       const div = document.createElement('div');
       div.className = 'stack-item';
+      div.setAttribute('data-stack-id', st.id);
+
+      // First photo of the stack is used as the thumbnail
       const first = st.photos[0];
+
+      // Get saved metadata (title + description) if available
       const meta = dayData.stackMeta?.[st.id] || { title: '', caption: '' };
       const title = meta.title || '';
-      const desc = meta.caption || '';
+      const desc  = meta.caption || '';
+
+      // Build HTML for the stack thumbnail + inline editors
       div.innerHTML = `
-        <img src="${first.thumb || first.url}" alt="" style="width:120px;height:auto;display:block;">
-        <div class="stack-caption">${title ? htmlesc(title) + (desc ? ' — ' : '') : ''}${htmlesc(desc)}</div>`;
-      div.addEventListener('dblclick', () => openStackEditor(st));
+        <div style="display:flex; gap:12px; align-items:flex-start;">
+          <img src="${first.thumb || first.url}" alt="" style="width:120px;height:90px;object-fit:cover;border-radius:10px;display:block;">
+          <div style="flex:1; display:grid; gap:6px;">
+            <input
+              data-role="stack-title"
+              class="card-title"
+              value="${htmlesc(title)}"
+              placeholder="Stack title"
+              style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-weight:800;width:100%">
+            <textarea
+              data-role="stack-caption"
+              rows="2"
+              placeholder="Stack description"
+              style="width:100%;background:#fff;border:1px solid var(--border);border-radius:12px;padding:.6rem .75rem;">${htmlesc(desc)}</textarea>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button class="stack-action-btn" data-role="save-stack">Save</button>
+              <button class="stack-action-btn" data-role="open-editor">Open editor</button>
+              <span data-role="status" style="font-size:.85rem; color: var(--muted)"></span>
+            </div>
+          </div>
+        </div>
+      `;
+
       stackEditorEl.appendChild(div);
     });
+
+    // Delegate events (bind once)
+    if (!stackEditorEl.dataset.bound) {
+      stackEditorEl.dataset.bound = '1';
+
+      // Click handlers (Save / Open editor)
+      stackEditorEl.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-role="save-stack"], [data-role="open-editor"]');
+        if (!btn) return;
+
+        const card = btn.closest('.stack-item');
+        if (!card) return;
+
+        const stackId = card.getAttribute('data-stack-id');
+
+        if (btn.getAttribute('data-role') === 'open-editor') {
+          const st = (dayStacks || []).find(s => s.id === stackId);
+          if (st && typeof openStackEditor === 'function') openStackEditor(st);
+          return;
+        }
+
+        // Save
+        const titleEl   = card.querySelector('[data-role="stack-title"]');
+        const captionEl = card.querySelector('[data-role="stack-caption"]');
+        const statusEl  = card.querySelector('[data-role="status"]');
+        const title   = titleEl ? titleEl.value : '';
+        const caption = captionEl ? captionEl.value : '';
+
+        try {
+          await patchStackMeta(dayData.slug, stackId, { title, caption });
+          dayData.stackMeta = dayData.stackMeta || {};
+          dayData.stackMeta[stackId] = { title: title.trim(), caption: caption.trim() };
+          if (statusEl) { statusEl.textContent = 'Saved'; setTimeout(()=> statusEl.textContent = '', 1200); }
+        } catch (err) {
+          if (statusEl) statusEl.textContent = 'Save failed';
+          console.error(err);
+        }
+      });
+
+      // Autosave on blur (title/description)
+      stackEditorEl.addEventListener('blur', async (e) => {
+        const el = e.target;
+        if (!el.matches('[data-role="stack-title"], [data-role="stack-caption"]')) return;
+
+        const card = el.closest('.stack-item');
+        if (!card) return;
+
+        const stackId = card.getAttribute('data-stack-id');
+        const title   = card.querySelector('[data-role="stack-title"]')?.value || '';
+        const caption = card.querySelector('[data-role="stack-caption"]')?.value || '';
+
+        try {
+          await patchStackMeta(dayData.slug, stackId, { title, caption });
+          dayData.stackMeta = dayData.stackMeta || {};
+          dayData.stackMeta[stackId] = { title: title.trim(), caption: caption.trim() };
+        } catch {}
+      }, true);
+    }
   }
 
   function openStackEditor(stack) {

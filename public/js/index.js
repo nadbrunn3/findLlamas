@@ -121,11 +121,11 @@ async function loadStacks(){
     (dj.photos||[]).forEach(p=> allPhotos.push({ ...p, dayTitle:dj.title, ts:+new Date(p.taken_at) }));
   }));
   allPhotos.sort((a,b)=>a.ts-b.ts);
-
   // group photos into stacks by proximity (used for feed only)
-  photoStacks = groupIntoStacks(allPhotos, 50);
   // tag photos with stack id for map interactions
   photoStacks.forEach(s => s.photos.forEach(p => p.stackId = s.id));
+  // group photos into stacks by proximity (500m radius)
+  photoStacks = groupIntoStacks(all, 500);
 }
 
 // ---------- maps ----------
