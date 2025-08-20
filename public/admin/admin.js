@@ -658,12 +658,12 @@ function renderTripsTab(panel) {
     });
   });
 
-    dayStacks = groupIntoStacks(dayData.photos || [], 50);
+    dayStacks = groupIntoStacks(dayData.photos || [], 500);
   }
 
   function renderStacks() {
     stackEl.innerHTML = '';
-    const stacks = groupIntoStacks(dayData.photos || [], 50);
+    const stacks = groupIntoStacks(dayData.photos || [], 500);
     stacks.forEach((st) => {
       const div = document.createElement('div');
       div.className = 'stack-item';
