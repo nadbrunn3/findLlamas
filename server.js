@@ -28,6 +28,8 @@ const IMMICH_API_KEYS = (process.env.IMMICH_API_KEYS || '')
 
 // optional admin token for protected endpoints (publish, edit/delete comments)
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+const DEFAULT_ALBUM_ID = process.env.DEFAULT_ALBUM_ID || '';
+const AUTOLOAD_INTERVAL = 60 * 60 * 1000; // 1 hour
 
 // helpers
 const app = fastify({ logger: true });
@@ -196,6 +198,80 @@ function mapAssetToPhoto(a) {
     lat, lon,
     caption: a?.exifInfo?.description || a?.originalFileName || ''
   };
+}
+
+async function autoLoadAlbum() {
+  if (!DEFAULT_ALBUM_ID) {
+    app.log.warn('DEFAULT_ALBUM_ID not set; autoLoadAlbum disabled');
+    return;
+  }
+  try {
+    app.log.info(`autoLoadAlbum: fetching album ${DEFAULT_ALBUM_ID}`);
+    let album;
+    try {
+      album = await immichFetchJSON(`/api/albums/${DEFAULT_ALBUM_ID}`);
+    } catch (err) {
+      app.log.error({ msg: 'autoLoadAlbum fetch album failed', err: String(err) });
+      return;
+    }
+
+    let assets = [];
+    if (Array.isArray(album?.assets)) {
+      assets = album.assets;
+    } else {
+      try {
+        const res = await immichFetchJSON(`/api/albums/${DEFAULT_ALBUM_ID}/assets`);
+        assets = Array.isArray(res) ? res : res?.items || [];
+      } catch (err) {
+        app.log.error({ msg: 'autoLoadAlbum fetch assets failed', err: String(err) });
+        return;
+      }
+    }
+
+    if (!assets.length) {
+      app.log.warn(`autoLoadAlbum: no assets in album ${DEFAULT_ALBUM_ID}`);
+      return;
+    }
+
+    const photos = assets.map(mapAssetToPhoto).filter(p => p.taken_at);
+    const groups = {};
+    for (const p of photos) {
+      const date = p.taken_at.slice(0, 10);
+      (groups[date] ||= []).push(p);
+    }
+
+    for (const [date, dayPhotos] of Object.entries(groups)) {
+      try {
+        const file = dayFile(date);
+        const existing = (await readJson(file)) || {
+          date,
+          segment: 'day',
+          slug: date,
+          title: `Day — ${date}`,
+          stats: {},
+          polyline: { type: 'LineString', coordinates: [] },
+          points: [],
+          photos: []
+        };
+        const seen = new Set(existing.photos.map(p => p.id || p.url));
+        for (const p of dayPhotos) {
+          const key = p.id || p.url;
+          if (key && !seen.has(key)) {
+            existing.photos.push(p);
+            seen.add(key);
+          }
+        }
+        await writeJson(file, existing);
+        app.log.info(`autoLoadAlbum: merged ${dayPhotos.length} photos into ${date}`);
+      } catch (err) {
+        app.log.error({ msg: `autoLoadAlbum: failed to write day ${date}`, err: String(err) });
+      }
+    }
+
+    app.log.info(`autoLoadAlbum: processed ${photos.length} photos`);
+  } catch (err) {
+    app.log.error({ msg: 'autoLoadAlbum failed', err: String(err) });
+  }
 }
 
 // ---- Routes: Health ---------------------------------------------------------
@@ -501,6 +577,17 @@ app.delete('/api/stack/:stackId/comment/:commentId', async (req, reply) => {
     reply.send({ ok: true });
   } catch { reply.code(500).send({ error: 'delete failed' }); }
 });
+
+if (DEFAULT_ALBUM_ID) {
+  autoLoadAlbum().catch(err =>
+    app.log.error({ msg: 'autoLoadAlbum initial run failed', err: String(err) })
+  );
+  setInterval(() => {
+    autoLoadAlbum().catch(err =>
+      app.log.error({ msg: 'autoLoadAlbum interval failed', err: String(err) })
+    );
+  }, AUTOLOAD_INTERVAL);
+}
 
 // ---- Boot -------------------------------------------------------------------
 app.listen({ port: PORT, host: '0.0.0.0' }, (err, address) => {
