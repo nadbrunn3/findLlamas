@@ -117,6 +117,15 @@ function renderTripsTab(panel) {
   galleryEl.style.marginTop = '1rem';
   panel.appendChild(galleryEl);
 
+  const iframe = document.createElement('iframe');
+  iframe.id = 'preview-frame';
+  iframe.style.width = '100%';
+  iframe.style.height = '60vh';
+  iframe.style.marginTop = '1rem';
+  iframe.style.display = 'none';
+  iframe.setAttribute('title', 'Day Preview');
+  panel.appendChild(iframe);
+
   const previewEl = document.createElement('div');
   previewEl.id = 'stack-preview';
   previewEl.className = 'gallery';
@@ -395,7 +404,13 @@ function renderTripsTab(panel) {
   }
 
   function previewDay() {
-    previewEl.style.display = previewEl.style.display === 'none' ? 'grid' : 'none';
+    const show = previewEl.style.display === 'none';
+    previewEl.style.display = show ? 'grid' : 'none';
+    iframe.style.display = show ? 'block' : 'none';
+    if (show && dayData) {
+      iframe.src = `../day.html?date=${encodeURIComponent(dayData.slug)}`;
+      iframe.focus();
+    }
   }
 
   async function publishSelected() {
