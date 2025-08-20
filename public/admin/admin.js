@@ -36,6 +36,40 @@ function saveSettings(obj) {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(obj));
 }
 
+// --- helpers for stack grouping ---
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) *
+            Math.sin(dLon/2)**2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function groupIntoStacks(photos, radiusMeters) {
+  const stacks = [];
+  const used = new Set();
+  const radiusKm = radiusMeters / 1000;
+  let idx = 0;
+  for (let i = 0; i < photos.length; i++) {
+    if (used.has(i)) continue;
+    const a = photos[i];
+    const group = [a];
+    used.add(i);
+    for (let j = i + 1; j < photos.length; j++) {
+      if (used.has(j)) continue;
+      const b = photos[j];
+      if (haversineKm(a.lat, a.lon, b.lat, b.lon) <= radiusKm) {
+        group.push(b);
+        used.add(j);
+      }
+    }
+    stacks.push({ id: `stack-${idx++}`, photos: group });
+  }
+  return stacks;
+}
+
 let rootHandle; // FileSystemDirectoryHandle (optional; not required for basic use)
 
 async function pickProjectFolder() {
@@ -115,6 +149,11 @@ function renderTripsTab(panel) {
   galleryEl.style.marginTop = '1rem';
   panel.appendChild(galleryEl);
 
+  const stackEl = document.createElement('div');
+  stackEl.id = 'stack-preview';
+  stackEl.style.marginTop = '1rem';
+  panel.appendChild(stackEl);
+
   const iframe = document.createElement('iframe');
   iframe.id = 'preview-frame';
   iframe.style.width = '100%';
@@ -153,6 +192,8 @@ function renderTripsTab(panel) {
       };
     }
 
+    dayData.stackCaptions = dayData.stackCaptions || {};
+
     renderDay();
     controls.querySelector('#save-day').disabled = false;
     controls.querySelector('#preview-day').disabled = false;
@@ -181,6 +222,7 @@ function renderTripsTab(panel) {
     }
     const data = await resp.json();
     dayData.photos = data.photos || [];
+    dayData.stackCaptions = dayData.stackCaptions || {};
 
     renderDay();
     controls.querySelector('#save-day').disabled = false;
@@ -302,6 +344,54 @@ function renderTripsTab(panel) {
         }
       });
     });
+
+    renderStacks();
+  }
+
+  function renderStacks() {
+    stackEl.innerHTML = '';
+    const stacks = groupIntoStacks(dayData.photos || [], 50);
+    stacks.forEach((st) => {
+      const div = document.createElement('div');
+      div.className = 'stack-item';
+      const first = st.photos[0];
+      const caption = dayData.stackCaptions?.[st.id] || '';
+      div.innerHTML = `
+        <img src="${first.thumb || first.url}" alt="" style="width:120px;height:auto;display:block;">
+        <div class="stack-caption">${caption}</div>`;
+      div.addEventListener('dblclick', () => openStackEditor(st));
+      stackEl.appendChild(div);
+    });
+  }
+
+  function openStackEditor(stack) {
+    const current = dayData.stackCaptions?.[stack.id] || '';
+    const edited = prompt('Edit stack caption (leave blank to clear):', current);
+    if (edited === null) return;
+    const newCaption = edited.trim();
+
+    (async () => {
+      try {
+        const s = loadSettings();
+        const token = s.apiToken || '';
+        await fetch(`${(s.apiBase||'')}/api/day/${dayData.slug}/stack/${encodeURIComponent(stack.id)}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'x-admin-token': token } : {})
+          },
+          body: JSON.stringify({ caption: newCaption })
+        });
+        dayData.stackCaptions = dayData.stackCaptions || {};
+        if (newCaption) dayData.stackCaptions[stack.id] = newCaption;
+        else delete dayData.stackCaptions[stack.id];
+      } catch (e) {
+        console.error(e);
+        alert('Stack caption update failed');
+      } finally {
+        renderStacks();
+      }
+    })();
   }
 
   // Small inline editor for captions & cover
