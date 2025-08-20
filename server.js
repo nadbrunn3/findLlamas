@@ -306,6 +306,46 @@ app.put('/api/day/:slug', async (req, reply) => {
   }
 });
 
+// update a single photo's caption
+app.patch('/api/day/:slug/photo/:id', async (req, reply) => {
+  try {
+    if (!requireAdmin(req, reply)) return;
+    const { caption } = req.body || {};
+    const file = dayFile(req.params.slug);
+    const day = await readJson(file);
+    if (!day || !Array.isArray(day.photos)) {
+      return reply.code(404).send({ error: 'day not found' });
+    }
+    const pid = decodeURIComponent(req.params.id);
+    const p = day.photos.find(ph => (ph.id || ph.url) === pid);
+    if (!p) return reply.code(404).send({ error: 'photo not found' });
+    p.caption = (caption || '').trim();
+    await writeJson(file, day);
+    reply.send({ ok: true });
+  } catch (e) {
+    reply.code(500).send({ error: 'update failed' });
+  }
+});
+
+// update or clear a stack caption/title
+app.patch('/api/day/:slug/stack/:stackId', async (req, reply) => {
+  try {
+    if (!requireAdmin(req, reply)) return;
+    const { caption, title } = req.body || {};
+    const file = dayFile(req.params.slug);
+    const day = await readJson(file);
+    if (!day) return reply.code(404).send({ error: 'day not found' });
+    const key = req.params.stackId;
+    const val = (caption ?? title ?? '').trim();
+    day.stackCaptions = day.stackCaptions || {};
+    if (val) day.stackCaptions[key] = val; else delete day.stackCaptions[key];
+    await writeJson(file, day);
+    reply.send({ ok: true });
+  } catch (e) {
+    reply.code(500).send({ error: 'update failed' });
+  }
+});
+
 // append-only publish (safer for two people)
 app.post('/api/publish', async (req, reply) => {
   try {
