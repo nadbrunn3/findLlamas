@@ -475,9 +475,10 @@ function renderTripsTab(panel) {
     renderAdminPreview(dayData);
     ensureAdminMap();
     renderAdminMapMarkers(dayData.photos || []);
-    
+
     controls.querySelector('#save-day').disabled = false;
     controls.querySelector('#preview-day').disabled = false;
+    controls.querySelector('#publish-day').disabled = !(dayData.photos && dayData.photos.length);
   }
 
   async function importDay() {
