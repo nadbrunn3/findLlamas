@@ -222,7 +222,7 @@ function renderTripsTab(panel) {
       title: `Day — ${dateVal}`, stats:{}, polyline:{type:'LineString', coordinates:[]}, points:[], photos:[]
     };
 
-    // Ask our backend to fetch photos for that calendar day (TEMPORARY: using local test route)
+    // Ask backend to import any new photos for that calendar day
     const url = `${s.apiBase}/api/local/day?date=${dateVal}`;
     const resp = await fetch(url);
     if (!resp.ok) {
@@ -231,14 +231,24 @@ function renderTripsTab(panel) {
       return alert('Local import failed. Check the server logs.');
     }
     const data = await resp.json();
-    dayData.photos = data.photos || [];
+    dayData.photos = dayData.photos || [];
+    const existing = new Set(dayData.photos.map((p) => p.id || p.url));
+    let newCount = 0;
+    (data.photos || []).forEach((p) => {
+      const key = p.id || p.url;
+      if (!existing.has(key)) {
+        existing.add(key);
+        dayData.photos.push(p);
+        newCount++;
+      }
+    });
     dayData.stackCaptions = dayData.stackCaptions || {};
 
     renderDay();
     controls.querySelector('#save-day').disabled = false;
     controls.querySelector('#preview-day').disabled = false;
     controls.querySelector('#publish-day').disabled = false;
-    alert(`Imported ${dayData.photos.length} photos from Immich for ${dateVal}`);
+    alert(`Imported ${newCount} new photos from Immich for ${dateVal}`);
   }
 
   function renderDay() {
