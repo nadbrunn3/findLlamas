@@ -160,7 +160,7 @@ function initMaps(){
       b.extend([p.lat, p.lon]);
     }
   });
-  topMap.fitBounds(b, { padding:[20,20] });
+  topMap.fitBounds(b, { padding:[20,20], maxZoom:3 });
 
   // Important when sticky containers change size / orientation
   setTimeout(()=>topMap.invalidateSize(), 250);
