@@ -40,8 +40,9 @@ const app = fastify({ logger: true });
 app.register(cors, { origin: true });
 
 // serve /public so /day.html, /js/day.js, /css etc. work
+// Use REPO_DIR to ensure correct static root even when the working directory differs
 app.register(fastifyStatic, {
-  root: path.join(process.cwd(), 'public'),
+  root: path.join(REPO_DIR, 'public'),
   prefix: '/', // so /day.html, /admin/index.html, /js/*
 });
 
@@ -368,8 +369,9 @@ app.get('/api/local/day', async (req, reply) => {
   const { date } = req.query;
   if (!date) return reply.code(400).send({ error: 'date required' });
 
-  const dir = path.join(process.cwd(), 'public', 'test-photos');
-  const manifestPath = path.join(process.cwd(), 'public', 'data', 'imported.json');
+  // Use REPO_DIR so local testing works when repository root is overridden
+  const dir = path.join(REPO_DIR, 'public', 'test-photos');
+  const manifestPath = path.join(REPO_DIR, 'public', 'data', 'imported.json');
   const imported = await readJson(manifestPath, []);
   const importedSet = new Set(imported);
 
