@@ -18,7 +18,9 @@ export function getApiBase() {
     const raw = localStorage.getItem("tripAdminSettings");
     if (!raw) return "";
     const { apiBase } = JSON.parse(raw) || {};
-    return apiBase || "";
+    const base = apiBase || "";
+    // Remove trailing slash to prevent double slashes in URLs
+    return base.replace(/\/$/, "");
   } catch { return ""; }
 }
 

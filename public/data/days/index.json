@@ -3,7 +3,13 @@
     "slug": "2025-08-01",
     "date": "2025-08-01",
     "title": "Day — 2025-08-01",
-    "cover": "/api/immich/assets/97a3593d-d046-46ea-9b52-e66e68babeb6/thumb"
+    "cover": "/api/immich/assets/8a68044e-c150-4e89-ab71-b4903c3b2407/thumb"
+  },
+  {
+    "slug": "2025-08-13",
+    "date": "2025-08-13",
+    "title": "Day — 2025-08-13",
+    "cover": "/api/immich/assets/8a68044e-c150-4e89-ab71-b4903c3b2407/thumb"
   },
   {
     "slug": "2025-08-14",
@@ -22,5 +28,11 @@
     "date": "2025-08-16",
     "title": "Day 5 — Prague to Vienna",
     "cover": "https://picsum.photos/id/274/400/225"
+  },
+  {
+    "slug": "2025-08-18",
+    "date": "2025-08-18",
+    "title": "Day — 2025-08-18",
+    "cover": "/api/immich/assets/3c883c40-d1e1-4880-a68a-93df92cc33f9/thumb"
   }
 ]
