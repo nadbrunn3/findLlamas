@@ -727,11 +727,30 @@ function renderTripsTab(panel) {
     }
   }
 
-  function previewDay() {
+  async function saveStackEdits() {
+    if (!dayData) return;
+    const cards = stackEditorEl.querySelectorAll('.stack-item');
+    dayData.stackMeta = dayData.stackMeta || {};
+    const tasks = [];
+    cards.forEach(card => {
+      const id = card.getAttribute('data-stack-id');
+      const title = card.querySelector('[data-role="stack-title"]').value.trim();
+      const caption = card.querySelector('[data-role="stack-caption"]').value.trim();
+      dayData.stackMeta[id] = { title, caption };
+      tasks.push(patchStackMeta(dayData.slug, id, { title, caption }).catch(()=>{}));
+    });
+    await Promise.all(tasks);
+  }
+
+  async function previewDay() {
+    if (!dayData) return;
+    await saveStackEdits();
+    ensureAdminMap();
+    renderAdminMapMarkers(dayData.photos || []);
     const show = iframe.style.display === 'none';
     iframe.style.display = show ? 'block' : 'none';
-    if (show && dayData) {
-      iframe.src = `../day.html?date=${encodeURIComponent(dayData.slug)}`;
+    if (show) {
+      iframe.src = `../index.html?preview=${encodeURIComponent(dayData.slug)}`;
       iframe.focus();
     }
   }
