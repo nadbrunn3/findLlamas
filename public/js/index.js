@@ -363,14 +363,17 @@ function renderFeed(){
       mainContainer.innerHTML = '';
       
       // Create main media element
-      const mainEl = renderMediaEl(mainPhoto, { 
-        withControls: isVideo(mainPhoto), 
-        className: 'stack-main-photo' 
+      const mainEl = renderMediaEl(mainPhoto, {
+        withControls: isVideo(mainPhoto),
+        className: 'stack-main-photo'
       });
       mainContainer.appendChild(mainEl);
-      
-      // Click-to-open only for images (videos already have controls)
-      if (!isVideo(mainPhoto)) {
+
+      if (isVideo(mainPhoto)) {
+        mainEl.addEventListener('click', () => {
+          if (mainEl.paused) mainEl.play();
+        });
+      } else {
         mainEl.style.cursor = 'zoom-in';
         mainEl.addEventListener('click', () => openLightboxForStack(stack, current));
       }
@@ -730,7 +733,9 @@ function openLightboxForStack(stack, startIndex=0){
     caption: photo.caption || '',
     taken_at: photo.taken_at,
     lat: photo.lat,
-    lon: photo.lon
+    lon: photo.lon,
+    mimeType: photo.mimeType,
+    kind: photo.kind
   }));
   
   // Use the new lightbox API

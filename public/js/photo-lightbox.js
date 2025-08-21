@@ -3,6 +3,13 @@ function escapeHtml(s){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt
 
 function likeKey(kind, id){ return `liked:${kind}:${id}`; }
 
+function isVideo(item){
+  const mt = (item?.mimeType || '').toLowerCase();
+  const url = (item?.url || '').toLowerCase();
+  const k = (item?.kind || '').toLowerCase();
+  return k === 'video' || mt.startsWith('video/') || /\.(mp4|webm|mov|m4v)$/i.test(url);
+}
+
 function renderLbComment(c){
   const li = document.createElement('div');
   li.className = 'lb-citem';
@@ -140,6 +147,7 @@ window.openPhotoLightbox = (photos, startIndex=0) => {
           </svg>
         </button>
         <img class="lb-img" alt="">
+        <video class="lb-video" controls style="display:none"></video>
         <button class="lb-nav lb-prev lightbox-prev" aria-label="Prev">‹</button>
         <button class="lb-nav lb-next lightbox-next" aria-label="Next">›</button>
 
@@ -247,11 +255,26 @@ window.openPhotoLightbox = (photos, startIndex=0) => {
   }
 
   const img = el.querySelector(".lb-img");
+  const vid = el.querySelector(".lb-video");
 
   function show(next) {
     i = (next + photos.length) % photos.length;
     const p = photos[i];
-    img.src = p.url;
+    if (isVideo(p)) {
+      img.style.display = 'none';
+      vid.style.display = 'block';
+      vid.src = p.url;
+      vid.poster = p.thumb || '';
+      vid.currentTime = 0;
+      const pp = vid.play();
+      if (pp && pp.catch) pp.catch(()=>{});
+    } else {
+      vid.pause?.();
+      vid.removeAttribute('src');
+      vid.style.display = 'none';
+      img.style.display = 'block';
+      img.src = p.url;
+    }
     el.querySelector(".lb-prev").disabled = photos.length < 2;
     el.querySelector(".lb-next").disabled = photos.length < 2;
     
