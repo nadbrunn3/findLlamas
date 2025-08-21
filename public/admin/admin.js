@@ -98,6 +98,8 @@ function ensureAdminMap() {
       scrollWheelZoom: true,
       touchZoom: true
     });
+    // Show a world view until specific photo coordinates are available
+    adminMap.setView([0, 0], 2);
 
     // Primary: Esri imagery; Fallback: OSM tiles if Esri errors/rate-limits
     const esri = L.tileLayer(
@@ -258,6 +260,8 @@ function renderTripsTab(panel) {
   mapEl.style.height = '40vh';
   mapEl.style.marginTop = '1rem';
   panel.appendChild(mapEl);
+  // Initialize map so users see a base layer immediately
+  ensureAdminMap();
 
   const galleryEl = document.createElement('div');
   galleryEl.id = 'admin-gallery';
