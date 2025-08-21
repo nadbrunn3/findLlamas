@@ -346,11 +346,23 @@ function renderTripsTab(panel) {
 
     const s = loadSettings();
     console.log('⚙️ Settings:', s);
-    
-    dayData = dayData || {
-      date: dateVal, slug: dateVal, segment: 'day',
-      title: `Day — ${dateVal}`, stats:{}, polyline:{type:'LineString', coordinates:[]}, points:[], photos:[]
-    };
+
+    // Reset dayData if switching to a different date so only photos for
+    // the imported day are shown
+    if (!dayData || dayData.slug !== dateVal) {
+      dayData = {
+        date: dateVal,
+        slug: dateVal,
+        segment: 'day',
+        title: `Day — ${dateVal}`,
+        stats: {},
+        polyline: { type: 'LineString', coordinates: [] },
+        points: [],
+        photos: []
+      };
+    }
+
+    dayData.photos = dayData.photos || [];
 
     // Ask backend to import any new photos for that calendar day from Immich
     const url = `${apiBase()}/api/immich/day?date=${dateVal}${s.immichAlbumId ? `&albumId=${encodeURIComponent(s.immichAlbumId)}` : ''}`;
@@ -364,8 +376,6 @@ function renderTripsTab(panel) {
     const data = await resp.json();
     console.log('📦 API Response:', data);
     console.log('📸 Photos in response:', data.photos?.length || 0);
-    
-    dayData.photos = dayData.photos || [];
     const existing = new Set(dayData.photos.map((p) => p.id || p.url));
     let newCount = 0;
     (data.photos || []).forEach((p) => {
