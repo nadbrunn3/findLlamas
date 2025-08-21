@@ -258,7 +258,11 @@ function onMarkerClick(id){
 function renderFeed(){
   const host = document.getElementById("stack-feed");
   host.innerHTML = "";
+  const seenCounts = JSON.parse(localStorage.getItem("stackPhotoCounts") || "{}");
+  const newCounts = {};
   photoStacks.forEach((stack,i)=>{
+    newCounts[stack.id] = stack.photos.length;
+    const hasNew = stack.photos.length > (seenCounts[stack.id] || 0);
     const card = document.createElement("div");
     card.className = `stack-card${stack.id===activeStackId?' active':''}`;
     card.id = stack.id; card.dataset.stackId = stack.id; card.tabIndex = 0;
@@ -268,6 +272,7 @@ function renderFeed(){
       <div class="stack-card-header">
         ${stack.title ? `<h2 class="stack-card-title">${escapeHtml(stack.title)}</h2>` : ''}
         <div class="stack-location-time">${stack.location.label} • ${t}</div>
+        ${hasNew ? '<span class="new-photo-bell" aria-label="New photos">🔔</span>' : ''}
       </div>
       ${stack.caption ? `<p class="caption">${escapeHtml(stack.caption)}</p>` : ''}
 
@@ -391,6 +396,7 @@ function renderFeed(){
     bindStackInteractions(stack.id, interactionsBlock);
     loadStackInteractions(stack.id, interactionsBlock);
   });
+  localStorage.setItem("stackPhotoCounts", JSON.stringify(newCounts));
 }
 
 // ----- Stack Interactions Helpers -----
