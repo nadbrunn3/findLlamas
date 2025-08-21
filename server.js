@@ -13,7 +13,7 @@ dotenv.config();
 
 // ---- Config / Paths ---------------------------------------------------------
 const PORT = Number(process.env.PORT) || 4000;
-const REPO_DIR = process.env.REPO_DIR || process.cwd();
+const REPO_DIR = path.resolve(process.env.REPO_DIR || process.cwd());
 
 // data lives under public/data
 const DATA_DIR = path.join(REPO_DIR, 'public', 'data');

@@ -29,5 +29,10 @@
       "caption": "IMG_5809.jpg"
     }
   ],
-  "stackCaptions": {}
+  "stackMeta": {
+    "stack-0": {
+      "title": "Day 1",
+      "caption": "Testing my first stack"
+    }
+  }
 }

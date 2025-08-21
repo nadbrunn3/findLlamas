@@ -1,5 +1,11 @@
 [
   {
+    "slug": "2025-08-01",
+    "date": "2025-08-01",
+    "title": "Day — 2025-08-01",
+    "cover": "/api/immich/assets/97a3593d-d046-46ea-9b52-e66e68babeb6/thumb"
+  },
+  {
     "slug": "2025-08-14",
     "date": "2025-08-14",
     "title": "Day 3 — Berlin → Prague",
@@ -7,14 +13,14 @@
   },
   {
     "slug": "2025-08-15",
-    "date": "2025-08-15", 
+    "date": "2025-08-15",
     "title": "Day 4 — Prague Exploration",
     "cover": "https://picsum.photos/id/102/400/225"
   },
   {
     "slug": "2025-08-16",
     "date": "2025-08-16",
-    "title": "Day 5 — Prague to Vienna", 
+    "title": "Day 5 — Prague to Vienna",
     "cover": "https://picsum.photos/id/274/400/225"
   }
 ]

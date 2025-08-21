@@ -75,6 +75,11 @@ function saveSettings(obj) {
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   }
 
+  function formatDateTime(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleString();
+  }
+
   // ----- Admin map state -----
   let adminMap, adminMapLayer, adminMarkers = [];
 
@@ -278,6 +283,7 @@ function renderTripsTab(panel) {
   panel.appendChild(iframe);
 
   let dayData = null;
+  let dayStacks = [];
 
   const settings = loadSettings();
 
