@@ -28,6 +28,42 @@ window.commentPhoto = commentPhoto;
 // Expose lightbox functions
 window.closeLightbox = closeLightbox;
 
+// ---- Video/Media helpers ----
+function isVideo(item) {
+  const mt = (item?.mimeType || '').toLowerCase();
+  const url = (item?.url || '').toLowerCase();
+  const k = (item?.kind || '').toLowerCase();
+  return (
+    k === 'video' ||
+    mt.startsWith('video/') ||
+    /\.(mp4|webm|mov|m4v)$/i.test(url)
+  );
+}
+
+function renderMediaEl(item, { withControls = false, className = '' } = {}) {
+  if (isVideo(item)) {
+    // If we have a thumb, show it as poster; otherwise the video will still render
+    const v = document.createElement('video');
+    v.src = item.url;
+    if (item.thumb) v.poster = item.thumb;
+    v.muted = true;
+    v.playsInline = true;
+    v.loop = true;
+    v.controls = !!withControls;
+    v.setAttribute('preload', 'metadata');
+    if (className) v.className = className;
+    return v;
+  }
+  // Photo
+  const img = document.createElement('img');
+  img.src = item.thumb || item.url;   // for photos thumb is fine; if missing, url works
+  img.alt = item.title || item.caption || '';
+  img.loading = 'lazy';
+  img.decoding = 'async';
+  if (className) img.className = className;
+  return img;
+}
+
 // ---- interactions helpers ----
 const API = () => (getApiBase() || ""); // allow same-origin
 
@@ -278,7 +314,7 @@ function renderFeed(){
 
       <div class="stack-photo-area" data-stack-id="${stack.id}">
         <div class="stack-media-container">
-          <img class="stack-main-photo" src="${stack.photos[0].url}" alt="" draggable="false">
+          <div class="photo-main" data-main-container="${stack.id}"></div>
           ${stack.photos.length>1 ? `
               <button class="stack-photo-nav prev" data-dir="-1" aria-label="Prev">‹</button>
               <button class="stack-photo-nav next" data-dir="1" aria-label="Next">›</button>` : ``}
@@ -286,12 +322,7 @@ function renderFeed(){
         ${stack.photos.length>1 ? `
           <div class="stack-thumbnail-drawer" data-stack-id="${stack.id}">
             <button class="thumb-scroll left" aria-label="Scroll thumbnails left">‹</button>
-            <div class="drawer-thumbnails">
-              ${stack.photos.map((p,idx)=>`
-                <img class="drawer-thumbnail ${idx===0?'active':''}"
-                     src="${p.thumb || p.url}" data-index="${idx}" draggable="false" alt="">
-              `).join('')}
-            </div>
+            <div class="drawer-thumbnails"></div>
             <button class="thumb-scroll right" aria-label="Scroll thumbnails right">›</button>
           </div>` : ``}
       </div>
@@ -317,14 +348,48 @@ function renderFeed(){
     `;
 
     // events
-    const main = card.querySelector(".stack-main-photo");
+    const mainContainer = card.querySelector(".photo-main");
     const drawer = card.querySelector(".stack-thumbnail-drawer");
     
     // Keep current index for navigation
     let current = 0;
 
     function updateMain() {
-      main.src = stack.photos[current].url;
+      if (!mainContainer) return;
+      
+      const mainPhoto = stack.photos[current];
+      
+      // Clear previous content
+      mainContainer.innerHTML = '';
+      
+      // Create main media element
+      const mainEl = renderMediaEl(mainPhoto, { 
+        withControls: isVideo(mainPhoto), 
+        className: 'stack-main-photo' 
+      });
+      mainContainer.appendChild(mainEl);
+      
+      // Click-to-open only for images (videos already have controls)
+      if (!isVideo(mainPhoto)) {
+        mainEl.style.cursor = 'zoom-in';
+        mainEl.addEventListener('click', () => openLightboxForStack(stack, current));
+      }
+      
+      // Add captions
+      if (mainPhoto.title) {
+        const t = document.createElement('p');
+        t.className = 'photo-caption';
+        t.textContent = mainPhoto.title;
+        mainContainer.appendChild(t);
+      }
+      if (mainPhoto.caption) {
+        const c = document.createElement('p');
+        c.className = 'photo-caption';
+        c.textContent = mainPhoto.caption;
+        mainContainer.appendChild(c);
+      }
+      
+      // Update thumbnail active states
       if (drawer) {
         drawer.querySelectorAll(".drawer-thumbnail").forEach((t, i) => {
           t.classList.toggle("active", i === current);
@@ -332,8 +397,33 @@ function renderFeed(){
       }
     }
 
-    // Main photo click opens lightbox at current index
-    main.addEventListener("click", ()=>openLightboxForStack(stack, current));
+    // Populate thumbnails with proper media elements
+    function populateThumbnails() {
+      if (!drawer) return;
+      const thumbsContainer = drawer.querySelector('.drawer-thumbnails');
+      if (!thumbsContainer) return;
+      
+      // Clear existing thumbnails
+      thumbsContainer.innerHTML = '';
+      
+      // Create thumbnail elements using renderMediaEl
+      stack.photos.forEach((p, idx) => {
+        // IMPORTANT: thumbnails must never try to load p.url for videos as <img>
+        const el = isVideo(p)
+          ? renderMediaEl(p, { withControls: false, className: `drawer-thumbnail ${idx===current?'active':''}` }) // <video poster=thumb>
+          : renderMediaEl(p, { withControls: false, className: `drawer-thumbnail ${idx===current?'active':''}` }); // <img src=thumb>
+        
+        el.setAttribute('data-index', idx);
+        el.setAttribute('draggable', 'false');
+        
+        el.addEventListener('click', () => {
+          current = idx;
+          updateMain();
+        });
+        
+        thumbsContainer.appendChild(el);
+      });
+    }
 
     // Wire prev/next navigation buttons
     const navBtns = card.querySelectorAll(".stack-photo-nav");
@@ -352,15 +442,7 @@ function renderFeed(){
       const leftBtn = drawer.querySelector('.thumb-scroll.left');
       const rightBtn = drawer.querySelector('.thumb-scroll.right');
 
-      // click a thumb -> change main photo
-      drawer.querySelectorAll('.drawer-thumbnail').forEach(img=>{
-        img.onclick = ()=>{
-          const idx = +img.dataset.index;
-          main.src = stack.photos[idx].url;
-          current = idx; // Update current index
-          drawer.querySelectorAll('.drawer-thumbnail').forEach(t=>t.classList.toggle('active', t===img));
-        };
-      });
+
 
       // arrow buttons scroll the row
       leftBtn.onclick  = ()=> thumbWrap.scrollBy({ left: -thumbWrap.clientWidth * 0.9, behavior: 'smooth' });
@@ -390,6 +472,12 @@ function renderFeed(){
     });
 
     host.appendChild(card);
+
+    // Initialize the main media display
+    updateMain();
+    
+    // Initialize thumbnails with proper media elements
+    populateThumbnails();
 
     // Bind interactions functionality using new helpers
     const interactionsBlock = card.querySelector('.stack-interactions');

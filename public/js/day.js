@@ -12,6 +12,34 @@ if (!daySlug) {
 let dayData = null;
 let map = null;
 
+// ---------- media helpers ----------
+function isVideo(item) {
+  return item?.kind === 'video' || (item?.mimeType || '').startsWith('video/');
+}
+
+function renderMediaEl(item, { withControls = false, className = 'media-tile' } = {}) {
+  if (isVideo(item)) {
+    const v = document.createElement('video');
+    v.src = item.url;
+    if (item.thumb) v.poster = item.thumb;
+    v.muted = true;
+    v.playsInline = true;
+    v.loop = true;
+    v.controls = !!withControls;
+    v.setAttribute('preload', 'metadata');
+    v.className = className;
+    return v;
+  } else {
+    const img = document.createElement('img');
+    img.src = item.thumb || item.url;
+    img.alt = item.title || item.caption || '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.className = className;
+    return img;
+  }
+}
+
 // Initialize the page
 async function init() {
   console.log('🚀 Initializing day view for:', daySlug);
@@ -74,13 +102,13 @@ function initMap() {
         font-size: 1rem;
         font-weight: 500;
       ">
-        📍 No location data available for these photos
+        📍 No location data available for these media
       </div>
     `;
     return;
   }
 
-  console.log(`📍 Found ${photosWithGPS.length} photos with GPS coordinates`);
+  console.log(`📍 Found ${photosWithGPS.length} media with GPS coordinates`);
 
   map = L.map('map', {
     zoomControl: true,
@@ -94,18 +122,17 @@ function initMap() {
     maxZoom: 18
   }).addTo(map);
 
-  // Add markers for photos with GPS coordinates
+  // Add markers for media with GPS coordinates
   const bounds = L.latLngBounds();
 
-  photosWithGPS.forEach((photo, index) => {
+  photosWithGPS.forEach((photo) => {
     const marker = L.marker([photo.lat, photo.lon]).addTo(map);
     marker.bindPopup(`
       <img src="${photo.thumb || photo.url}" style="width:100px;height:75px;object-fit:cover;border-radius:4px;" alt="">
-      <br><strong>${escapeHtml(photo.title || photo.caption || 'Photo')}</strong>
+      <br><strong>${escapeHtml(photo.title || photo.caption || (isVideo(photo) ? 'Video' : 'Photo'))}</strong>
       <br><small>${formatTime(photo.taken_at)}</small>
     `);
     
-    // Find the original index in the full photos array
     const originalIndex = dayData.photos.findIndex(p => p.id === photo.id);
     marker.on('click', () => openLightbox(originalIndex));
     bounds.extend([photo.lat, photo.lon]);
@@ -114,44 +141,28 @@ function initMap() {
   map.fitBounds(bounds, { padding: [20, 20] });
 }
 
-// Render the photo post section
+// Render the photo post section (now "media post")
 function renderPhotoPost() {
   const container = document.getElementById('photo-post');
-  console.log('📸 Rendering photo post, photos count:', dayData?.photos?.length);
+  console.log('📸 Rendering media post, count:', dayData?.photos?.length);
   
   if (!dayData?.photos?.length) {
-    container.innerHTML = '<p>No photos for this day.</p>';
+    container.innerHTML = '<p>No media for this day.</p>';
     return;
   }
 
-  const photos = dayData.photos;
-  const mainPhoto = photos[0];
+  const items = dayData.photos;
+  const main = items[0];
 
-  container.innerHTML = `
+  // Header
+  const headerHtml = `
     <div class="photo-post-card">
       <div class="photo-header">
         <h2>${escapeHtml(dayData.title || `Day — ${daySlug}`)}</h2>
-        <p class="photo-meta">${formatDateTime(mainPhoto.taken_at)} • ${photos.length} photo${photos.length > 1 ? 's' : ''}</p>
+        <p class="photo-meta">${formatDateTime(main.taken_at)} • ${items.length} item${items.length > 1 ? 's' : ''}</p>
       </div>
-      
-      <div class="photo-main">
-        <img src="${mainPhoto.url}" alt="${escapeHtml(mainPhoto.title || mainPhoto.caption || '')}" onclick="openLightbox(0)">
-        ${mainPhoto.title ? `<p class="photo-caption">${escapeHtml(mainPhoto.title)}</p>` : ''}
-        ${mainPhoto.caption ? `<p class="photo-caption">${escapeHtml(mainPhoto.caption)}</p>` : ''}
-      </div>
-      
-      ${photos.length > 1 ? `
-        <div class="photo-thumbnails">
-          ${photos.slice(1, 5).map((photo, index) => `
-            <img src="${photo.thumb || photo.url}" 
-                 alt="${escapeHtml(photo.title || photo.caption || '')}"
-                 onclick="openLightbox(${index + 1})"
-                 class="thumbnail">
-          `).join('')}
-          ${photos.length > 5 ? `<div class="more-photos" onclick="openLightbox(5)">+${photos.length - 5}</div>` : ''}
-        </div>
-      ` : ''}
-      
+      <div id="photo-main" class="photo-main"></div>
+      ${items.length > 1 ? `<div id="photo-thumbs" class="photo-thumbnails"></div>` : ''}
       <div class="photo-actions">
         <button class="action-btn like-btn" onclick="toggleLike()">
           <span class="icon">♥</span>
@@ -162,7 +173,6 @@ function renderPhotoPost() {
           <span class="count">0</span>
         </button>
       </div>
-      
       <div id="comments-section" class="comments-section" style="display: none;">
         <div id="comments-list" class="comments-list"></div>
         <form class="comment-form" onsubmit="addComment(event)">
@@ -172,23 +182,105 @@ function renderPhotoPost() {
       </div>
     </div>
   `;
+  container.innerHTML = headerHtml;
+
+  // Main media
+  const mainWrap = document.getElementById('photo-main');
+  const mainEl = renderMediaEl(main, { withControls: isVideo(main), className: 'photo-main-media' });
+  mainWrap.appendChild(mainEl);
+
+  // Click to open lightbox for images; videos keep controls/play
+  if (!isVideo(main)) {
+    mainEl.style.cursor = 'zoom-in';
+    mainEl.addEventListener('click', () => openLightbox(0));
+  }
+
+  // Captions
+  if (main.title) {
+    const t = document.createElement('p');
+    t.className = 'photo-caption';
+    t.textContent = main.title;
+    mainWrap.appendChild(t);
+  }
+  if (main.caption) {
+    const c = document.createElement('p');
+    c.className = 'photo-caption';
+    c.textContent = main.caption;
+    mainWrap.appendChild(c);
+  }
+
+  // Thumbnails
+  if (items.length > 1) {
+    const thumbs = document.getElementById('photo-thumbs');
+    const thumbItems = items.slice(1, 5);
+    thumbItems.forEach((it, idx) => {
+      const el = renderMediaEl(it, { withControls: false, className: 'thumbnail' });
+      el.addEventListener('click', () => openLightbox(idx + 1));
+      thumbs.appendChild(el);
+    });
+    if (items.length > 5) {
+      const more = document.createElement('div');
+      more.className = 'more-photos';
+      more.textContent = `+${items.length - 5}`;
+      more.addEventListener('click', () => openLightbox(5));
+      thumbs.appendChild(more);
+    }
+  }
 }
 
-// Lightbox functionality
+// Lightbox functionality (image + video)
 let currentPhotoIndex = 0;
+
+function ensureLightboxVideoEl() {
+  let v = document.getElementById('lightbox-video');
+  if (!v) {
+    const container = document.getElementById('lightbox-media') || document.getElementById('lightbox');
+    v = document.createElement('video');
+    v.id = 'lightbox-video';
+    v.controls = true;
+    v.playsInline = true;
+    v.style.maxWidth = '90vw';
+    v.style.maxHeight = '85vh';
+    v.style.display = 'none';
+    container.insertBefore(v, document.getElementById('lightbox-caption'));
+  }
+  return v;
+}
 
 function openLightbox(index = 0) {
   if (!dayData?.photos?.length) return;
   
   currentPhotoIndex = Math.max(0, Math.min(index, dayData.photos.length - 1));
-  const lightbox = document.getElementById('lightbox');
-  const photo = dayData.photos[currentPhotoIndex];
-  
-  document.getElementById('lightbox-image').src = photo.url;
-  document.getElementById('lightbox-caption').textContent = photo.caption || photo.title || '';
+  const lb = document.getElementById('lightbox');
+  const item = dayData.photos[currentPhotoIndex];
+
+  const img = document.getElementById('lightbox-image');
+  const vid = ensureLightboxVideoEl();
+
+  if (isVideo(item)) {
+    // show video
+    img.style.display = 'none';
+    vid.style.display = '';
+    vid.src = item.url;
+    vid.poster = item.thumb || '';
+    vid.currentTime = 0;
+    // autoplay muted is friendly; user can unmute
+    vid.muted = true;
+    const playPromise = vid.play();
+    if (playPromise && playPromise.catch) playPromise.catch(()=>{ /* ignore */ });
+  } else {
+    // show image
+    vid.pause?.();
+    vid.style.display = 'none';
+    vid.removeAttribute('src');
+    img.style.display = '';
+    img.src = item.url;
+  }
+
+  document.getElementById('lightbox-caption').textContent = item.caption || item.title || '';
   document.getElementById('lightbox-counter').textContent = `${currentPhotoIndex + 1} / ${dayData.photos.length}`;
   
-  lightbox.classList.add('open');
+  lb.classList.add('open');
   document.body.classList.add('lightbox-open');
   
   // Update navigation buttons
@@ -197,6 +289,8 @@ function openLightbox(index = 0) {
 }
 
 function closeLightbox() {
+  const vid = document.getElementById('lightbox-video');
+  if (vid) { vid.pause(); }
   document.getElementById('lightbox').classList.remove('open');
   document.body.classList.remove('lightbox-open');
 }
@@ -220,8 +314,8 @@ document.getElementById('lightbox-next').addEventListener('click', nextPhoto);
 
 // Keyboard navigation
 document.addEventListener('keydown', (e) => {
-  if (!document.getElementById('lightbox').classList.contains('open')) return;
-  
+  const lbOpen = document.getElementById('lightbox').classList.contains('open');
+  if (!lbOpen) return;
   if (e.key === 'Escape') closeLightbox();
   if (e.key === 'ArrowLeft') previousPhoto();
   if (e.key === 'ArrowRight') nextPhoto();
@@ -234,7 +328,6 @@ document.getElementById('lightbox').addEventListener('click', (e) => {
 
 // Interactions (simplified for day view)
 function toggleLike() {
-  // TODO: Implement like functionality for the day/stack
   console.log('Like toggled');
 }
 
@@ -248,8 +341,6 @@ function addComment(event) {
   const input = event.target.querySelector('input');
   const text = input.value.trim();
   if (!text) return;
-  
-  // TODO: Implement comment submission
   console.log('Comment added:', text);
   input.value = '';
 }
@@ -267,3 +358,4 @@ if (document.readyState === 'loading') {
 } else {
   init();
 }
+

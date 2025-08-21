@@ -105,6 +105,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .drawer-thumbnails { display: flex; gap: 8px; overflow-x: auto; padding: 8px 0; scrollbar-width: none; }
 .drawer-thumbnails::-webkit-scrollbar { display: none; }
 .drawer-thumbnail { width: 88px; height: 66px; border-radius: 10px; overflow: hidden; border: 2px solid transparent; box-shadow: 0 4px 12px rgba(0,0,0,.2); cursor: pointer; transition: transform .2s ease, border-color .2s ease, opacity .2s ease; opacity: .8; flex-shrink: 0; }
+.drawer-thumbnail img, .drawer-thumbnail video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .drawer-thumbnail:hover { transform: translateY(-1px); opacity: 1; }
 .drawer-thumbnail.active { border-color: #8bb8ff; opacity: 1; }
 @media (max-width: 768px) { .drawer-thumbnail { width: 76px; height: 58px; border-radius: 8px; } .stack-thumbnail-drawer { margin: 8px 12px 0; } }
@@ -1047,3 +1048,18 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   height: 100%;
   object-fit: cover;
 }
+
+/* Video and Image consistent styling */
+.photo-main img, .photo-main video,
+.photo-thumbnails img, .photo-thumbnails video,
+.media-tile, .thumbnail, .photo-main-media {
+  display:block;
+  width:100%;
+  object-fit:cover;
+  border-radius:12px;
+}
+
+.thumbnail { width:100px; height:80px; }
+.photo-main-media { max-height:60vh; }
+.lightbox-media { display:flex; align-items:center; justify-content:center; }
+#lightbox-image, #lightbox-video { max-width:90vw; max-height:85vh; }
