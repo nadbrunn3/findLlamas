@@ -1,4 +1,13 @@
 {
-  "reactions": {},
-  "comments": []
+  "reactions": {
+    "♥": 1
+  },
+  "comments": [
+    {
+      "id": "1755797761397",
+      "text": "Hallo",
+      "author": "Anonymous",
+      "timestamp": "2025-08-21T17:36:01.397Z"
+    }
+  ]
 }

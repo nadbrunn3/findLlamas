@@ -83,13 +83,41 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .card-sub .dot::before{content:"•";margin:0 .45rem;color:#cbd5e1}
 .stack-pill{margin-left:auto;background:#eff6ff;border:1px solid #dbeafe;color:#1d4ed8;border-radius:999px;padding:2px 10px;font-weight:700;font-size:.78rem}
 
+.stack-desc {
+  margin: 0;
+  font-size: 0.95rem;
+  opacity: 0.9;
+
+  /* Default for light backgrounds */
+  color: #333;
+}
+
+/* If parent card has a dark background */
+@media (prefers-color-scheme: dark) {
+  .stack-desc {
+    color: #fff;
+    opacity: 0.85;
+  }
+}
+
+/* Extra safety: if the stack-card itself is dark */
+.stack-card[style*="background: #000"],
+.stack-card[style*="background-color: #000"],
+.stack-card.dark {
+  color: #fff;
+}
+
+.stack-card.dark .stack-desc {
+  color: #fff;
+}
+
 /* New photo indicator */
 .new-photo-bell{position:absolute;top:12px;right:14px;font-size:1.1rem;color:#f59e0b}
 
 /* ===== MEDIA CONTAINER ===== */
 .stack-photo-area, .stack-media-container, .card-media{position:relative;background:#f8fafc}
-.stack-main-photo, .card-media img.main-photo{width:100%;height:auto;display:block;cursor:zoom-in;transition:transform .18s ease;object-fit:cover;max-height:500px}
-.stack-main-photo:hover, .card-media img.main-photo:hover{transform:scale(1.01)}
+.stack-main-photo, .card-media img.main-photo{width:100%;height:auto;display:block;cursor:default;transition:transform .18s ease;object-fit:contain;max-height:500px}
+.stack-main-photo:hover, .card-media img.main-photo:hover{transform:none}
 .media-gradient::after{content:"";position:absolute;left:0;right:0;bottom:0;height:96px;background:linear-gradient(to top,rgba(0,0,0,.35),transparent);pointer-events:none}
 
 /* ===== NAVIGATION ARROWS ===== */
@@ -105,7 +133,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .drawer-thumbnails { display: flex; gap: 8px; overflow-x: auto; padding: 8px 0; scrollbar-width: none; }
 .drawer-thumbnails::-webkit-scrollbar { display: none; }
 .drawer-thumbnail { width: 88px; height: 66px; border-radius: 10px; overflow: hidden; border: 2px solid transparent; box-shadow: 0 4px 12px rgba(0,0,0,.2); cursor: pointer; transition: transform .2s ease, border-color .2s ease, opacity .2s ease; opacity: .8; flex-shrink: 0; }
-.drawer-thumbnail img, .drawer-thumbnail video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.drawer-thumbnail img, .drawer-thumbnail video { width: 100%; height: 100%; object-fit: contain; display: block; }
 .drawer-thumbnail:hover { transform: translateY(-1px); opacity: 1; }
 .drawer-thumbnail.active { border-color: #8bb8ff; opacity: 1; }
 @media (max-width: 768px) { .drawer-thumbnail { width: 76px; height: 58px; border-radius: 8px; } .stack-thumbnail-drawer { margin: 8px 12px 0; } }
@@ -163,7 +191,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .rail-thumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 .rail-thumb:hover { transform: translateY(-2px); opacity: 1; }
 .rail-thumb.active { border-color: #8bb8ff; opacity: 1; }
@@ -724,7 +752,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .drawer-thumbnail{
   width: 140px;
   height: 90px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 14px;
   filter: none !important;
   opacity: 1 !important;
@@ -783,14 +811,14 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .photo-main img {
   width: 100%;
   max-height: 500px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 12px;
   cursor: pointer;
   transition: transform 0.2s ease;
 }
 
 .photo-main img:hover {
-  transform: scale(1.02);
+  transform: none;
 }
 
 .photo-caption {
@@ -809,7 +837,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .thumbnail {
   width: 100%;
   height: 80px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 8px;
   cursor: pointer;
   transition: transform 0.2s ease, opacity 0.2s ease;
@@ -817,7 +845,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 }
 
 .thumbnail:hover {
-  transform: scale(1.05);
+  transform: none;
   opacity: 1;
 }
 
@@ -904,99 +932,15 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   background: #2563eb;
 }
 
-/* Lightbox for day view */
-.lightbox {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.9);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.3s ease;
-}
 
-.lightbox.open {
-  opacity: 1;
-  visibility: visible;
-}
 
-.lightbox-content {
-  position: relative;
-  max-width: 90vw;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
 
-.lightbox-image {
-  max-width: 100%;
-  max-height: 70vh;
-  object-fit: contain;
-  border-radius: 8px;
-  cursor: default;
-}
 
-.lightbox-nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  background: rgba(0,0,0,0.6);
-  color: white;
-  border: none;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  font-size: 24px;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
 
-.lightbox-nav:hover {
-  background: rgba(0,0,0,0.8);
-}
 
-.lightbox-nav:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
 
-.lightbox-prev { left: -70px; }
-.lightbox-next { right: -70px; }
 
-.lightbox-close {
-  position: absolute;
-  top: -50px;
-  right: 0;
-  background: rgba(0,0,0,0.6);
-  color: white;
-  border: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  font-size: 20px;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
 
-.lightbox-close:hover {
-  background: rgba(0,0,0,0.8);
-}
-
-.lightbox-info {
-  margin-top: 16px;
-  text-align: center;
-  color: white;
-}
-
-.lightbox-counter {
-  font-size: 0.9rem;
-  opacity: 0.8;
-  margin-bottom: 8px;
-}
 
 /* Mobile adjustments for day view */
 @media (max-width: 768px) {
@@ -1058,11 +1002,191 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .media-tile, .thumbnail, .photo-main-media {
   display:block;
   width:100%;
-  object-fit:cover;
+  object-fit:contain;
   border-radius:12px;
 }
 
 .thumbnail { width:100px; height:80px; }
 .photo-main-media { max-height:60vh; }
-.lightbox-media { display:flex; align-items:center; justify-content:center; }
-#lightbox-image, #lightbox-video { max-width:90vw; max-height:85vh; cursor:default; }
+
+/* ===== SOCIAL STACK CARDS ===== */
+
+/* Container for stacks */
+#stacks { display: grid; gap: 16px; margin-top: 24px; }
+
+/* Card */
+.stack-card.social {
+  border: 1px solid rgba(0,0,0,.08);
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0,0,0,.06);
+}
+
+/* Cover media (top) */
+.stack-cover { position: relative; }
+.stack-cover-media {
+  width: 100%;
+  max-height: 36vh;
+  object-fit: contain;
+  display: block;
+}
+
+/* Header */
+.stack-header { padding: 12px 14px 4px; }
+.stack-title { margin: 0 0 6px; font-size: 1.1rem; font-weight: 800; color: #0f172a; }
+.stack-subline { color: #6b7280; font-size: .9rem; display: flex; gap: 4px; flex-wrap: wrap; }
+
+/* Description */
+.stack-desc {
+  padding: 0 14px 8px;
+  margin: 0;
+  font-size: .96rem;
+  line-height: 1.45;
+  color: #374151; /* readable on white */
+}
+
+/* Grid of remaining media */
+.stack-grid { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); padding: 0 14px 10px; }
+.stack-thumb { width: 100%; height: 120px; object-fit: contain; border-radius: 10px; display:block; }
+
+/* Footer (likes) */
+.stack-footer {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid rgba(0,0,0,.06);
+}
+.stack-like-btn {
+  border: none; background: #f3f4f6; color: #ef4444;
+  width: 34px; height: 34px; border-radius: 999px; cursor: pointer;
+  font-size: 16px; line-height: 34px; text-align: center;
+}
+.stack-like-btn:hover { background: #e5e7eb; }
+.stack-like-count { color: #2563eb; text-decoration: none; font-weight: 600; }
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .stack-card.social { background: #111827; border-color: rgba(255,255,255,.08); }
+  .stack-title { color: #e5e7eb; }
+  .stack-subline { color: #9ca3af; }
+  .stack-desc { color: #e5e7eb; opacity: .92; }
+  .stack-footer { border-top-color: rgba(255,255,255,.08); }
+  .stack-like-btn { background: #1f2937; }
+  .stack-like-btn:hover { background: #374151; }
+  .stack-like-count { color: #60a5fa; }
+}
+
+/* Auto-contrast if a theme sets very dark background on the card */
+.stack-card.social { --bg: 255; }
+.stack-card.social.dark .stack-title,
+.stack-card.social.dark .stack-subline,
+.stack-card.social.dark .stack-desc { color: #fff; }
+
+/* ===== LIGHTBOX LAYOUT ===== */
+
+/* Overlay */
+#lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  z-index: 10001;
+  display: none; /* hidden until .open */
+}
+
+/* When open: 2-column layout: media | side panel */
+#lightbox.open {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  align-items: center;
+  justify-items: center;
+  gap: 0;
+}
+
+/* === MEDIA AREA === */
+#lightbox-media {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: black;
+  width: 100%;
+  height: 100%;
+}
+
+#lightbox-image,
+#lightbox-video {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain; /* ✅ Ensures no zoom/crop */
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* === RIGHT PANEL === */
+#lightbox-panel {
+  background: #0f1115;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 16px;
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* === CLOSE BUTTON === */
+#lightbox-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 10002;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 20px;
+  line-height: 36px;
+  cursor: pointer;
+  pointer-events: auto; /* Always clickable */
+}
+#lightbox-close:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+/* === NAV BUTTONS === */
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 2.5rem;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.4);
+  border: none;
+  cursor: pointer;
+  z-index: 10002;
+  padding: 8px 14px;
+  border-radius: 6px;
+}
+.lightbox-prev {
+  left: 12px;
+}
+.lightbox-next {
+  right: 12px;
+}
+.lightbox-nav:hover {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+/* Keep children interactive */
+#lightbox * {
+  pointer-events: auto;
+}
+
+/* Prevent page scrolling when lightbox is open */
+body.lightbox-open {
+  overflow: hidden;
+}
+
+

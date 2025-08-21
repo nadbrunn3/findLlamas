@@ -1,4 +1,4 @@
-import { dataUrl, getApiBase, haversineKm, escapeHtml, formatTime, formatDateTime } from "./utils.js";
+import { dataUrl, getApiBase, haversineKm, escapeHtml, formatTime, formatDateTime, groupIntoStacks } from "./utils.js";
 
 // Get date from URL parameter
 const urlParams = new URLSearchParams(window.location.search);
@@ -40,6 +40,123 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile' } 
   }
 }
 
+async function fetchStackInteractions(stackId) {
+  try {
+    const r = await fetch(`/api/stack/${encodeURIComponent(stackId)}/interactions`);
+    if (!r.ok) throw new Error('interactions');
+    return await r.json(); // { reactions: { "❤️": n, ... }, comments: [] }
+  } catch { return { reactions: {}, comments: [] }; }
+}
+
+function reactionCountSum(reactions = {}) {
+  return Object.values(reactions).reduce((a, b) => a + (b || 0), 0);
+}
+
+async function renderStacksSection() {
+  const host = document.getElementById('stacks');
+  if (!host) return;
+  host.innerHTML = '';
+
+  const items = dayData?.photos || [];
+  if (!items.length) { host.innerHTML = '<p>No media.</p>'; return; }
+
+  const stacks = groupIntoStacks(items, 500);
+
+  const globalIndex = new Map(items.map((p, i) => [p.id || p.url, i]));
+
+  for (const st of stacks) {
+    const meta = (dayData.stackMeta && dayData.stackMeta[st.id]) || { title: '', caption: '' };
+    const title = meta.title?.trim() || 'Untitled stop';
+    const caption = meta.caption?.trim() || '';
+
+    // Card shell
+    const card = document.createElement('article');
+    card.className = 'stack-card social';
+
+    // Cover media
+    const coverWrap = document.createElement('div');
+    coverWrap.className = 'stack-cover';
+    const cover = renderMediaEl(st.photos[0], { withControls: false, className: 'stack-cover-media' });
+    coverWrap.appendChild(cover);
+
+    // Header (title + subline)
+    const header = document.createElement('header');
+    header.className = 'stack-header';
+    const when = formatTime(st.photos[0]?.taken_at || '');
+    header.innerHTML = `
+      <h3 class="stack-title">${escapeHtml(title)}</h3>
+      <div class="stack-subline">
+        <span>${escapeHtml(dayData.title || `Day — ${dayData.slug || ''}`)}</span>
+        ${when ? ` · <span>${when}</span>` : ''}
+      </div>
+    `;
+
+    // Description
+    const desc = document.createElement('p');
+    desc.className = 'stack-desc';
+    desc.textContent = caption;
+
+    // Media grid (rest)
+    const grid = document.createElement('div');
+    grid.className = 'stack-grid';
+    st.photos.forEach((p, idx) => {
+      const el = renderMediaEl(p, { withControls: false, className: idx === 0 ? 'stack-cover-media' : 'stack-thumb' });
+      if (idx > 0) {
+        el.addEventListener('click', () => {
+          const gi = globalIndex.get(p.id || p.url) ?? 0;
+          openLightbox(gi);
+        });
+        grid.appendChild(el);
+      } else {
+        // cover click opens lightbox
+        coverWrap.addEventListener('click', () => {
+          const gi = globalIndex.get(p.id || p.url) ?? 0;
+          openLightbox(gi);
+        });
+      }
+    });
+
+    // Footer with likes count
+    const footer = document.createElement('footer');
+    footer.className = 'stack-footer';
+    footer.innerHTML = `
+      <button class="stack-like-btn" data-stack="${st.id}" aria-label="Like">♥</button>
+      <a class="stack-like-count" href="javascript:void(0)" data-stack="${st.id}">0 likes</a>
+    `;
+
+    // Assemble
+    card.appendChild(coverWrap);
+    card.appendChild(header);
+    if (caption) card.appendChild(desc);
+    if (st.photos.length > 1) card.appendChild(grid);
+    card.appendChild(footer);
+    host.appendChild(card);
+
+    // Load interactions & update counts
+    (async () => {
+      const inter = await fetchStackInteractions(st.id);
+      const count = reactionCountSum(inter.reactions);
+      const cntEl = card.querySelector('.stack-like-count');
+      if (cntEl) cntEl.textContent = `${count} ${count === 1 ? 'like' : 'likes'}`;
+    })();
+
+    // Like handler (anonymous)
+    card.querySelector('.stack-like-btn').addEventListener('click', async () => {
+      try {
+        await fetch(`/api/stack/${encodeURIComponent(st.id)}/react`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ emoji: '♥' })
+        });
+        const inter = await fetchStackInteractions(st.id);
+        const count = reactionCountSum(inter.reactions);
+        const cntEl = card.querySelector('.stack-like-count');
+        if (cntEl) cntEl.textContent = `${count} ${count === 1 ? 'like' : 'likes'}`;
+      } catch (e) { console.warn('like failed', e); }
+    });
+  }
+}
+
 // Initialize the page
 async function init() {
   console.log('🚀 Initializing day view for:', daySlug);
@@ -50,6 +167,8 @@ async function init() {
     console.log('✅ Map initialized');
     renderPhotoPost();
     console.log('✅ Photo post rendered');
+    renderStacksSection();
+    console.log('✅ Stacks section rendered');
   } catch (error) {
     console.error('❌ Failed to initialize day view:', error);
     document.getElementById('day-title').textContent = 'Failed to load day data';
@@ -249,49 +368,39 @@ function ensureLightboxVideoEl() {
 
 function openLightbox(index = 0) {
   if (!dayData?.photos?.length) return;
-  
+
   currentPhotoIndex = Math.max(0, Math.min(index, dayData.photos.length - 1));
   const lb = document.getElementById('lightbox');
   const item = dayData.photos[currentPhotoIndex];
 
   const img = document.getElementById('lightbox-image');
-  const vid = ensureLightboxVideoEl();
+  const vid = document.getElementById('lightbox-video');
 
-  if (isVideo(item)) {
-    // show video
-    img.style.display = 'none';
-    vid.style.display = '';
+  if (item.type === 'video') {
     vid.src = item.url;
-    vid.poster = item.thumb || '';
-    vid.currentTime = 0;
-    // autoplay muted is friendly; user can unmute
-    vid.muted = true;
-    const playPromise = vid.play();
-    if (playPromise && playPromise.catch) playPromise.catch(()=>{ /* ignore */ });
+    vid.style.display = 'block';
+    img.style.display = 'none';
   } else {
-    // show image
-    vid.pause?.();
-    vid.style.display = 'none';
-    vid.removeAttribute('src');
-    img.style.display = '';
     img.src = item.url;
+    img.style.display = 'block';
+    vid.style.display = 'none';
   }
 
   document.getElementById('lightbox-caption').textContent = item.caption || item.title || '';
   document.getElementById('lightbox-counter').textContent = `${currentPhotoIndex + 1} / ${dayData.photos.length}`;
-  
+
   lb.classList.add('open');
   document.body.classList.add('lightbox-open');
-  
-  // Update navigation buttons
+
   document.getElementById('lightbox-prev').disabled = currentPhotoIndex === 0;
   document.getElementById('lightbox-next').disabled = currentPhotoIndex === dayData.photos.length - 1;
 }
 
 function closeLightbox() {
+  const lb = document.getElementById('lightbox');
   const vid = document.getElementById('lightbox-video');
-  if (vid) { vid.pause(); }
-  document.getElementById('lightbox').classList.remove('open');
+  if (vid) vid.pause?.();
+  lb.classList.remove('open');
   document.body.classList.remove('lightbox-open');
 }
 
@@ -307,10 +416,15 @@ function nextPhoto() {
   }
 }
 
-// Event listeners for lightbox
-document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
-document.getElementById('lightbox-prev').addEventListener('click', previousPhoto);
-document.getElementById('lightbox-next').addEventListener('click', nextPhoto);
+// Make sure the button actually closes (id must match the CSS above)
+const closeBtn = document.getElementById('lightbox-close');
+if (closeBtn) closeBtn.addEventListener('click', closeLightbox);
+
+const prevBtn = document.getElementById('lightbox-prev');
+if (prevBtn) prevBtn.addEventListener('click', previousPhoto);
+
+const nextBtn = document.getElementById('lightbox-next');
+if (nextBtn) nextBtn.addEventListener('click', nextPhoto);
 
 // Keyboard navigation
 document.addEventListener('keydown', (e) => {
@@ -321,9 +435,19 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowRight') nextPhoto();
 });
 
-// Click outside to close
+// Optional: click on backdrop to close.
+// If you want only backdrop (not the panel) to close:
 document.getElementById('lightbox').addEventListener('click', (e) => {
-  if (e.target.id === 'lightbox') closeLightbox();
+  // Close when clicking the dim area only (not media or panel)
+  const panel = document.getElementById('lightbox-panel');
+  const img = document.getElementById('lightbox-image');
+  const vid = document.getElementById('lightbox-video');
+  const clickedInside =
+    (panel && panel.contains(e.target)) ||
+    (img && img.contains(e.target)) ||
+    (vid && vid.contains(e.target)) ||
+    (e.target.id === 'lightbox-close');
+  if (!clickedInside) closeLightbox();
 });
 
 // Interactions (simplified for day view)

@@ -18,6 +18,9 @@
     <!-- Social Media Style Post -->
     <div id="photo-post" class="photo-post"></div>
     
+    <!-- Stacks Section -->
+    <div id="stacks"></div>
+    
     <!-- Traditional Gallery (fallback) -->
     <section id="gallery" class="gallery" style="display: none;"></section>
 
@@ -46,29 +49,22 @@
     </form>
   </div>
 
-  <div id="lightbox" class="lightbox">
-    <div class="lightbox-content">
-      <img id="lightbox-image" class="lightbox-image" src="" alt="" />
-      <button class="lightbox-nav lightbox-prev" id="lightbox-prev">‹</button>
-      <button class="lightbox-nav lightbox-next" id="lightbox-next">›</button>
-      <button class="lightbox-close" id="lightbox-close">×</button>
-      <div class="lightbox-info">
-        <div class="lightbox-counter" id="lightbox-counter">1 / 5</div>
-        <div id="lightbox-caption">Photo caption</div>
-      </div>
-      <div class="lightbox-interactions" id="lightbox-interactions">
-        <div class="lightbox-reactions" id="lightbox-reactions">
-          <button class="lightbox-react-btn" data-emoji="👍">👍 <span>0</span></button>
-          <button class="lightbox-react-btn" data-emoji="😊">😊 <span>0</span></button>
-          <button class="lightbox-react-btn" data-emoji="❤️">❤️ <span>0</span></button>
-        </div>
-        <div class="lightbox-comments" id="lightbox-comments"></div>
-        <form class="lightbox-comment-form" id="lightbox-comment-form">
-          <input type="text" id="lightbox-comment-input" placeholder="Add a comment..." />
-          <button type="submit">Send</button>
-        </form>
-      </div>
+  <div id="lightbox">
+    <div id="lightbox-media">
+      <img id="lightbox-image" alt="">
+      <video id="lightbox-video" style="display:none" playsinline controls></video>
     </div>
+
+    <aside id="lightbox-panel">
+      <div id="lightbox-info">
+        <div id="lightbox-counter"></div>
+        <div id="lightbox-caption"></div>
+      </div>
+    </aside>
+
+    <button id="lightbox-prev" class="lightbox-nav lightbox-prev">‹</button>
+    <button id="lightbox-next" class="lightbox-nav lightbox-next">›</button>
+    <button id="lightbox-close" aria-label="Close">×</button>
   </div>
 </body>
 </html>
