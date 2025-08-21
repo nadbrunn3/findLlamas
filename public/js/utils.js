@@ -35,39 +35,41 @@ export function haversineKm(lat1, lon1, lat2, lon2) {
 
 // --- stacking ---
 export function groupIntoStacks(photos, radiusMeters) {
-  const stacks = [];
-  const used = new Set();
   const radiusKm = radiusMeters / 1000; // convert meters to kilometers
+  const sorted = [...photos].sort((a, b) => {
+    const ta = new Date(a.taken_at || a.takenAt || a.ts || 0).getTime();
+    const tb = new Date(b.taken_at || b.takenAt || b.ts || 0).getTime();
+    return ta - tb;
+  });
+
+  const stacks = [];
   let idx = 0;
+  let current = null;
 
-  for (let i = 0; i < photos.length; i++) {
-    if (used.has(i)) continue;
-    const a = photos[i];
-    const group = [a];
-    used.add(i);
+  for (const photo of sorted) {
+    const last = current?.photos[current.photos.length - 1];
+    const hasGPS = typeof photo.lat === 'number' && typeof photo.lon === 'number';
+    const lastHasGPS = last && typeof last.lat === 'number' && typeof last.lon === 'number';
+    const dist = (hasGPS && lastHasGPS)
+      ? haversineKm(photo.lat, photo.lon, last.lat, last.lon)
+      : Infinity;
 
-    for (let j = i + 1; j < photos.length; j++) {
-      if (used.has(j)) continue;
-      const b = photos[j];
-      if (haversineKm(a.lat, a.lon, b.lat, b.lon) <= radiusKm) {
-        group.push(b);
-        used.add(j);
-      }
+    if (!current || dist > radiusKm) {
+      const location = hasGPS
+        ? { lat: photo.lat, lng: photo.lon, label: `${photo.lat.toFixed(4)}, ${photo.lon.toFixed(4)}` }
+        : { lat: null, lng: null, label: 'Location unknown' };
+
+      current = {
+        id: `stack-${idx++}`,
+        title: photo.caption || photo.dayTitle,
+        location,
+        photos: [],
+        takenAt: photo.taken_at
+      };
+      stacks.push(current);
     }
 
-    // Handle missing GPS coordinates
-    const hasGPS = typeof a.lat === 'number' && typeof a.lon === 'number';
-    const location = hasGPS 
-      ? { lat: a.lat, lng: a.lon, label: `${a.lat.toFixed(4)}, ${a.lon.toFixed(4)}` }
-      : { lat: null, lng: null, label: 'Location unknown' };
-
-    stacks.push({
-      id: `stack-${idx++}`,
-      title: a.caption || a.dayTitle,
-      location,
-      photos: group,
-      takenAt: a.taken_at
-    });
+    current.photos.push(photo);
   }
 
   return stacks;
