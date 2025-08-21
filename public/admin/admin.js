@@ -250,7 +250,6 @@ function renderTripsTab(panel) {
     <button id="import-day">Import</button>
     <button id="publish-day" disabled>Publish selected</button>
     <button id="save-day" disabled>Save</button>
-    <button id="preview-day" disabled>Preview</button>
   `;
   panel.appendChild(controls);
 
@@ -272,15 +271,6 @@ function renderTripsTab(panel) {
   stackEditorEl.className = 'stack-feed-container';
   stackEditorEl.style.marginTop = '1rem';
   panel.appendChild(stackEditorEl);
-
-  const iframe = document.createElement('iframe');
-  iframe.id = 'preview-frame';
-  iframe.style.width = '100%';
-  iframe.style.height = '60vh';
-  iframe.style.marginTop = '1rem';
-  iframe.style.display = 'none';
-  iframe.setAttribute('title', 'Day Preview');
-  panel.appendChild(iframe);
 
   let dayData = null;
   let dayStacks = [];
@@ -334,7 +324,6 @@ function renderTripsTab(panel) {
     renderAdminMapMarkers(dayData.photos || []);
 
     controls.querySelector('#save-day').disabled = false;
-    controls.querySelector('#preview-day').disabled = false;
     controls.querySelector('#publish-day').disabled = !(dayData.photos && dayData.photos.length);
   }
 
@@ -394,7 +383,6 @@ function renderTripsTab(panel) {
     renderAdminMapMarkers(dayData.photos || []);
     
     controls.querySelector('#save-day').disabled = false;
-    controls.querySelector('#preview-day').disabled = false;
     controls.querySelector('#publish-day').disabled = false;
     alert(`Imported ${newCount} new photos from Immich for ${dateVal}`);
   }
@@ -733,34 +721,6 @@ function renderTripsTab(panel) {
     }
   }
 
-  async function saveStackEdits() {
-    if (!dayData) return;
-    const cards = stackEditorEl.querySelectorAll('.stack-item');
-    dayData.stackMeta = dayData.stackMeta || {};
-    const tasks = [];
-    cards.forEach(card => {
-      const id = card.getAttribute('data-stack-id');
-      const title = card.querySelector('[data-role="stack-title"]').value.trim();
-      const caption = card.querySelector('[data-role="stack-caption"]').value.trim();
-      dayData.stackMeta[id] = { title, caption };
-      tasks.push(patchStackMeta(dayData.slug, id, { title, caption }).catch(()=>{}));
-    });
-    await Promise.all(tasks);
-  }
-
-  async function previewDay() {
-    if (!dayData) return;
-    await saveStackEdits();
-    ensureAdminMap();
-    renderAdminMapMarkers(dayData.photos || []);
-    const show = iframe.style.display === 'none';
-    iframe.style.display = show ? 'block' : 'none';
-    if (show) {
-      iframe.src = `../index.html?preview=${encodeURIComponent(dayData.slug)}`;
-      iframe.focus();
-    }
-  }
-
   async function publishSelected() {
     const adminToken = getAdminToken();
     if (!adminToken) return alert('Set Admin API Token in Settings first');
@@ -805,7 +765,6 @@ function renderTripsTab(panel) {
   controls.querySelector('#import-day').addEventListener('click', importDay);
   controls.querySelector('#publish-day').addEventListener('click', publishSelected);
   controls.querySelector('#save-day').addEventListener('click', saveDay);
-  controls.querySelector('#preview-day').addEventListener('click', previewDay);
   console.log('✅ Event listeners attached successfully');
 }
 
