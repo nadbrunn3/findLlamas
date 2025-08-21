@@ -204,22 +204,32 @@ window.openPhotoLightbox = (photos, startIndex=0) => {
     showOnMapBtn.addEventListener('click', ()=>{
       const p = photos[i];
       if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
-      
+
       // Close the lightbox first (clean UI)
       if (window.closeLightbox) window.closeLightbox();
       else el.classList.remove("on");
-      
-      // Jump right to the location
+
+      const latlng = [p.lat, p.lon];
+
+      // Prefer the rich overlay map when available
       if (window.openMapOverlayAt) {
         window.openMapOverlayAt(p.lat, p.lon, p.caption || '');
-        
+
         // When overlay closes, pan page map (if present)
-        const latlng = [p.lat, p.lon];
-        const onClose = ()=>{ 
-          if (window.topMap?.panTo) window.topMap.panTo(latlng); 
-          document.removeEventListener('map:closed', onClose); 
+        const onClose = ()=>{
+          if (window.topMap?.panTo) window.topMap.panTo(latlng);
+          document.removeEventListener('map:closed', onClose);
         };
         document.addEventListener('map:closed', onClose);
+        return;
+      }
+
+      // Fallback: pan existing page map or open Google Maps
+      if (window.topMap?.panTo) {
+        window.topMap.panTo(latlng);
+      } else {
+        const url = `https://maps.google.com/?q=${p.lat},${p.lon}`;
+        window.open(url, '_blank');
       }
     });
     
