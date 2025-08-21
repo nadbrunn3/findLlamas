@@ -3,7 +3,13 @@
     "slug": "2025-08-01",
     "date": "2025-08-01",
     "title": "Day — 2025-08-01",
-    "cover": "/api/immich/assets/8a68044e-c150-4e89-ab71-b4903c3b2407/thumb"
+    "cover": "/api/immich/assets/97a3593d-d046-46ea-9b52-e66e68babeb6/thumb"
+  },
+  {
+    "slug": "2025-08-03",
+    "date": "2025-08-03",
+    "title": "Day — 2025-08-03",
+    "cover": "/api/immich/assets/3c883c40-d1e1-4880-a68a-93df92cc33f9/thumb"
   },
   {
     "slug": "2025-08-13",
@@ -34,5 +40,11 @@
     "date": "2025-08-18",
     "title": "Day — 2025-08-18",
     "cover": "/api/immich/assets/3c883c40-d1e1-4880-a68a-93df92cc33f9/thumb"
+  },
+  {
+    "slug": "2025-08-21",
+    "date": "2025-08-21",
+    "title": "Day — 2025-08-21",
+    "cover": "/api/immich/assets/d46f9989-81d9-4dcf-be87-6745abe9bcd5/thumb"
   }
 ]

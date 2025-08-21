@@ -1,8 +1,8 @@
 {
-  "date": "2025-08-18",
-  "slug": "2025-08-18",
+  "date": "2025-08-03",
+  "slug": "2025-08-03",
   "segment": "day",
-  "title": "Day — 2025-08-18",
+  "title": "Day — 2025-08-03",
   "stats": {},
   "polyline": {
     "type": "LineString",
@@ -47,10 +47,5 @@
       "caption": "PXL_20250803_132608666.jpg"
     }
   ],
-  "stackMeta": {
-    "stack-0": {
-      "title": "Hello",
-      "caption": "Hi"
-    }
-  }
+  "stackMeta": {}
 }

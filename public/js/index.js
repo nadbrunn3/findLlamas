@@ -519,7 +519,7 @@ function renderCommentItem(c){
   return li;
 }
 
-function escapeHtml(s){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
 
 function likeKey(kind, id){ return `liked:${kind}:${id}`; }
 
