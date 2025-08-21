@@ -271,17 +271,39 @@ async function getAssetsForDay({ date, albumId }) {
 }
 
 function mapAssetToPhoto(a) {
-  const id = a.id || a.assetId || a._id;
-  const takenAt = a?.exifInfo?.dateTimeOriginal || a?.localDateTime || a?.fileCreatedAt || a?.createdAt;
-  const lat = a?.exifInfo?.latitude ?? a?.exif?.latitude ?? null;
-  const lon = a?.exifInfo?.longitude ?? a?.exif?.longitude ?? null;
+  const asset = a?.asset || a; // handle wrapped items
+  const id = asset.id || asset.assetId || asset._id;
+  const takenAt =
+    asset?.exifInfo?.dateTimeOriginal ||
+    asset?.localDateTime ||
+    asset?.fileCreatedAt ||
+    asset?.createdAt;
+
+  // Immich typically has asset.type = 'IMAGE' | 'VIDEO'
+  const t = (asset?.type || asset?.assetType || '').toString().toUpperCase();
+  const mime = asset?.mimeType || '';
+  const isVideo = t === 'VIDEO' || mime.startsWith('video/');
+
+  const lat = asset?.exifInfo?.latitude ?? asset?.exif?.latitude ?? null;
+  const lon = asset?.exifInfo?.longitude ?? asset?.exif?.longitude ?? null;
+
+  // Optional duration if Immich provides it (seconds)
+  const duration =
+    typeof asset?.duration === 'number'
+      ? asset.duration
+      : (asset?.exifInfo?.duration || null);
+
   return {
     id,
+    kind: isVideo ? 'video' : 'photo',
+    mimeType: mime || (isVideo ? 'video/*' : 'image/*'),
+    duration,
     url: `/api/immich/assets/${id}/original`,
     thumb: `/api/immich/assets/${id}/thumb`,
     taken_at: takenAt,
-    lat, lon,
-    caption: a?.exifInfo?.description || a?.originalFileName || ''
+    lat,
+    lon,
+    caption: asset?.exifInfo?.description || asset?.originalFileName || ''
   };
 }
 

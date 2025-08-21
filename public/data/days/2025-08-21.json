@@ -65,5 +65,14 @@
       "caption": "PXL_20250821_133522490.mp4"
     }
   ],
-  "stackMeta": {}
+  "stackMeta": {
+    "stack-0": {
+      "title": "Hi",
+      "caption": ""
+    },
+    "stack-1": {
+      "title": "Next",
+      "caption": ""
+    }
+  }
 }
