@@ -114,18 +114,27 @@ function makeDragScrollable(el) {
 }
 
 async function loadStacks(){
-  const days = await (await fetch(dataUrl("days", "index.json"))).json();
+  const previewSlug = urlParam("preview");
   allPhotos = [];
-  await Promise.all(days.map(async d=>{
-    const dj = await (await fetch(dataUrl("days", `${d.slug}.json`))).json();
+
+  if (previewSlug){
+    const dj = await (await fetch(dataUrl("days", `${previewSlug}.json`))).json();
     (dj.photos||[]).forEach(p=> allPhotos.push({ ...p, dayTitle:dj.title, ts:+new Date(p.taken_at) }));
-  }));
+  } else {
+    const days = await (await fetch(dataUrl("days", "index.json"))).json();
+    await Promise.all(days.map(async d=>{
+      const dj = await (await fetch(dataUrl("days", `${d.slug}.json`))).json();
+      (dj.photos||[]).forEach(p=> allPhotos.push({ ...p, dayTitle:dj.title, ts:+new Date(p.taken_at) }));
+    }));
+  }
+
   allPhotos.sort((a,b)=>a.ts-b.ts);
-  // group photos into stacks by proximity (used for feed only)
+
+  // group photos into stacks by proximity (500m radius)
+  photoStacks = groupIntoStacks(allPhotos, 500);
+
   // tag photos with stack id for map interactions
   photoStacks.forEach(s => s.photos.forEach(p => p.stackId = s.id));
-  // group photos into stacks by proximity (500m radius)
-  photoStacks = groupIntoStacks(all, 500);
 }
 
 // ---------- maps ----------
