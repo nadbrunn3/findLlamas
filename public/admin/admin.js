@@ -390,6 +390,13 @@ function renderTripsTab(panel) {
     }
     dayData.stackMeta = dayData.stackMeta || {};
 
+    // Sort photos chronologically so gallery and stacks match frontend order
+    dayData.photos.sort((a, b) => {
+      const ta = new Date(a.taken_at || a.takenAt || a.ts || 0).getTime();
+      const tb = new Date(b.taken_at || b.takenAt || b.ts || 0).getTime();
+      return ta - tb;
+    });
+
     renderDay();
     
     // Update map after importing photos
@@ -516,10 +523,17 @@ function renderTripsTab(panel) {
     });
   });
 
-   // Group photos into stacks first (distance-based, 500 m)
+  // Group photos into stacks first (distance-based, 500 m)
   dayStacks = groupIntoStacks(dayData.photos || [], 500);
 
-    // Render all stacks with inline editors
+  // Ensure stacks are ordered by the time of their first photo
+  dayStacks.sort((a, b) => {
+    const ta = new Date(a.photos[0]?.taken_at || a.photos[0]?.takenAt || 0).getTime();
+    const tb = new Date(b.photos[0]?.taken_at || b.photos[0]?.takenAt || 0).getTime();
+    return ta - tb;
+  });
+
+  // Render all stacks with inline editors
   renderStacks();
   }
 
