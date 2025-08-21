@@ -1,9 +1,10 @@
-import { dataUrl, getApiBase, groupIntoStacks, debounce, urlParam, pushUrlParam, replaceUrlParam, fmtTime } from "./utils.js";
+import { dataUrl, getApiBase, groupIntoStacks, debounce, urlParam, pushUrlParam, replaceUrlParam, fmtTime, escapeHtml } from "./utils.js";
 
 const isMobile = matchMedia('(max-width:768px)').matches;
 let topMap; // no mini-map when sticky hero map is always visible
 let photoStacks = [];
 let allPhotos = [];
+let stackMetaByDay = {};
 let activeStackId = null;
 let scrollLocked = false;
 
@@ -116,15 +117,18 @@ function makeDragScrollable(el) {
 async function loadStacks(){
   const previewSlug = urlParam("preview");
   allPhotos = [];
+  stackMetaByDay = {};
 
   if (previewSlug){
     const dj = await (await fetch(dataUrl("days", `${previewSlug}.json`))).json();
-    (dj.photos||[]).forEach(p=> allPhotos.push({ ...p, dayTitle:dj.title, ts:+new Date(p.taken_at) }));
+    stackMetaByDay[previewSlug] = dj.stackMeta || {};
+    (dj.photos||[]).forEach(p=> allPhotos.push({ ...p, dayTitle:dj.title, daySlug:previewSlug, ts:+new Date(p.taken_at) }));
   } else {
     const days = await (await fetch(dataUrl("days", "index.json"))).json();
     await Promise.all(days.map(async d=>{
       const dj = await (await fetch(dataUrl("days", `${d.slug}.json`))).json();
-      (dj.photos||[]).forEach(p=> allPhotos.push({ ...p, dayTitle:dj.title, ts:+new Date(p.taken_at) }));
+      stackMetaByDay[d.slug] = dj.stackMeta || {};
+      (dj.photos||[]).forEach(p=> allPhotos.push({ ...p, dayTitle:dj.title, daySlug:d.slug, ts:+new Date(p.taken_at) }));
     }));
   }
 
@@ -133,8 +137,14 @@ async function loadStacks(){
   // group photos into stacks by proximity (500m radius)
   photoStacks = groupIntoStacks(allPhotos, 500);
 
-  // tag photos with stack id for map interactions
-  photoStacks.forEach(s => s.photos.forEach(p => p.stackId = s.id));
+  // apply saved metadata and tag photos with stack id
+  photoStacks.forEach(s => {
+    const slug = s.photos[0]?.daySlug;
+    const meta = stackMetaByDay[slug]?.[s.id];
+    if (meta?.title) s.title = meta.title;
+    s.caption = meta?.caption || '';
+    s.photos.forEach(p => p.stackId = s.id);
+  });
 }
 
 // ---------- maps ----------
@@ -256,8 +266,10 @@ function renderFeed(){
     const t = fmtTime(stack.takenAt);
     card.innerHTML = `
       <div class="stack-card-header">
+        ${stack.title ? `<h2 class="stack-card-title">${escapeHtml(stack.title)}</h2>` : ''}
         <div class="stack-location-time">${stack.location.label} • ${t}</div>
       </div>
+      ${stack.caption ? `<p class="caption">${escapeHtml(stack.caption)}</p>` : ''}
 
       <div class="stack-photo-area" data-stack-id="${stack.id}">
         <div class="stack-media-container">
