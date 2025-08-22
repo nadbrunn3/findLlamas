@@ -671,7 +671,7 @@ app.post('/api/photo/:photoId/react', async (req, reply) => {
 
 app.post('/api/photo/:photoId/comment', async (req, reply) => {
   try {
-    const { text, author } = req.body || {};
+    const { text, author, parentId } = req.body || {};
     if (!text) return reply.code(400).send({ error: 'text required' });
     const file = interactionsPathForPhoto(req.params.photoId);
     const data = (await readJson(file)) || { reactions: {}, comments: [] };
@@ -681,6 +681,12 @@ app.post('/api/photo/:photoId/comment', async (req, reply) => {
       author: author || 'Anonymous',
       timestamp: new Date().toISOString()
     };
+    
+    // Add parentId if this is a reply
+    if (parentId) {
+      comment.parentId = parentId;
+    }
+    
     data.comments.push(comment);
     await writeJson(file, data);
     reply.send({ ok: true, comment });
@@ -744,7 +750,7 @@ app.post('/api/stack/:stackId/react', async (req, reply) => {
 
 app.post('/api/stack/:stackId/comment', async (req, reply) => {
   try {
-    const { text, author } = req.body || {};
+    const { text, author, parentId } = req.body || {};
     if (!text) return reply.code(400).send({ error: 'text required' });
     const file = interactionsPathForStack(req.params.stackId);
     const data = (await readJson(file)) || { reactions: {}, comments: [] };
@@ -754,6 +760,12 @@ app.post('/api/stack/:stackId/comment', async (req, reply) => {
       author: author || 'Anonymous',
       timestamp: new Date().toISOString()
     };
+    
+    // Add parentId if this is a reply
+    if (parentId) {
+      comment.parentId = parentId;
+    }
+    
     data.comments.push(comment);
     await writeJson(file, data);
     reply.send({ ok: true, comment });

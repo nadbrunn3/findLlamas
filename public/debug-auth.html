@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Authentication</title>
+</head>
+<body>
+    <h1>Debug Authentication</h1>
+    
+    <div>
+        <h3>Test Admin Token Storage</h3>
+        <p>Expected server token: <code>changeme</code></p>
+        
+        <button onclick="checkStoredTokens()">Check Stored Tokens</button>
+        <button onclick="setCorrectToken()">Set Correct Token</button>
+        <button onclick="testDeleteCall()">Test Delete API Call</button>
+        
+        <div id="results" style="margin-top: 20px; font-family: monospace; white-space: pre-wrap;"></div>
+    </div>
+
+    <script>
+        function log(message) {
+            const results = document.getElementById('results');
+            results.textContent += new Date().toISOString() + ': ' + message + '\n';
+        }
+
+        function checkStoredTokens() {
+            log('=== Checking stored tokens ===');
+            
+            // Check tripAdminPass (legacy)
+            const legacyToken = localStorage.getItem('tripAdminPass');
+            log('Legacy tripAdminPass: ' + (legacyToken || 'NOT SET'));
+            
+            // Check tripAdminSettings (new)
+            const settingsJson = localStorage.getItem('tripAdminSettings');
+            log('Raw tripAdminSettings: ' + (settingsJson || 'NOT SET'));
+            
+            if (settingsJson) {
+                try {
+                    const settings = JSON.parse(settingsJson);
+                    log('Parsed settings.apiToken: ' + (settings.apiToken || 'NOT SET'));
+                } catch (e) {
+                    log('Error parsing settings: ' + e.message);
+                }
+            }
+            
+            // Test the same function as our delete code
+            const getAdminToken = () => {
+                try {
+                    const settings = JSON.parse(localStorage.getItem('tripAdminSettings') || '{}');
+                    return settings.apiToken || localStorage.getItem('tripAdminPass') || '';
+                } catch {
+                    return localStorage.getItem('tripAdminPass') || '';
+                }
+            };
+            
+            const finalToken = getAdminToken();
+            log('Final resolved token: ' + (finalToken || 'EMPTY'));
+            log('Token matches expected: ' + (finalToken === 'changeme'));
+        }
+
+        function setCorrectToken() {
+            log('=== Setting correct token ===');
+            
+            // Set in the new format (same as admin panel)
+            const settings = {
+                apiToken: 'changeme'
+            };
+            localStorage.setItem('tripAdminSettings', JSON.stringify(settings));
+            log('Set tripAdminSettings with apiToken: changeme');
+            
+            // Also set legacy format just in case
+            localStorage.setItem('tripAdminPass', 'changeme');
+            log('Set tripAdminPass: changeme');
+            
+            checkStoredTokens();
+        }
+
+        async function testDeleteCall() {
+            log('=== Testing delete API call ===');
+            
+            const getAdminToken = () => {
+                try {
+                    const settings = JSON.parse(localStorage.getItem('tripAdminSettings') || '{}');
+                    return settings.apiToken || localStorage.getItem('tripAdminPass') || '';
+                } catch {
+                    return localStorage.getItem('tripAdminPass') || '';
+                }
+            };
+            
+            const adminToken = getAdminToken();
+            log('Using token: ' + (adminToken || 'EMPTY'));
+            
+            try {
+                const res = await fetch('/api/stack/test-stack/comment/test-comment', {
+                    method: 'DELETE',
+                    headers: {
+                        'x-admin-token': adminToken
+                    }
+                });
+                
+                log('Response status: ' + res.status);
+                log('Response ok: ' + res.ok);
+                
+                const text = await res.text();
+                log('Response text: ' + text);
+                
+                if (res.status === 401) {
+                    log('❌ AUTHENTICATION FAILED - Token not accepted');
+                } else if (res.status === 404) {
+                    log('✅ AUTHENTICATION PASSED - Comment not found (expected)');
+                } else {
+                    log('? Unexpected response status');
+                }
+                
+            } catch (error) {
+                log('❌ Request failed: ' + error.message);
+            }
+        }
+
+        // Auto-check on load
+        window.onload = () => {
+            checkStoredTokens();
+        };
+    </script>
+</body>
+</html>

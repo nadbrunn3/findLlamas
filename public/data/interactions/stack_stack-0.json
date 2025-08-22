@@ -1,4 +1,29 @@
 {
   "reactions": {},
-  "comments": []
+  "comments": [
+    {
+      "id": "1755897897354",
+      "text": "Hi",
+      "author": "Anonymous",
+      "timestamp": "2025-08-22T21:24:57.354Z"
+    },
+    {
+      "id": "1755897953045",
+      "text": "Cool Picture",
+      "author": "Anonymous",
+      "timestamp": "2025-08-22T21:25:53.045Z"
+    },
+    {
+      "id": "1755898342144",
+      "text": "hey",
+      "author": "Anonymous",
+      "timestamp": "2025-08-22T21:32:22.144Z"
+    },
+    {
+      "id": "1755898579102",
+      "text": "Hi",
+      "author": "Anonymous",
+      "timestamp": "2025-08-22T21:36:19.102Z"
+    }
+  ]
 }

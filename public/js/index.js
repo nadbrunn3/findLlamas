@@ -40,7 +40,7 @@ function isVideo(item) {
   );
 }
 
-function renderMediaEl(item, { withControls = false, className = '', useThumb = false, autoplay = false } = {}) {
+function renderMediaEl(item, { withControls = false, className = '', useThumb = false } = {}) {
   if (isVideo(item)) {
     // If we have a thumb, show it as poster; otherwise the video will still render
     const v = document.createElement('video');
@@ -50,14 +50,8 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
     v.playsInline = true;
     v.loop = true;
     v.controls = !!withControls;
-    v.autoplay = autoplay;
     v.setAttribute('preload', 'metadata');
     if (className) v.className = className;
-    // In some browsers autoplay on newly-created elements may not kick in
-    if (autoplay) {
-      // play() can reject; ignore failures (e.g., autoplay policy)
-      v.play().catch(() => {});
-    }
     return v;
   }
   // Photo - use full resolution by default, thumbnail only when explicitly requested
@@ -170,7 +164,7 @@ async function loadStacks(){
       const res = await fetch(dataUrl("days", "index.json"));
       const days = res.ok ? await res.json() : [];
       if (Array.isArray(days) && days.length > 0) {
-        await Promise.all(days.map(async d=>{
+  await Promise.all(days.map(async d=>{
           try {
             const dj = await (await fetch(dataUrl("days", `${d.slug}.json`))).json();
             stackMetaByDay[d.slug] = dj.stackMeta || {};
@@ -343,6 +337,13 @@ function renderFeed(){
             <div class="drawer-thumbnails"></div>
             <button class="thumb-scroll right" aria-label="Scroll thumbnails right">›</button>
           </div>` : ``}
+        
+        <!-- Media Actions Bar -->
+        <div class="stack-media-actions">
+          <button class="reaction-pill like-pill" type="button" aria-pressed="false">
+            <span>♥</span><span class="count">0</span>
+          </button>
+        </div>
       </div>
 
       <div class="stack-card-header">
@@ -354,21 +355,35 @@ function renderFeed(){
 
       <!-- PERMANENT inline interactions -->
       <section class="stack-interactions" data-stack-id="${stack.id}">
-        <div class="stack-reaction-pills">
-          <button class="reaction-pill like-pill" type="button" aria-pressed="false">
-            <span>♥</span><span class="count">0</span>
-          </button>
-          <button class="reaction-pill comment-pill" type="button">
-            <span>💬</span><span class="count">0</span>
+        <!-- Discussion Thread -->
+        <div class="discussion-thread">
+          <div class="thread-header">
+            <button class="thread-toggle" type="button" aria-expanded="false">
+              <span class="thread-count">View 0 comments</span>
           </button>
       </div>
 
-        <ul class="comment-list"></ul>
+          <div class="thread-container" style="display: none;">
+            <div class="thread-empty" style="display: none;">
+              <p>Be the first to comment</p>
+            </div>
+            
+            <ul class="comment-list" role="list" aria-label="Comments"></ul>
+            
+            <div class="load-more-comments" style="display: none;">
+              <button class="load-more-btn">Show earlier comments</button>
+            </div>
+          </div>
 
-        <form class="comment-form" autocomplete="off">
-          <input name="text" placeholder="Leave a comment…" />
-          <button type="submit">Post</button>
+          <form class="comment-composer" autocomplete="off">
+            <textarea name="text" placeholder="Leave a comment…" rows="1" aria-label="Write a comment"></textarea>
+            <div class="composer-actions">
+              <button type="submit" class="post-btn">Post</button>
+            </div>
         </form>
+        </div>
+
+        <div aria-live="polite" class="sr-only comment-status"></div>
       </section>
     `;
 
@@ -390,16 +405,9 @@ function renderFeed(){
       // Create main media element (no controls in stacks)
       const mainEl = renderMediaEl(mainPhoto, {
         withControls: false,
-        className: 'stack-main-photo',
-        autoplay: true
+        className: 'stack-main-photo'
       });
       mainContainer.appendChild(mainEl);
-      if (mainEl.tagName === 'VIDEO') {
-        // Ensure the video starts once it can play
-        mainEl.addEventListener('loadeddata', () => {
-          mainEl.play().catch(() => {});
-        });
-      }
 
       // All media (photos and videos) open in lightbox when clicked
       // Videos do not play inline in stacks
@@ -510,87 +518,838 @@ function renderFeed(){
     // Initialize thumbnails with proper media elements
     populateThumbnails();
 
-    // Bind interactions functionality using new helpers
+    // Bind interactions functionality using new threaded discussion system
     const interactionsBlock = card.querySelector('.stack-interactions');
-    bindStackInteractions(stack.id, interactionsBlock);
-    loadStackInteractions(stack.id, interactionsBlock);
+    const mediaActionsBlock = card.querySelector('.stack-media-actions');
+    if (!interactionsBlock) {
+      console.error('❌ Stack interactions block not found for:', stack.id);
+      return;
+    }
+    
+    // Bind like button in media actions area
+    if (mediaActionsBlock) {
+      bindLikeInteractions(stack.id, mediaActionsBlock);
+    }
+    
+    bindDiscussionThread(stack.id, interactionsBlock);
+    loadThreadedDiscussion(stack.id, interactionsBlock, mediaActionsBlock);
   });
   localStorage.setItem("stackPhotoCounts", JSON.stringify(newCounts));
 }
 
-// ----- Stack Interactions Helpers -----
+// ----- Threaded Discussion System -----
 
-// Load and render stack interactions in new format
-async function loadStackInteractions(stackId, block){
+// Global state for discussions
+const discussionState = new Map();
+
+// Initialize discussion state for a stack
+function initDiscussionState(stackId) {
+  if (!discussionState.has(stackId)) {
+    discussionState.set(stackId, {
+      comments: [],
+      expanded: false,
+      activeReplyComposer: null
+    });
+  }
+  return discussionState.get(stackId);
+}
+
+// Load and render threaded discussion
+async function loadThreadedDiscussion(stackId, block, mediaActionsBlock = null) {
+  const state = initDiscussionState(stackId);
+  
   try {
-    // GET interactions
     const res = await fetch(`${getApiBase()}/api/stack/${stackId}/interactions`);
     const data = await res.json();
-    const ul = block.querySelector('.comment-list');
-    const likeCountEl = block.querySelector('.like-pill .count');
-    const commentCountEl = block.querySelector('.comment-pill .count');
     
-    // Update counts
+    // Update like count in media actions area
+    if (mediaActionsBlock) {
+      const likeCountEl = mediaActionsBlock.querySelector('.like-pill .count');
     const likeCount = Object.values(data.reactions || {}).reduce((a,b)=>a+b,0);
+      if (likeCountEl) {
     likeCountEl.textContent = likeCount;
-    commentCountEl.textContent = (data.comments?.length || 0);
-
-    // Render comments
-    ul.innerHTML = '';
-    (data.comments || []).forEach(c=>{
-      ul.appendChild(renderStackComment(c));
-    });
+      }
+    }
+    
+    // Process comments into threaded structure
+    state.comments = processCommentsIntoThreads(data.comments || []);
+    
+    // Update thread count
+    updateThreadCount(stackId, block);
+    
+    // Render if expanded
+    if (state.expanded) {
+      renderThreadedComments(stackId, block);
+    }
   } catch(e) {
-    // fallback on error
-    block.querySelector('.like-pill .count').textContent = '0';
-    block.querySelector('.comment-pill .count').textContent = '0';
+    console.warn('Failed to load discussion:', e);
+    if (mediaActionsBlock) {
+      const likeCountEl = mediaActionsBlock.querySelector('.like-pill .count');
+      if (likeCountEl) {
+        likeCountEl.textContent = '0';
+      }
+    }
+    updateThreadCount(stackId, block);
   }
 }
 
-function renderStackComment(c){
+// Process flat comments into threaded structure
+function processCommentsIntoThreads(comments) {
+  const threaded = [];
+  const commentMap = new Map();
+  
+  // First pass: create map of all comments
+  comments.forEach(c => {
+    commentMap.set(c.id, { ...c, replies: [] });
+  });
+  
+  // Second pass: organize into threads
+  comments.forEach(c => {
+    const comment = commentMap.get(c.id);
+    if (c.parentId && commentMap.has(c.parentId)) {
+      // It's a reply
+      commentMap.get(c.parentId).replies.push(comment);
+    } else {
+      // It's a top-level comment
+      threaded.push(comment);
+    }
+  });
+  
+  return threaded;
+}
+
+// Update thread count display
+function updateThreadCount(stackId, block) {
+  const state = discussionState.get(stackId);
+  const threadCount = block.querySelector('.thread-count');
+  const threadToggle = block.querySelector('.thread-toggle');
+  const totalComments = state ? countTotalComments(state.comments) : 0;
+  
+  if (totalComments === 0) {
+    threadCount.textContent = 'Add a comment';
+  } else {
+    // Check if expanded or collapsed
+    const isExpanded = state.expanded;
+    
+    if (isExpanded) {
+      // When expanded: static label, no caret
+      if (totalComments === 1) {
+        threadCount.textContent = '1 comment';
+      } else {
+        threadCount.textContent = `${totalComments} comments`;
+      }
+      threadToggle.classList.add('expanded');
+    } else {
+      // When collapsed: "View N comments ▾"
+      if (totalComments === 1) {
+        threadCount.textContent = 'View 1 comment ▾';
+      } else {
+        threadCount.textContent = `View ${totalComments} comments ▾`;
+      }
+      threadToggle.classList.remove('expanded');
+    }
+  }
+}
+
+// Count total comments including replies
+function countTotalComments(comments) {
+  return comments.reduce((total, comment) => {
+    return total + 1 + countTotalComments(comment.replies || []);
+  }, 0);
+}
+
+// Bind like interactions (simplified from old system)
+function bindLikeInteractions(stackId, block) {
+  initLikeChip(block, 'stack', stackId);
+}
+
+// Bind discussion thread interactions
+function bindDiscussionThread(stackId, block) {
+  const state = initDiscussionState(stackId);
+  
+  // Thread toggle
+  const threadToggle = block.querySelector('.thread-toggle');
+  const threadContainer = block.querySelector('.thread-container');
+  
+  if (!threadToggle || !threadContainer) {
+    console.error('❌ Missing required thread elements for stack:', stackId);
+    return;
+  }
+  
+  threadToggle.addEventListener('click', () => {
+    state.expanded = !state.expanded;
+    threadToggle.setAttribute('aria-expanded', state.expanded);
+    
+    if (state.expanded) {
+      threadContainer.style.display = 'block';
+      renderThreadedComments(stackId, block);
+    } else {
+      threadContainer.style.display = 'none';
+      // Close any open reply composers
+      closeAllReplyComposers(stackId, block);
+    }
+    
+    // Update the thread count text based on new state
+    updateThreadCount(stackId, block);
+  });
+  
+  // Main comment composer
+  bindCommentComposer(stackId, block);
+  
+  // Comments start collapsed by default
+}
+
+// Bind main comment composer
+function bindCommentComposer(stackId, block) {
+  const composer = block.querySelector('.comment-composer');
+  const textarea = composer.querySelector('textarea');
+  const postBtn = composer.querySelector('.post-btn');
+  const statusRegion = block.querySelector('.comment-status');
+  
+  // Auto-resize textarea
+  textarea.addEventListener('input', () => {
+    textarea.style.height = 'auto';
+    textarea.style.height = textarea.scrollHeight + 'px';
+    
+    // Update post button state
+    postBtn.disabled = !textarea.value.trim();
+  });
+  
+  // Keyboard shortcuts
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.shiftKey) {
+      // Shift+Enter: new line (default behavior)
+      return;
+    } else if (e.key === 'Enter' && !e.shiftKey) {
+      // Enter: submit comment
+      e.preventDefault();
+      if (textarea.value.trim() && !postBtn.disabled) {
+        composer.dispatchEvent(new Event('submit'));
+      }
+    }
+  });
+  
+  // Form submission
+  composer.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = textarea.value.trim();
+    if (!text || postBtn.disabled) return;
+    
+    // Disable form during submission
+    postBtn.disabled = true;
+    textarea.disabled = true;
+    
+    try {
+      // Optimistic update
+      const tempComment = {
+        id: 'temp-' + Date.now(),
+        author: 'You',
+        text,
+        timestamp: new Date().toISOString(),
+        replies: []
+      };
+      
+      const state = discussionState.get(stackId);
+      state.comments.unshift(tempComment);
+      renderThreadedComments(stackId, block);
+      updateThreadCount(stackId, block);
+      
+      // Clear form
+      textarea.value = '';
+      textarea.style.height = 'auto';
+      
+      // Submit to server
+      const res = await fetch(`${getApiBase()}/api/stack/${stackId}/comment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      
+      if (res.ok) {
+        const result = await res.json();
+        // Replace temp comment with real one
+        const index = state.comments.findIndex(c => c.id === tempComment.id);
+        if (index !== -1) {
+          state.comments[index] = { ...result.comment, replies: [] };
+          renderThreadedComments(stackId, block);
+        }
+        
+        // Show success feedback with toast
+        showSuccessToast('Comment posted');
+        
+        // Also update ARIA status
+        statusRegion.textContent = 'Comment posted';
+        setTimeout(() => statusRegion.textContent = '', 2000);
+      } else {
+        throw new Error('Failed to post comment');
+      }
+    } catch (error) {
+      console.error('Failed to post comment:', error);
+      
+      // Remove optimistic comment
+      const state = discussionState.get(stackId);
+      state.comments = state.comments.filter(c => !c.id.startsWith('temp-'));
+      renderThreadedComments(stackId, block);
+      updateThreadCount(stackId, block);
+      
+      // Restore form
+      textarea.value = text;
+      statusRegion.textContent = 'Failed to post comment. Please try again.';
+      setTimeout(() => statusRegion.textContent = '', 3000);
+    } finally {
+      postBtn.disabled = false;
+      textarea.disabled = false;
+      textarea.focus();
+    }
+  });
+}
+
+// Render threaded comments
+function renderThreadedComments(stackId, block) {
+  const state = discussionState.get(stackId);
+  const commentList = block.querySelector('.comment-list');
+  const emptyState = block.querySelector('.thread-empty');
+  
+  // Clear existing content
+  commentList.innerHTML = '';
+  
+  if (state.comments.length === 0) {
+    emptyState.style.display = 'block';
+    return;
+  }
+  
+  emptyState.style.display = 'none';
+  
+  // Display comments in chronological order (newest first)
+  const sortedComments = [...state.comments].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  
+  // Render each comment thread with staggered animation
+  sortedComments.forEach((comment, index) => {
+    renderCommentThread(comment, commentList, stackId, 0);
+    
+    // Add staggered delay for smooth sequential appearance
+    const commentElement = commentList.children[commentList.children.length - 1];
+    if (commentElement) {
+      commentElement.style.animationDelay = `${index * 0.05}s`;
+    }
+  });
+}
+
+// Comments are sorted inline where needed
+
+// Render a single comment thread (parent + replies)
+function renderCommentThread(comment, container, stackId, depth = 0) {
+  const isReply = depth > 0;
+  
+  // Create comment element with clean structure
   const li = document.createElement('li');
-  li.className = 'comment';
-  li.dataset.commentId = c.id || '';
+  li.className = `comment${isReply ? ' reply' : ''}`;
+  li.dataset.commentId = comment.id;
+  
+  // Get user initials for avatar
+  const initials = (comment.author || 'A').trim().split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  
+  // Format timestamps
+  const timeAgo = formatTimeAgo(new Date(comment.timestamp));
+  const fullTimestamp = formatFullTimestamp(new Date(comment.timestamp));
   
   li.innerHTML = `
-    <div class="meta">
-      <span>${escapeHtml(c.author || 'Anonymous')} • ${new Date(c.timestamp || c.edited || Date.now()).toLocaleString([], {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short'})}</span>
-      ${c.id && !c.id.startsWith('temp-') ? `<button class="stack-comment-delete" data-comment-id="${c.id}" title="Delete comment">🗑️</button>` : ''}
+    <div class="avatar" aria-hidden="true">${initials}</div>
+    <div class="content">
+      <div class="meta">
+        <span class="author">${escapeHtml(comment.author || 'Anonymous')}</span>
+        <time class="time" datetime="${comment.timestamp}" title="${fullTimestamp}">${timeAgo}</time>
+      </div>
+      <div class="body">${escapeHtml(comment.text || '').replace(/\n/g, '<br>')}</div>
+      ${!isReply ? `<div class="actions">
+        <button class="reply" type="button">Reply</button>
+      </div>` : ''}
+      <form class="reply-composer" hidden>
+        <div class="reply-chip">
+          <span>Replying to <strong class="reply-target">${escapeHtml(comment.author || 'Anonymous')}</strong></span>
+          <button class="close" type="button" aria-label="Cancel reply">×</button>
+        </div>
+        <textarea name="reply" placeholder="Write your reply..." rows="1"></textarea>
+        <div class="reply-actions">
+          <button class="btn-link cancel" type="button">Cancel</button>
+          <button class="btn-primary post" type="submit" disabled>Post</button>
+        </div>
+      </form>
     </div>
-    <div class="text">${escapeHtml(c.text || '')}</div>
   `;
+  
+  container.appendChild(li);
+  
+  // Bind reply action if it's a parent comment
+  if (!isReply) {
+    const replyBtn = li.querySelector('.reply');
+    if (replyBtn) {
+      replyBtn.addEventListener('click', () => {
+        showInlineReplyComposer(stackId, comment.id, li);
+      });
+    }
+  }
+  
+  // Render replies (only for parent comments) - always show as threaded
+  if (!isReply && comment.replies && comment.replies.length > 0) {
+    // Sort replies chronologically (oldest first for natural conversation flow)
+    const sortedReplies = [...comment.replies].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    
+    // Show all replies by default
+    sortedReplies.forEach((reply, index) => {
+      renderCommentThread(reply, container, stackId, depth + 1);
+      
+      // Add slight staggered delay for replies
+      const replyElements = container.querySelectorAll('.comment.reply');
+      const lastReply = replyElements[replyElements.length - 1];
+      if (lastReply) {
+        lastReply.style.animationDelay = `${0.1 + (index * 0.03)}s`;
+      }
+    });
+  }
+}
+
+// Show inline reply composer (using built-in form)
+function showInlineReplyComposer(stackId, parentCommentId, parentElement) {
+  const state = discussionState.get(stackId);
+  
+  // Close any existing reply composers
+  closeAllReplyComposers(stackId, parentElement.closest('.stack-interactions'));
+  
+  // Show the reply form in this comment
+  const replyForm = parentElement.querySelector('.reply-composer');
+  if (replyForm) {
+    replyForm.hidden = false;
+    
+    // Store reference
+    state.activeReplyComposer = replyForm;
+    
+    // Bind events
+    bindReplyComposer(stackId, replyForm, parentCommentId);
+    
+    // Focus textarea
+    const textarea = replyForm.querySelector('textarea');
+    textarea.focus();
+    autoResizeTextarea(textarea);
+  }
+}
+
+// Auto-resize textarea utility
+function autoResizeTextarea(textarea) {
+  textarea.style.height = 'auto';
+  const newHeight = Math.min(textarea.scrollHeight, 120); // Max 5 lines (120px)
+  textarea.style.height = newHeight + 'px';
+}
+
+// Bind reply composer events
+function bindReplyComposer(stackId, composer, parentCommentId) {
+  const textarea = composer.querySelector('textarea');
+  const closeBtn = composer.querySelector('.close');
+  const cancelBtn = composer.querySelector('.cancel');
+  const submitBtn = composer.querySelector('.post');
+  const statusRegion = composer.closest('.stack-interactions').querySelector('.comment-status');
+  
+  // Auto-resize and enable/disable submit
+  textarea.addEventListener('input', () => {
+    autoResizeTextarea(textarea);
+    submitBtn.disabled = !textarea.value.trim();
+  });
+  
+  // Keyboard shortcuts
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeReplyComposer(composer);
+    } else if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (textarea.value.trim() && !submitBtn.disabled && !submitBtn.classList.contains('loading')) {
+        composer.dispatchEvent(new Event('submit'));
+      }
+    }
+    // Shift+Enter for new line is default behavior
+  });
+  
+  // Close button (X in chip)
+  closeBtn.addEventListener('click', () => {
+    closeReplyComposer(composer);
+  });
+  
+  // Cancel button
+  cancelBtn.addEventListener('click', () => {
+    closeReplyComposer(composer);
+  });
+  
+  // Form submission
+  composer.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = textarea.value.trim();
+    if (!text || submitBtn.disabled || submitBtn.classList.contains('loading')) return;
+    
+    // Show loading state
+    submitBtn.disabled = true;
+    submitBtn.classList.add('loading');
+    submitBtn.textContent = 'Posting...';
+    textarea.disabled = true;
+    
+    try {
+      // Optimistic update
+      const tempReply = {
+        id: 'temp-reply-' + Date.now(),
+        author: 'You',
+        text,
+        timestamp: new Date().toISOString(),
+        parentId: parentCommentId,
+        replies: []
+      };
+      
+      const state = discussionState.get(stackId);
+      const parentComment = findCommentById(state.comments, parentCommentId);
+      if (parentComment) {
+        parentComment.replies = parentComment.replies || [];
+        parentComment.replies.push(tempReply);
+        
+        // Close composer and re-render
+        closeReplyComposer(composer);
+        renderThreadedComments(stackId, composer.closest('.stack-interactions'));
+        updateThreadCount(stackId, composer.closest('.stack-interactions'));
+      }
+      
+      // Submit to server (assuming your API supports parent comment replies)
+      const res = await fetch(`${getApiBase()}/api/stack/${stackId}/comment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, parentId: parentCommentId })
+      });
+      
+      if (res.ok) {
+        const result = await res.json();
+        // Replace temp reply with real one
+        if (parentComment) {
+          const replyIndex = parentComment.replies.findIndex(r => r.id === tempReply.id);
+          if (replyIndex !== -1) {
+            parentComment.replies[replyIndex] = { ...result.comment, replies: [] };
+            renderThreadedComments(stackId, composer.closest('.stack-interactions'));
+          }
+        }
+        
+        // Show success feedback
+        showSuccessToast('Reply posted');
+        
+        // Also update ARIA status
+        statusRegion.textContent = 'Reply posted';
+        setTimeout(() => statusRegion.textContent = '', 2000);
+      } else {
+        throw new Error('Failed to post reply');
+      }
+    } catch (error) {
+      console.error('Failed to post reply:', error);
+      
+      // Remove optimistic reply
+      const state = discussionState.get(stackId);
+      const parentComment = findCommentById(state.comments, parentCommentId);
+      if (parentComment && parentComment.replies) {
+        parentComment.replies = parentComment.replies.filter(r => !r.id.startsWith('temp-'));
+        renderThreadedComments(stackId, composer.closest('.stack-interactions'));
+        updateThreadCount(stackId, composer.closest('.stack-interactions'));
+      }
+      
+      // Reset button state and show composer again with text
+      submitBtn.disabled = false;
+      submitBtn.classList.remove('loading');
+      submitBtn.textContent = 'Post';
+      textarea.disabled = false;
+      
+      showInlineReplyComposer(stackId, parentCommentId, 
+        composer.closest('.stack-interactions').querySelector(`[data-comment-id="${parentCommentId}"]`));
+      const newComposer = composer.closest('.stack-interactions').querySelector('.inline-reply-composer');
+      if (newComposer) {
+        newComposer.querySelector('.reply-textarea').value = text;
+      }
+      
+      statusRegion.textContent = 'Failed to post reply. Please try again.';
+      setTimeout(() => statusRegion.textContent = '', 3000);
+    }
+  });
+}
+
+// Close reply composer
+function closeReplyComposer(composer) {
+  const stackId = composer.closest('.stack-interactions').dataset.stackId;
+  const state = discussionState.get(stackId);
+  
+  if (state.activeReplyComposer === composer) {
+    state.activeReplyComposer = null;
+  }
+  
+  // Hide the form and reset it
+  composer.hidden = true;
+  const textarea = composer.querySelector('textarea');
+  if (textarea) {
+    textarea.value = '';
+    textarea.style.height = 'auto';
+  }
+  
+  const submitBtn = composer.querySelector('.post');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.classList.remove('loading');
+    submitBtn.textContent = 'Post';
+  }
+}
+
+// Close all reply composers for a stack
+function closeAllReplyComposers(stackId, block) {
+  const state = discussionState.get(stackId);
+  state.activeReplyComposer = null;
+  
+  block.querySelectorAll('.reply-composer').forEach(composer => {
+    composer.hidden = true;
+    const textarea = composer.querySelector('textarea');
+    if (textarea) {
+      textarea.value = '';
+      textarea.style.height = 'auto';
+    }
+    
+    const submitBtn = composer.querySelector('.post');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.classList.remove('loading');
+      submitBtn.textContent = 'Post';
+    }
+  });
+}
+
+// Toggle replies visibility
+function toggleReplies(commentId, parentElement, toggleBtn) {
+  const isExpanded = toggleBtn.dataset.expanded === 'true';
+  const nextSibling = parentElement.nextElementSibling;
+  
+  // Find all reply elements
+  const replies = [];
+  let current = nextSibling;
+  while (current && current.classList.contains('reply')) {
+    replies.push(current);
+    current = current.nextElementSibling;
+  }
+  
+  if (isExpanded) {
+    // Hide replies
+    replies.forEach(reply => reply.style.display = 'none');
+    toggleBtn.dataset.expanded = 'false';
+    toggleBtn.textContent = `View ${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}`;
+  } else {
+    // Show replies
+    replies.forEach(reply => reply.style.display = 'flex');
+    toggleBtn.dataset.expanded = 'true';
+    toggleBtn.textContent = `Hide ${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}`;
+  }
+}
+
+// Find comment by ID in nested structure
+function findCommentById(comments, id) {
+  for (const comment of comments) {
+    if (comment.id === id) {
+      return comment;
+    }
+    if (comment.replies) {
+      const found = findCommentById(comment.replies, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+// Format relative time with specific requirements
+function formatTimeAgo(date) {
+  const now = new Date();
+  const diffMs = now - date;
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  if (diffSecs < 60) return 'just now';
+  if (diffMins < 60) return `${diffMins}m`;
+  if (diffHours < 24) return `${diffHours}h`;
+  if (diffDays < 30) return `${diffDays}d`;
+  
+  // For older comments, show short date
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+// Format full timestamp for hover/title
+function formatFullTimestamp(date) {
+  return date.toLocaleString([], {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+// ----- Micro-interactions -----
+
+// Show success toast notification
+function showSuccessToast(message) {
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  
+  // Remove toast after animation completes
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.parentNode.removeChild(toast);
+    }
+  }, 2500);
+}
+
+// Animate like count with bump effect
+function animateLikeCount(countElement, newCount) {
+  const countSpan = countElement;
+  
+  // Add bump animation
+  countSpan.classList.add('bump');
+  
+  // Update count
+  countSpan.textContent = newCount;
+  
+  // Remove animation class after animation completes
+  setTimeout(() => {
+    countSpan.classList.remove('bump');
+  }, 300);
+}
+
+// ----- Comments Block Helpers (Legacy) -----
+
+// Render comments into a block
+async function loadAndRenderComments(stackId, block){
+  try {
+    // GET interactions (your backend already returns {reactions, comments})
+    const res = await fetch(`${getApiBase()}/api/stack/${stackId}/interactions`);
+    const data = res.ok ? await res.json() : {reactions:{}, comments:[]};
+    const ul = block.querySelector('.comment-list');
+    const countEl = block.querySelector('.comment-count');
+    countEl.textContent = (data.comments?.length || 0);
+
+    ul.innerHTML = '';
+    (data.comments || []).forEach(c=>{
+      ul.appendChild(renderCommentItem(c));
+    });
+    if ((data.comments?.length || 0) > 0) ul.hidden = false;
+
+    // like count (sum stack reactions)
+    const likeCount = Object.values(data.reactions || {}).reduce((a,b)=>a+b,0);
+    block.querySelector('.like-count').textContent = likeCount;
+  } catch(e) {
+    // fallback on error
+    block.querySelector('.like-count').textContent = '0';
+    block.querySelector('.comment-count').textContent = '0';
+  }
+}
+
+function renderCommentItem(c){
+  const li = document.createElement('li');
+  li.className = 'comment-item';
+  li.dataset.commentId = c.id || '';
+  const initials = (c.author || 'A').trim()[0]?.toUpperCase() || 'A';
+  
+  li.innerHTML = `
+    <div class="comment-avatar">${initials}</div>
+    <div class="comment-bubble">
+      <div class="comment-head">
+        <div class="comment-meta">
+          <span class="comment-author">${escapeHtml(c.author || 'Anonymous')}</span>
+          <span class="comment-time">${new Date(c.timestamp || c.edited || Date.now()).toLocaleString([], {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short'})}</span>
+        </div>
+        ${c.id && !c.id.startsWith('temp-') ? `<button class="comment-delete" data-comment-id="${c.id}" title="Delete comment">🗑️</button>` : ''}
+      </div>
+      <div class="comment-text">${escapeHtml(c.text || '')}</div>
+    </div>`;
   return li;
 }
 
-// Bind events for stack interactions block
-function bindStackInteractions(stackId, block){
-  const likePill = block.querySelector('.like-pill');
-  const commentPill = block.querySelector('.comment-pill');
-  const form = block.querySelector('.comment-form');
-  const input = form.querySelector('input[name="text"]');
 
-  // Use existing like chip logic
-  initLikeChip(block, 'stack', stackId);
 
-  // Comment form submission
+function likeKey(kind, id){ return `liked:${kind}:${id}`; }
+
+function initLikeChip(block, kind, id){
+  const api = getApiBase();
+  const btn = block.querySelector('.chip-like') || block.querySelector('.like-pill');
+  const countEl = block.querySelector('.like-count') || block.querySelector('.like-pill .count');
+  if(!btn) return;
+
+  // restore local state
+  let liked = localStorage.getItem(likeKey(kind, id)) === '1';
+  const likedClass = btn.classList.contains('like-pill') ? 'liked' : 'active';
+  btn.classList.toggle(likedClass, liked);
+  btn.setAttribute('aria-pressed', liked);
+
+  btn.addEventListener('click', async ()=>{
+    if (btn._busy) return;
+    btn._busy = true;
+
+    liked = !liked;
+    btn.classList.toggle(likedClass, liked);
+    btn.setAttribute('aria-pressed', liked);
+    localStorage.setItem(likeKey(kind, id), liked ? '1' : '0');
+
+    try{
+      const res = await fetch(`${api}/api/${kind}/${id}/react`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ emoji:'♥', action: liked ? 'add' : 'remove' })
+      });
+      const out = await res.json();
+      if (typeof out.count === 'number') {
+        // Animate the like count with bump effect
+        animateLikeCount(countEl, out.count);
+      }
+    }catch(e){
+      // rollback UI if request fails
+      liked = !liked;
+      btn.classList.toggle('active', liked);
+      btn.setAttribute('aria-pressed', liked);
+      localStorage.setItem(likeKey(kind, id), liked ? '1' : '0');
+    }finally{
+      btn._busy = false;
+    }
+  });
+}
+
+// Bind events for one block
+function bindCommentsBlock(stackId, block){
+  // chip toggles visibility
+  block.querySelector('.chip-cmt')?.addEventListener('click', ()=>{
+    const ul = block.querySelector('.comment-list');
+    ul.hidden = !ul.hidden;
+  });
+
+  // composer
+  const form = block.querySelector('.comment-composer');
   form.addEventListener('submit', async (e)=>{
     e.preventDefault();
-    const text = input.value.trim(); 
-    if (!text) return;
-    
-    const ul = block.querySelector('.comment-list');
-    const temp = { author:'You', text, timestamp:new Date().toISOString() };
-    ul.appendChild(renderStackComment(temp));
+    const input = form.querySelector('.comment-input');
+    const text = input.value.trim(); if (!text) return;
+    // optimistic add
+    const temp = { id: 'temp-'+Date.now(), author: 'You', text, timestamp: new Date().toISOString() };
+    const ul = block.querySelector('.comment-list'); ul.hidden = false;
+    ul.appendChild(renderCommentItem(temp));
     input.value = '';
 
     try{
       const res = await fetch(`${getApiBase()}/api/stack/${stackId}/comment`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ text })
       });
       const out = await res.json();
-      // bump count
-      const cnt = block.querySelector('.comment-pill .count');
+      // replace the temp node with server one (optional: re-render)
+      ul.lastElementChild.replaceWith(renderCommentItem(out.comment || temp));
+      // bump counter
+      const cnt = block.querySelector('.comment-count');
       cnt.textContent = (+cnt.textContent || 0) + 1;
     }catch{
       // rollback UI on error
@@ -598,13 +1357,13 @@ function bindStackInteractions(stackId, block){
     }
   });
 
-  // Comment delete buttons (event delegation)
+  // comment delete buttons (event delegation)
   block.addEventListener('click', async (e) => {
-    if (e.target.classList.contains('stack-comment-delete')) {
+    if (e.target.classList.contains('comment-delete')) {
       const commentId = e.target.dataset.commentId;
       if (!commentId || !confirm('Delete this comment?')) return;
 
-      const commentItem = e.target.closest('.comment');
+      const commentItem = e.target.closest('.comment-item');
       if (!commentItem) return;
 
       // Optimistic UI - remove comment immediately
@@ -639,12 +1398,12 @@ function bindStackInteractions(stackId, block){
         }
 
         // Update comment count
-        const cnt = block.querySelector('.comment-pill .count');
+        const cnt = block.querySelector('.comment-count');
         cnt.textContent = Math.max(0, (+cnt.textContent || 0) - 1);
         
-        console.log('✅ Stack comment deleted successfully');
+        console.log('✅ Comment deleted successfully');
       } catch (error) {
-        console.error('❌ Failed to delete stack comment:', error);
+        console.error('❌ Failed to delete comment:', error);
         
         // Restore comment on error
         if (originalNextSibling) {
@@ -662,83 +1421,6 @@ function bindStackInteractions(stackId, block){
     }
   });
 }
-
-// ----- Comments Block Helpers (Legacy) -----
-
-// Render comments into a block
-async function loadAndRenderComments(stackId, block){
-  try {
-    // GET interactions (your backend already returns {reactions, comments})
-    const res = await fetch(`${getApiBase()}/api/stack/${stackId}/interactions`);
-    const data = res.ok ? await res.json() : {reactions:{}, comments:[]};
-    const ul = block.querySelector('.comment-list');
-    const countEl = block.querySelector('.comment-count');
-    countEl.textContent = (data.comments?.length || 0);
-
-    ul.innerHTML = '';
-    (data.comments || []).forEach(c=>{
-      ul.appendChild(renderCommentItem(c));
-    });
-    if ((data.comments?.length || 0) > 0) ul.hidden = false;
-
-    // like count (sum stack reactions)
-    const likeCount = Object.values(data.reactions || {}).reduce((a,b)=>a+b,0);
-    block.querySelector('.like-count').textContent = likeCount;
-  } catch(e) {
-    // fallback on error
-    block.querySelector('.like-count').textContent = '0';
-    block.querySelector('.comment-count').textContent = '0';
-  }
-}
-
-// Note: renderCommentItem function removed - now using renderStackComment for stack comments
-
-
-
-function likeKey(kind, id){ return `liked:${kind}:${id}`; }
-
-function initLikeChip(block, kind, id){
-  const api = getApiBase();
-  const btn = block.querySelector('.chip-like') || block.querySelector('.like-pill');
-  const countEl = block.querySelector('.like-count') || block.querySelector('.like-pill .count');
-  if(!btn) return;
-
-  // restore local state
-  let liked = localStorage.getItem(likeKey(kind, id)) === '1';
-  const likedClass = btn.classList.contains('like-pill') ? 'liked' : 'active';
-  btn.classList.toggle(likedClass, liked);
-  btn.setAttribute('aria-pressed', liked);
-
-  btn.addEventListener('click', async ()=>{
-    if (btn._busy) return;
-    btn._busy = true;
-
-    liked = !liked;
-    btn.classList.toggle(likedClass, liked);
-    btn.setAttribute('aria-pressed', liked);
-    localStorage.setItem(likeKey(kind, id), liked ? '1' : '0');
-
-    try{
-      const res = await fetch(`${api}/api/${kind}/${id}/react`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ emoji:'♥', action: liked ? 'add' : 'remove' })
-      });
-      const out = await res.json();
-      if (typeof out.count === 'number') countEl.textContent = out.count;
-    }catch(e){
-      // rollback UI if request fails
-      liked = !liked;
-      btn.classList.toggle('active', liked);
-      btn.setAttribute('aria-pressed', liked);
-      localStorage.setItem(likeKey(kind, id), liked ? '1' : '0');
-    }finally{
-      btn._busy = false;
-    }
-  });
-}
-
-// Note: bindCommentsBlock function removed - now using integrated deletion in bindStackInteractions
 
 
 // ---------- lightbox (new photo-focused viewer) ----------
@@ -945,5 +1627,19 @@ window.closeMapOverlay   = closeMapOverlay;
     document.dispatchEvent(evt);
   };
 })();
+
+// Document-level event handlers for clean comment system
+document.addEventListener('input', (e) => {
+  if (e.target.tagName === 'TEXTAREA') {
+    autoResizeTextarea(e.target);
+    const form = e.target.closest('form, .reply-composer');
+    if (form) {
+      const submitBtn = form.querySelector('.post, .btn-primary, .post-btn');
+      if (submitBtn) {
+        submitBtn.disabled = !e.target.value.trim();
+      }
+    }
+  }
+});
 
 
