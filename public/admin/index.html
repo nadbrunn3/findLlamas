@@ -1,46 +1,252 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Admin — Trip Manager</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trip Admin Panel - Finding Llamas</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+            --background: #0f172a;
+            --card: #1e293b;
+            --border: #334155;
+            --muted: #64748b;
+            --accent: #3b82f6;
+            --text: #f1f5f9;
+        }
 
-  <!-- App styles (optional; use your main stylesheet if you want) -->
-  <link rel="stylesheet" href="/css/styles.css" />
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    crossorigin=""
-  />
+        * {
+            box-sizing: border-box;
+        }
 
-  <style>
-    /* tiny admin-only tweaks */
-    #tabs { margin-top: 0.5rem; }
-    #tabs button { margin-right: .5rem; padding: .4rem .8rem; border-radius: 6px; border: 1px solid #e5e7eb; cursor: pointer; }
-    #tabs button.active { background: steelblue; color: #fff; border-color: steelblue; }
-    .gallery { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
-    .gallery > div { border-radius: 8px; overflow: hidden; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
-    .gallery img { display:block; width: 100%; height: 120px; object-fit: cover; }
-    .chip { position:absolute; right:8px; top:8px; background:#0009; color:#fff; font-size:.75rem; padding:.15rem .4rem; border-radius: 999px; }
-  </style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: var(--background);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        #app {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1, h2, h3, h4 {
+            margin-top: 0;
+        }
+
+        #tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+
+        #tabs button {
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        #tabs button:hover {
+            background: var(--accent);
+        }
+
+        #tabs button.active {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .gallery > div {
+            position: relative;
+            aspect-ratio: 4/3;
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--card);
+            border: 1px solid var(--border);
+        }
+
+        .gallery img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            cursor: pointer;
+        }
+
+        .chip {
+            position: absolute;
+            bottom: 4px;
+            left: 4px;
+            background: var(--accent);
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .stack-item {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            transition: border-color 0.2s ease;
+        }
+
+        .stack-item:hover {
+            border-color: var(--accent);
+        }
+
+        .card-title {
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: inherit;
+        }
+
+        .stack-action-btn {
+            background: var(--accent);
+            border: none;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .stack-action-btn:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        input, textarea, select {
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 14px;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+
+        button {
+            background: var(--accent);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        button:hover {
+            background: #2563eb;
+        }
+
+        button:disabled {
+            background: var(--muted);
+            cursor: not-allowed;
+        }
+
+        label {
+            display: block;
+            margin: 12px 0 4px 0;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .top-map {
+            height: 40vh;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        /* Loading states */
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .error {
+            background: #fef2f2;
+            border: 1px solid #fca5a5;
+            color: #dc2626;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 12px 0;
+        }
+
+        .success {
+            background: #f0fdf4;
+            border: 1px solid #86efac;
+            color: #16a34a;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 12px 0;
+        }
+
+        /* Photo marker styles for the map */
+        .photo-marker {
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .photo-marker:hover {
+            transform: scale(1.1);
+        }
+
+        .pm__wrap {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            overflow: hidden;
+        }
+
+        .pm__wrap img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+    </style>
 </head>
 <body>
-  <header class="container">
-    <h1>Admin</h1>
-    <p style="opacity:.8; font-size:.9rem;">Local editor — changes are saved directly to your repo</p>
-  </header>
+    <div id="app">
+        <h1>🦙 Trip Admin Panel</h1>
+        <p>Manage your travel photos and data for Finding Llamas</p>
+    </div>
 
-  <main class="container" id="app">
-    <!-- password prompt or app will render here -->
-  </main>
-
-  <!-- Load Leaflet first so the global L is ready before our module uses it -->
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    crossorigin=""
-  ></script>
-
-  <!-- Your admin app -->
-  <script type="module" src="/admin/admin.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script type="module" src="/admin/admin.js"></script>
 </body>
 </html>

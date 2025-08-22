@@ -480,6 +480,23 @@ app.get('/api/immich/assets/:id/thumb', async (req, reply) => {
   }
 });
 
+// ---- Routes: Admin Config ---------------------------------------------------
+
+// Get server configuration for admin panel (without exposing sensitive data)
+app.get('/api/admin/config', async (req, reply) => {
+  // Return configuration from environment variables
+  // Note: We don't expose actual tokens/keys for security
+  const config = {
+    immichUrl: IMMICH_URL || '',
+    immichAlbumId: IMMICH_ALBUM_ID || '',
+    hasImmichKeys: IMMICH_API_KEYS.length > 0,
+    hasAdminToken: !!ADMIN_TOKEN,
+    serverPort: PORT
+  };
+  
+  reply.send(config);
+});
+
 // ---- Routes: Day JSON --------------------------------------------------------
 
 function dayFile(slug) {

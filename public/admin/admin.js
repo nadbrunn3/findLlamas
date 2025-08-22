@@ -1,7 +1,7 @@
 /* global L */
 // admin/admin.js
 
-import { groupIntoStacks } from "../js/utils.js";
+import { groupIntoStacks } from "/js/utils.js";
 
 const PASS_KEY = 'tripAdminPass';
 const SETTINGS_KEY = 'tripAdminSettings';
@@ -41,6 +41,7 @@ function saveSettings(obj) {
   // ----- Admin Helper Functions -----
   function getAdminToken() {
     const settings = loadSettings();
+    // Return local token if set, otherwise rely on server-side token
     return settings.apiToken || '';
   }
   function apiBase() { return window.location.origin; }
@@ -337,8 +338,21 @@ function renderTripsTab(panel) {
     console.log('📅 Selected date:', dateVal);
     if (!dateVal) return alert('Choose date first');
 
+    // Load local settings and server config
     const s = loadSettings();
-    console.log('⚙️ Settings:', s);
+    let serverConfig = {};
+    try {
+      const res = await fetch(`${apiBase()}/api/admin/config`);
+      if (res.ok) {
+        serverConfig = await res.json();
+      }
+    } catch (error) {
+      console.warn('Failed to load server config:', error);
+    }
+    
+    // Use server config as fallback for album ID
+    const effectiveAlbumId = s.immichAlbumId || serverConfig.immichAlbumId || '';
+    console.log('⚙️ Using album ID:', effectiveAlbumId, '(local:', s.immichAlbumId, 'server:', serverConfig.immichAlbumId, ')');
 
     // Reset dayData if switching to a different date so only photos for
     // the imported day are shown
@@ -358,7 +372,7 @@ function renderTripsTab(panel) {
     dayData.photos = dayData.photos || [];
 
     // Ask backend to import any new photos for that calendar day from Immich
-    const url = `${apiBase()}/api/immich/day?date=${dateVal}${s.immichAlbumId ? `&albumId=${encodeURIComponent(s.immichAlbumId)}` : ''}`;
+    const url = `${apiBase()}/api/immich/day?date=${dateVal}${effectiveAlbumId ? `&albumId=${encodeURIComponent(effectiveAlbumId)}` : ''}`;
     console.log('🔗 Immich URL:', url);
     const resp = await fetch(url);
     if (!resp.ok) {
@@ -390,13 +404,13 @@ function renderTripsTab(panel) {
     }
     dayData.stackMeta = dayData.stackMeta || {};
 
-    renderDay();
+      renderDay();
     
     // Update map after importing photos
     ensureAdminMap();
     renderAdminMapMarkers(dayData.photos || []);
     
-    controls.querySelector('#save-day').disabled = false;
+      controls.querySelector('#save-day').disabled = false;
     controls.querySelector('#publish-day').disabled = false;
     alert(`Imported ${newCount} new photos from Immich for ${dateVal}`);
   }
@@ -511,10 +525,10 @@ function renderTripsTab(panel) {
           renderAdminMapMarkers(dayData.photos || []);
           
           // reset idx
-    galleryEl.querySelectorAll('[draggable]').forEach((c, i) => { c.dataset.idx = String(i); });
-      }
+          galleryEl.querySelectorAll('[draggable]').forEach((c, i) => { c.dataset.idx = String(i); });
+        }
+      });
     });
-  });
 
    // Group photos into stacks first (distance-based, 500 m)
   dayStacks = groupIntoStacks(dayData.photos || [], 500);
@@ -692,8 +706,8 @@ function renderTripsTab(panel) {
         console.error(e);
         alert('Photo metadata update failed');
       } finally {
-        const makeCover = confirm('Set this photo as the cover for the day?');
-        if (makeCover) {
+    const makeCover = confirm('Set this photo as the cover for the day?');
+    if (makeCover) {
           dayData.cover = photo.id || photo.url;
           // save day cover via full PUT so the index picks it up immediately
           await saveDay();
@@ -783,33 +797,86 @@ function renderTripsTab(panel) {
 }
 
 // -------------------- Settings Tab --------------------
-function renderSettingsTab(panel) {
+async function renderSettingsTab(panel) {
   const s = loadSettings();
+  
+  // Show loading message
+  panel.innerHTML = '<p>Loading server configuration...</p>';
+  
+  // Fetch server configuration
+  let serverConfig = {};
+  try {
+    const res = await fetch(`${apiBase()}/api/admin/config`);
+    if (res.ok) {
+      serverConfig = await res.json();
+    }
+  } catch (error) {
+    console.warn('Failed to load server config:', error);
+  }
+  
+  // Auto-populate from server config, but allow local overrides
+  const immichUrl = s.immichUrl || serverConfig.immichUrl || '';
+  const immichAlbumId = s.immichAlbumId || serverConfig.immichAlbumId || '';
+  const hasServerImmichKeys = serverConfig.hasImmichKeys || false;
+  const hasServerAdminToken = serverConfig.hasAdminToken || false;
+  
   panel.innerHTML = `
-    <h3>API Endpoints</h3>
+    <h3>Settings</h3>
+    
+    <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+      <h4 style="margin: 0 0 8px 0; color: #0369a1;">📋 Server Configuration Status</h4>
+      <div style="font-size: 14px; color: #0c4a6e;">
+        <div>✅ Immich URL: <strong>${serverConfig.immichUrl ? 'Configured' : 'Not set'}</strong></div>
+        <div>✅ Immich Album ID: <strong>${serverConfig.immichAlbumId ? 'Configured' : 'Not set'}</strong></div>
+        <div>🔑 Immich API Keys: <strong>${hasServerImmichKeys ? 'Configured' : 'Not set'}</strong></div>
+        <div>🔑 Admin Token: <strong>${hasServerAdminToken ? 'Configured' : 'Not set'}</strong></div>
+      </div>
+      <div style="font-size: 12px; color: #475569; margin-top: 8px; font-style: italic;">
+        💡 Values below are auto-populated from server .env file. You can override them locally if needed.
+      </div>
+    </div>
+    
+    <h4>API Endpoints</h4>
     <label style="display:block; margin-top:0.5rem;">Backend API Base URL
-      <input type="text" id="set-api-base" value="${s.apiBase || ''}" style="width:100%;" />
+      <input type="text" id="set-api-base" value="${s.apiBase || ''}" placeholder="${window.location.origin} (auto-detected)" style="width:100%;" />
     </label>
+    
+    <label style="display:block; margin-top:0.5rem;">Immich URL ${serverConfig.immichUrl ? '(from server .env)' : ''}
+      <input type="text" id="set-immich-url" value="${immichUrl}" placeholder="${serverConfig.immichUrl || 'http://your-immich-server:2283'}" style="width:100%;" />
+    </label>
+    
+    <label style="display:block; margin-top:0.5rem;">Immich Album ID ${serverConfig.immichAlbumId ? '(from server .env)' : ''}
+      <input type="text" id="set-immich-album" value="${immichAlbumId}" placeholder="${serverConfig.immichAlbumId || 'album-uuid-here'}" style="width:100%;" />
+    </label>
+    
+    <h4>Optional Local Overrides</h4>
+    <p style="font-size: 14px; color: #6b7280; margin: 8px 0;">These are only needed if you want to override server settings locally:</p>
+    
+    <label style="display:block; margin-top:0.5rem;">Immich Tokens (one per line) ${hasServerImmichKeys ? '✅ Server has keys' : '❌ Server missing keys'}
+      <textarea id="set-immich-tokens" style="width:100%; height:60px;" placeholder="${hasServerImmichKeys ? 'Keys configured on server (leave blank to use server keys)' : 'Add your Immich API keys here'}">${(s.immichTokens || []).join('\n')}</textarea>
+    </label>
+    
+    <label style="display:block; margin-top:0.5rem;">Admin API Token ${hasServerAdminToken ? '✅ Server has token' : '❌ Server missing token'}
+      <input type="text" id="set-api-token" value="${s.apiToken || ''}" placeholder="${hasServerAdminToken ? 'Token configured on server (leave blank to use server token)' : 'Add your admin token here'}" style="width:100%;" />
+    </label>
+    
+    <h4>Legacy Settings</h4>
+    <details style="margin-top: 12px;">
+      <summary style="cursor: pointer; color: #6b7280;">Show legacy/unused settings</summary>
+      <div style="margin-top: 8px; padding: 8px; background: #f9fafb; border-radius: 6px;">
     <label style="display:block; margin-top:0.5rem;">Dawarich URL
       <input type="text" id="set-dawarich-url" value="${s.dawarichUrl || ''}" style="width:100%;" />
     </label>
     <label style="display:block; margin-top:0.5rem;">Dawarich Token
       <input type="text" id="set-dawarich-token" value="${s.dawarichToken || ''}" style="width:100%;" />
     </label>
-    <label style="display:block; margin-top:0.5rem;">Immich URL
-      <input type="text" id="set-immich-url" value="${s.immichUrl || ''}" style="width:100%;" />
-    </label>
-    <label style="display:block; margin-top:0.5rem;">Immich Tokens (one per line)
-      <textarea id="set-immich-tokens" style="width:100%; height:80px;">${(s.immichTokens || []).join('\n')}</textarea>
-    </label>
-    <label style="display:block; margin-top:0.5rem;">Immich Album ID
-      <input type="text" id="set-immich-album" value="${s.immichAlbumId || ''}" style="width:100%;" />
-    </label>
-    <label style="display:block; margin-top:0.5rem;">Admin API Token
-      <input type="text" id="set-api-token" value="${s.apiToken || ''}" style="width:100%;" />
-    </label>
-    <button id="save-settings" style="margin-top:1rem;">Save Settings</button>
+      </div>
+    </details>
+    
+    <button id="save-settings" style="margin-top:1rem; background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">💾 Save Local Settings</button>
+    <button id="clear-settings" style="margin-top:1rem; margin-left: 8px; background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">🗑️ Clear All Local Settings</button>
   `;
+  
   panel.querySelector('#save-settings').addEventListener('click', () => {
     const newSet = {
       apiBase: panel.querySelector('#set-api-base').value.trim(),
@@ -822,7 +889,15 @@ function renderSettingsTab(panel) {
       immichAlbumId: panel.querySelector('#set-immich-album').value.trim()
     };
     saveSettings(newSet);
-    alert('Saved');
+    alert('✅ Local settings saved! These will override server defaults.');
+  });
+  
+  panel.querySelector('#clear-settings').addEventListener('click', () => {
+    if (confirm('🗑️ Clear all local settings? This will reset to server defaults.')) {
+      localStorage.removeItem(SETTINGS_KEY);
+      alert('✅ Local settings cleared! Refreshing...');
+      renderSettingsTab(panel); // Refresh the tab
+    }
   });
 }
 
