@@ -1028,7 +1028,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 }
 
 /* Ensure seamless integration - no spacing between header and media */
-.stack-card .stack-card-header + .stack-photo-area {
+.stack-card .stack-photo-area + .stack-card-header {
   margin-top: 0 !important;
   border-top: none !important;
 }

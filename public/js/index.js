@@ -330,13 +330,6 @@ function renderFeed(){
 
     const t = fmtTime(stack.takenAt);
     card.innerHTML = `
-      <div class="stack-card-header">
-        ${stack.title ? `<h2 class="stack-card-title">${escapeHtml(stack.title)}</h2>` : ''}
-        <div class="stack-location-time">${stack.location.label} • ${t}</div>
-        ${hasNew ? '<span class="new-photo-bell" aria-label="New photos">🔔</span>' : ''}
-      </div>
-      ${stack.caption ? `<p class="caption">${escapeHtml(stack.caption)}</p>` : ''}
-
       <div class="stack-photo-area" data-stack-id="${stack.id}">
         <div class="stack-media-container">
           <div class="photo-main" data-main-container="${stack.id}"></div>
@@ -351,6 +344,13 @@ function renderFeed(){
             <button class="thumb-scroll right" aria-label="Scroll thumbnails right">›</button>
           </div>` : ``}
       </div>
+
+      <div class="stack-card-header">
+        ${stack.title ? `<h2 class="stack-card-title">${escapeHtml(stack.title)}</h2>` : ''}
+        <div class="stack-location-time">${stack.location.label} • ${t}</div>
+        ${hasNew ? '<span class="new-photo-bell" aria-label="New photos">🔔</span>' : ''}
+      </div>
+      ${stack.caption ? `<p class="caption">${escapeHtml(stack.caption)}</p>` : ''}
 
       <!-- PERMANENT inline interactions -->
       <section class="stack-interactions" data-stack-id="${stack.id}">
