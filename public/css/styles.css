@@ -7,12 +7,56 @@
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;line-height:1.6}
 
-/* ===== HEADER ===== */
-.trip-header{position:sticky;top:0;z-index:30;background:rgba(255,255,255,.95);border-bottom:1px solid var(--border);backdrop-filter:blur(12px)}
-.container{max-width:980px;margin:0 auto;padding:0 16px}
-.trip-header .container{padding:14px 16px;display:flex;align-items:center;gap:16px}
+/* ===== HERO / TITLE PAGE HEADER ===== */
+.hero {
+  position: relative;
+  min-height: 18vh;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: #fff;
+  padding: 2.5rem 1rem;
+  /* Replace the URL below with your map or hero image if needed */
+  background: #0f172a url('your-map-image.jpg') center / cover no-repeat;
+}
+/* Dark gradient + subtle blur overlay for readability */
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(60% 60% at 50% 40%, rgba(15,23,42,.35) 0%, rgba(2,6,23,.75) 100%),
+              linear-gradient(to bottom, rgba(2,6,23,.45), rgba(2,6,23,.85));
+  backdrop-filter: blur(1.5px);
+}
+.hero .container { position: relative; z-index: 1; }
 
-.trip-title{font-size:1.35rem;font-weight:800;margin:8px 0 0 0;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.app-name {
+  margin: 0 0 .25rem 0;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: .5px;
+  font-size: clamp(24px, 4.5vw, 48px);
+}
+.trip-title {
+  --accent: #93c5fd; /* light-blue accent */
+  margin: .1rem 0 0 0;
+  font-weight: 700;
+  line-height: 1.2;
+  font-size: clamp(16px, 2.5vw, 28px);
+}
+.trip-title .flag { filter: drop-shadow(0 2px 4px rgba(0,0,0,.35)); }
+
+/* Optional thin divider under the app name */
+.hero .divider {
+  width: min(200px, 35vw);
+  height: 2px;
+  margin: .3rem auto .5rem auto;
+  background: linear-gradient(90deg, transparent, var(--accent, #93c5fd), transparent);
+  opacity: .85;
+}
+
+/* If you use a site-wide container, this keeps spacing tidy */
+.container { max-width: 1100px; margin: 0 auto; padding: 0 1rem; }
 
 .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#eef2ff;border:1px solid #e0e7ff;color:#3730a3;font-weight:700;font-size:.78rem}
 
@@ -20,18 +64,18 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .page, .stack-feed-container{max-width:980px;margin:16px auto 64px;padding:0 16px;display:grid;grid-template-columns:1fr;gap:16px}
 .stack-feed-container{background:transparent;min-height:auto;padding:16px 0}
 
-/* ===== STICKY HERO MAP ===== */
-/* Sticky hero map */
+/* ===== STICKY COMPACT MAP ===== */
+/* Quarter-screen hero map that stays fixed while scrolling through stacks */
 .top-map-wrap{
-  position: relative;
-  top: 0;
-  z-index: 40;
+  position: sticky;
+  top: 0; /* Position at top since hero is not sticky */
+  z-index: 25; /* Below hero content */
   padding: 0;
 }
 
-/* Fullscreen map */
+/* Quarter-screen map */
 .top-map{
-  height: 100vh;
+  height: 25vh;
   width: 100%;
   border-radius: 0;
   overflow: hidden;
@@ -42,6 +86,9 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 @media (max-width: 768px){
   /* If you want the map to be "display-only" to keep scrolling smooth: */
   .leaflet-container { touch-action: pan-y; } /* let vertical page scroll pass */
+  
+  /* Slightly taller on mobile for better usability */
+  .top-map { height: 30vh; }
 }
 
 /* Optional: a tiny expand button on mobile to open the full map view */
@@ -59,14 +106,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   .top-map-wrap{ top: env(safe-area-inset-top); }
 }
 
-/* ===== MINI MAP ===== */
-.mini-map-container{position:fixed;top:100px;right:20px;width:280px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:var(--shadow-2);border:1px solid var(--border);transition:opacity .4s ease,transform .4s ease;z-index:50}
-.mini-map-container.hidden{opacity:0;transform:translateY(-20px);pointer-events:none}
-.mini-map-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#fafbfc;border-bottom:1px solid var(--border)}
-.mini-map-title{font-size:14px;font-weight:700;color:var(--text)}
-.mini-map-toggle{background:none;border:none;color:var(--muted);cursor:pointer;padding:4px;border-radius:4px;transition:background .2s ease}
-.mini-map-toggle:hover{background:var(--border);color:var(--text)}
-.mini-map{height:200px;width:100%}
+
 
 /* ===== FEED ===== */
 .stack-feed, .feed{max-width:660px;margin:0 auto;padding:0 16px;display:grid;gap:16px}
@@ -78,14 +118,21 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   --card-muted: color-mix(in srgb, var(--card-text) 65%, var(--card-bg));
   background: var(--card-bg);
   color: var(--card-text);
-  border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-1),var(--shadow-2);transition:transform .18s ease,box-shadow .18s ease;scroll-margin-top:100px
+  border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-1),var(--shadow-2);transition:all .25s ease;scroll-margin-top:100px
 }
 .stack-card:hover, .card:hover{transform:translateY(-1px);box-shadow:var(--shadow-1),0 20px 40px rgba(16,24,40,.12)}
+
+/* Map sync visual feedback */
+.stack-card.map-active{
+  border-left: 4px solid #3b82f6;
+  transform: translateX(2px);
+  box-shadow: var(--shadow-1), 0 8px 25px rgba(59, 130, 246, 0.15);
+}
 
 .stack-card.active{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1),var(--shadow-2)}
 
 /* ===== CARD HEADER ===== */
-.stack-card-header, .card-head{position:relative;display:grid;row-gap:4px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.stack-card-header, .card-head{position:relative;display:grid;row-gap:4px;padding:12px 14px;border-bottom:none}
 .stack-card-title, .card-title{font-weight:800;font-size:1.05rem;line-height:1.35;margin:0;color:var(--card-text)}
 .stack-location-time, .card-sub{color:var(--card-muted);font-size:.9rem;display:flex;flex-wrap:wrap;gap:.6rem;align-items:center}
 .card-sub .dot::before{content:"•";margin:0 .45rem;color:#cbd5e1}
@@ -106,8 +153,8 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .new-photo-bell{position:absolute;top:12px;right:14px;font-size:1.1rem;color:#f59e0b}
 
 /* ===== MEDIA CONTAINER ===== */
-.stack-photo-area, .stack-media-container, .card-media{position:relative;background:#f8fafc}
-.stack-main-photo, .card-media img.main-photo{width:100%;height:auto;display:block;cursor:default;transition:transform .18s ease;object-fit:contain;max-height:500px}
+.stack-photo-area, .stack-media-container, .card-media{position:relative;background:transparent}
+.stack-main-photo, .card-media img.main-photo{width:100%;height:auto;display:block;cursor:default;transition:transform .18s ease;object-fit:cover;max-height:50vh;border-radius:0}
 .stack-main-photo:hover, .card-media img.main-photo:hover{transform:none}
 .media-gradient::after{content:"";position:absolute;left:0;right:0;bottom:0;height:96px;background:linear-gradient(to top,rgba(0,0,0,.35),transparent);pointer-events:none}
 
@@ -120,15 +167,85 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .card-media:hover .nav{opacity:1}
 .stack-photo-nav:disabled, .nav:disabled{opacity:.5;cursor:not-allowed;transform:translateY(-50%)}
 
-/* ==== Thumbnail Drawer ==== */
+/* ==== Enhanced Thumbnail Strip ==== */
 .stack-thumbnail-drawer { position: static; margin: 10px 16px 0; }
-.drawer-thumbnails { display: flex; gap: 8px; overflow-x: auto; padding: 8px 0; scrollbar-width: none; }
+
+.thumbnail-strip,
+.drawer-thumbnails { 
+  display: flex;
+  gap: 8px;
+  padding: 6px 8px;
+  background: transparent; /* remove the dark box behind */
+  border: none;
+  overflow-x: auto; 
+  scrollbar-width: none; 
+}
 .drawer-thumbnails::-webkit-scrollbar { display: none; }
-.drawer-thumbnail { width: 88px; height: 66px; border-radius: 10px; overflow: hidden; border: 2px solid transparent; box-shadow: 0 4px 12px rgba(0,0,0,.2); cursor: pointer; transition: transform .2s ease, border-color .2s ease, opacity .2s ease; opacity: .8; flex-shrink: 0; }
-.drawer-thumbnail img, .drawer-thumbnail video { width: 100%; height: 100%; object-fit: contain; display: block; }
-.drawer-thumbnail:hover { transform: scale(1.03); opacity: 1; }
-.drawer-thumbnail.active { border-color: var(--accent); outline:2px solid var(--accent); outline-offset:2px; opacity: 1; }
-@media (max-width: 768px) { .drawer-thumbnail { width: 76px; height: 58px; border-radius: 8px; } .stack-thumbnail-drawer { margin: 8px 12px 0; } }
+
+.thumbnail,
+.drawer-thumbnail { 
+  flex: 0 0 auto;
+  width: 80px;
+  height: 60px;
+  border: none;           /* remove any border */
+  padding: 0;             /* remove inner padding */
+  background: none;       /* remove background */
+  border-radius: 8px;     /* rounded corners */
+  overflow: hidden;       /* ensures image clips perfectly */
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, outline 0.2s ease;
+  position: relative;
+}
+
+.thumbnail img,
+.thumbnail video,
+.drawer-thumbnail img, 
+.drawer-thumbnail video { 
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* fills the entire thumbnail area */
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.thumbnail:hover,
+.drawer-thumbnail:hover { 
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+
+.thumbnail:hover img,
+.thumbnail:hover video,
+.drawer-thumbnail:hover img,
+.drawer-thumbnail:hover video { 
+  transform: scale(1.05); /* smooth hover zoom effect */
+}
+
+.thumbnail.active,
+.drawer-thumbnail.active { 
+  outline: 2px solid #3b82f6; /* highlight for selected one */
+  outline-offset: 0;
+  transition: outline 0.2s ease; /* smooth transition when switching active thumbnails */
+}
+
+@media (max-width: 768px) { 
+  .thumbnail,
+  .drawer-thumbnail { 
+    width: 64px; 
+    height: 48px; 
+    border-radius: 6px; 
+  } 
+  .stack-thumbnail-drawer { 
+    margin: 8px 12px 0; 
+  }
+  
+  /* Smaller hover effects on mobile */
+  .thumbnail:hover img,
+  .thumbnail:hover video,
+  .drawer-thumbnail:hover img,
+  .drawer-thumbnail:hover video { 
+    transform: scale(1.02); /* gentler zoom on touch devices */
+  }
+}
 
 /* ==== Persistent Thumbnail Rail (Legacy) ====*/
 .thumb-rail {
@@ -219,7 +336,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 /* ===== CAPTION ===== */
 
-.caption{padding:10px 14px 2px;color:#1f2937;line-height:1.55;font-size:.95rem;font-weight:400}
+.caption{padding:8px 14px 12px;color:#ffffff;line-height:1.55;font-size:.95rem;font-weight:500;margin:0}
 
 /* ===== ACTIONS BAR ===== */
 .stack-actions, .card-actions{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-top:1px solid var(--border);background:#fafbfc}
@@ -241,9 +358,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .custom-marker.active, .photo-marker.active{transform:scale(1.1);z-index:1000}
 .custom-marker.active .inner, .photo-marker.active .pm__wrap{transform:scale(1.02)}
 .custom-marker.active::after, .photo-marker.active::after{box-shadow:0 0 0 max(2px,calc(var(--marker-size,28px) * .08)) var(--accent)}
-.mini-map .photo-marker{width:24px !important;height:24px !important;border-width:2px !important}
-.mini-map .photo-marker::after{inset:-2px !important}
-.mini-map .photo-marker.active::after{box-shadow:0 0 0 2px var(--accent) !important}
+
 
 
 .save-btn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:8px;border-radius:6px;cursor:pointer;transition:all .2s ease;display:flex;align-items:center;justify-content:center}
@@ -286,20 +401,30 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 /* ===== RESPONSIVE DESIGN ===== */
 @media (max-width:768px){
   .container, .header-inner, .page{padding:0 12px}
-  .trip-title, .title{font-size:1.3rem}
+  .trip-title, .title{font-size:2rem}
 
   .stack-feed, .feed{gap:12px;padding:0 12px}
 
   .nav{padding:10px 12px}
-  .mini-map-container{position:relative;width:100%;margin:16px 0;right:auto;top:auto}
+
   .stack-card-header, .card-head{padding:12px 14px}
   .stack-actions, .card-actions{padding:10px 14px}
 
+  /* Reduce stack heights on mobile for better scrolling */
+  .stack-main-photo, .card-media img.main-photo{max-height:40vh}
+  .stack-cover-media{max-height:22vh}
+  .photo-main-media{max-height:35vh}
+
 }
 @media (max-width:480px){
-  .trip-title, .title{font-size:1.2rem}
+  .trip-title, .title{font-size:1.8rem}
   .stack-actions, .card-actions{flex-wrap:wrap;gap:8px}
   .stack-action-btn, .action-btn{padding:6px 12px;font-size:.85rem}
+  
+  /* Further reduce stack heights on small mobile screens */
+  .stack-main-photo, .card-media img.main-photo{max-height:35vh}
+  .stack-cover-media{max-height:20vh}
+  .photo-main-media{max-height:30vh}
 }
 
 /* ===== FOCUS & ACCESSIBILITY ===== */
@@ -310,12 +435,136 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 @keyframes cardPulse{0%{transform:scale(1)}50%{transform:scale(1.02)}100%{transform:scale(1)}}
 .stack-card.pulse{animation:cardPulse 1s ease-out}
 
+/* ===== MAP MARKER BUBBLES ===== */
+.photo-marker {
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
+}
+
+.photo-marker .pm__wrap {
+  position: relative;
+  border-radius: 50%;
+  overflow: hidden;
+  /* Crisp white ring */
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  /* Darker halo ring */
+  box-shadow: 
+    0 0 0 1px rgba(0, 0, 0, 0.2),
+    0 0 0 4px rgba(0, 0, 0, 0.1),
+    /* Soft accent glow that works over bright/dark */
+    0 0 16px rgba(59, 130, 246, 0.4),
+    0 0 32px rgba(59, 130, 246, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.photo-marker .pm__wrap img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hover scale for lift effect */
+.photo-marker:hover {
+  transform: scale(1.15);
+  filter: drop-shadow(0 8px 25px rgba(0, 0, 0, 0.25));
+}
+
+.photo-marker:hover .pm__wrap {
+  box-shadow: 
+    0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 0 0 4px rgba(0, 0, 0, 0.15),
+    0 0 20px rgba(59, 130, 246, 0.6),
+    0 0 40px rgba(59, 130, 246, 0.3);
+}
+
+.photo-marker:hover .pm__wrap img {
+  transform: scale(1.05);
+}
+
+/* Active bubble with pulsing ring */
+.photo-marker.active .pm__wrap {
+  border-color: rgba(59, 130, 246, 0.9);
+  box-shadow: 
+    0 0 0 1px rgba(59, 130, 246, 0.4),
+    0 0 0 4px rgba(59, 130, 246, 0.2),
+    0 0 20px rgba(59, 130, 246, 0.5),
+    0 0 40px rgba(59, 130, 246, 0.3);
+  animation: bubblePulse 2s ease-in-out infinite;
+}
+
+.photo-marker.active {
+  transform: scale(1.1);
+  z-index: 1000;
+}
+
+/* Pulsing animation for active bubble */
+@keyframes bubblePulse {
+  0%, 100% {
+    box-shadow: 
+      0 0 0 1px rgba(59, 130, 246, 0.4),
+      0 0 0 4px rgba(59, 130, 246, 0.2),
+      0 0 20px rgba(59, 130, 246, 0.5),
+      0 0 40px rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    box-shadow: 
+      0 0 0 1px rgba(59, 130, 246, 0.6),
+      0 0 0 6px rgba(59, 130, 246, 0.3),
+      0 0 25px rgba(59, 130, 246, 0.7),
+      0 0 50px rgba(59, 130, 246, 0.4);
+  }
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .photo-marker .pm__wrap {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 
+      0 0 0 1px rgba(255, 255, 255, 0.1),
+      0 0 0 4px rgba(0, 0, 0, 0.3),
+      0 0 16px rgba(96, 165, 250, 0.4),
+      0 0 32px rgba(96, 165, 250, 0.2);
+  }
+  
+  .photo-marker:hover .pm__wrap {
+    box-shadow: 
+      0 0 0 1px rgba(255, 255, 255, 0.2),
+      0 0 0 4px rgba(0, 0, 0, 0.4),
+      0 0 20px rgba(96, 165, 250, 0.6),
+      0 0 40px rgba(96, 165, 250, 0.3);
+  }
+  
+  .photo-marker.active .pm__wrap {
+    border-color: rgba(96, 165, 250, 0.9);
+    box-shadow: 
+      0 0 0 1px rgba(96, 165, 250, 0.4),
+      0 0 0 4px rgba(96, 165, 250, 0.2),
+      0 0 20px rgba(96, 165, 250, 0.5),
+      0 0 40px rgba(96, 165, 250, 0.3);
+  }
+}
+
+/* Performance optimizations */
+.photo-marker {
+  will-change: transform, filter;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+}
+
 /* ===== DARK MODE SUPPORT ===== */
 @media (prefers-color-scheme:dark){
   :root{--bg:#0f172a;--card:#1e293b;--text:#f1f5f9;--muted:#94a3b8;--border:#334155}
-  .trip-header, .header-bar{background:rgba(30,41,59,.95);border-bottom-color:var(--border)}
   .stack-actions, .card-actions{background:#0f172a}
-  .mini-map-header{background:#0f172a}
+  
+  /* Dark mode map sync feedback */
+  .stack-card.map-active{
+    border-left-color: #60a5fa;
+    box-shadow: var(--shadow-1), 0 8px 25px rgba(96, 165, 250, 0.2);
+  }
+
 }
 
 
@@ -634,9 +883,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 }
 #overlay-map { width: 100%; height: 100%; }
 
-/* === Blur background behind mini thumbs (stack + lightbox) === */
-.stack-thumbnail-drawer,
-.drawer-thumbnails,
+/* === Clean thumbnail containers === */
 .lightbox-thumbnails,
 .lightbox-thumbnails-container{
   background: rgba(15,15,20,.35);
@@ -645,6 +892,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   border:1px solid rgba(255,255,255,.12);
   border-radius:12px;
 }
+/* Note: .stack-thumbnail-drawer and .drawer-thumbnails now use clean transparent styling */
 
 /* === Lightbox arrows fix (ensure they're above everything and visible) === */
 .lightbox-main{ position:relative; overflow:hidden; }
@@ -706,28 +954,41 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   z-index: 7;                                        /* above ::after + photo nav */
 }
 
-/* thumbnails themselves – full clarity (no accidental filters/opacities) */
-.stack-thumbnail-drawer .drawer-thumbnails { gap: 10px; overflow-x: auto; }
-.drawer-thumbnail{
-  filter: none !important;
-  opacity: 1 !important;
-  border-radius: 14px;
-  box-shadow: 0 2px 8px rgba(0,0,0,.25);
-}
-.drawer-thumbnail.active{
-  outline: 3px solid #60a5fa;        /* highlight selected */
-  outline-offset: 0;
-}
+/* Legacy thumbnail styles - cleaned up */
 
 /* nav + strip on top */
 .stack-photo-nav { z-index: 6; }
 
-/* ----- Thumbnail strip lives BELOW the photo, no white, no blur ----- */
+/* ----- Edge-to-edge media: no backgrounds, padding, or spacing ----- */
 .stack-card .stack-photo-area,
 .stack-card .stack-media-container{
   background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 .stack-media-container{ position: relative; }
+
+/* Edge-to-edge main photos */
+.stack-card .stack-main-photo {
+  border-radius: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  object-fit: cover !important;
+}
+
+/* Ensure seamless integration - no spacing between header and media */
+.stack-card .stack-card-header + .stack-photo-area {
+  margin-top: 0 !important;
+  border-top: none !important;
+}
+
+/* Make media container edge-to-edge within the card */
+.stack-card .stack-photo-area {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  border-radius: 0 !important;
+}
 
 /* The strip itself – block element under the image */
 .stack-thumbnail-drawer{
@@ -753,20 +1014,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 }
 .stack-thumbnail-drawer .drawer-thumbnails::-webkit-scrollbar{ display:none; }
 
-/* Thumbs – crisp, not blurred */
-.drawer-thumbnail{
-  width: 140px;
-  height: 90px;
-  object-fit: contain;
-  border-radius: 14px;
-  filter: none !important;
-  opacity: 1 !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,.30);
-}
-.drawer-thumbnail.active{
-  outline: 3px solid #60a5fa;
-  outline-offset: 0;
-}
+/* Legacy thumbnail override - using main styles now */
 
 /* Nav arrows – appear only if overflow exists */
 .thumb-scroll{
@@ -787,7 +1035,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 /* ===== PRINT STYLES ===== */
 @media print{
-  .mini-map-container, .plb-root{display:none}
+  .plb-root{display:none}
   .stack-card, .card{break-inside:avoid;box-shadow:none}
 }
 
@@ -817,15 +1065,15 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 .photo-main {
   position: relative;
-  background: var(--card);
-  padding: 4px;
-  border-radius: 12px;
-  box-shadow: var(--shadow-1);
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .photo-main-media {
   width: 100%;
-  max-height: 500px;
+  max-height: 400px;
   object-fit: cover;
   border-radius: 8px;
   cursor: pointer;
@@ -862,27 +1110,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   box-shadow: 0 4px 12px rgba(0,0,0,0.25);
 }
 
-.thumbnail {
-  width: 60px;
-  height: 60px;
-  object-fit: cover;
-  border: 2px solid #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-  cursor: pointer;
-  transition: transform 0.2s ease, opacity 0.2s ease;
-  opacity: 0.95;
-  margin-left: -16px;
-}
-
-.thumbnail:first-child {
-  margin-left: 0;
-}
-
-.thumbnail:hover {
-  transform: scale(1.05);
-  opacity: 1;
-}
+/* Legacy thumbnail styles - now handled by main thumbnail styles */
 
 .more-photos {
   width: 60px;
@@ -989,11 +1217,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
     border-radius: 12px;
   }
 
-  .thumbnail {
-    width: 48px;
-    height: 48px;
-    margin-left: -12px;
-  }
+  /* Mobile thumbnail sizes handled by main styles */
   
   .lightbox-nav {
     width: 40px;
@@ -1043,12 +1267,8 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   border-radius:12px;
 }
 
-.thumbnail, .photo-main-media {
-  object-fit: cover;
-}
-
-.thumbnail { width:60px; height:60px; }
-.photo-main-media { max-height:60vh; }
+/* Thumbnail sizes handled by main thumbnail styles */
+.photo-main-media { max-height:45vh; }
 
 /* ===== SOCIAL STACK CARDS ===== */
 
@@ -1068,7 +1288,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .stack-cover { position: relative; }
 .stack-cover-media {
   width: 100%;
-  max-height: 36vh;
+  max-height: 28vh;
   object-fit: contain;
   display: block;
 }
@@ -1084,7 +1304,8 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   margin: 0;
   font-size: .96rem;
   line-height: 1.45;
-  color: #374151; /* readable on white */
+  color: #ffffff; /* white color for better visibility */
+  font-weight: 500; /* slightly bolder for better readability */
 }
 
 /* Grid of remaining media */
@@ -1117,52 +1338,255 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 /* ===== LIGHTBOX LAYOUT ===== */
 
-/* Overlay */
-#lightbox {
+/* Overlay - for both standard lightbox and photo-lightbox.js */
+#lightbox,
+.lb-portal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.92);
+  background: rgba(0, 0, 0, 0.85);
   z-index: 10001;
   display: none; /* hidden until .open */
+  /* Center the lightbox content */
+  justify-content: center;
+  align-items: center;
+  padding: 4vh 4vw;
 }
 
-/* When open: 2-column layout: media | side panel */
-#lightbox.open {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+/* Photo-lightbox.js specific - when active */
+.lb-portal.on {
+  display: flex;
+}
+
+/* Modal frame for photo-lightbox.js - replaces full-screen layout */
+.lb-frame {
+  /* Modal-style container instead of full screen */
+  max-width: 90vw;
+  max-height: 90vh;
+  width: fit-content;
+  height: fit-content;
+  
+  background: rgba(17, 24, 39, 0.98);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 
+    0 25px 100px rgba(0, 0, 0, 0.6),
+    0 12px 40px rgba(0, 0, 0, 0.4);
+  
+  display: flex;
+  position: relative;
+  
+  /* Reset any full-screen styles */
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+}
+
+/* Photo-lightbox.js media elements */
+.lb-img,
+.lb-video {
+  /* Modal-aware sizing - hero image display */
+  max-width: 60vw;
+  max-height: 80vh;
+  width: auto;
+  height: auto;
+  object-fit: contain; /* Show complete image without cropping */
+  
+  /* Visual enhancement */
+  border-radius: 12px;
+  box-shadow: 
+    0 16px 64px rgba(0, 0, 0, 0.4),
+    0 8px 32px rgba(0, 0, 0, 0.3);
+  
+  /* Centering within flex container */
+  flex-shrink: 0;
+}
+
+/* Photo-lightbox.js side panel */
+.lb-panel {
+  /* Modal side panel styling */
+  width: 380px;
+  max-height: 80vh;
+  background: rgba(17, 24, 39, 0.98);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  
+  /* Reset any positioning */
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+}
+
+/* Comments section container with padding from toolbar */
+.lb-comments-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  margin-top: 20px; /* Padding between toolbar and comments */
+  overflow: hidden; /* Prevent overflow from panel */
+}
+
+/* Photo-lightbox.js close button */
+.lb-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10002;
+  width: 40px;
+  height: 40px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
   align-items: center;
-  justify-items: center;
-  gap: 0;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+  padding: 0;
+}
+
+.lb-close:hover {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.lb-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Photo-lightbox.js navigation buttons */
+.lb-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10001;
+  width: 50px;
+  height: 50px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: bold;
+  backdrop-filter: blur(8px);
+  transition: all 0.2s ease;
+}
+
+.lb-nav:hover {
+  background: rgba(0, 0, 0, 0.85);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.lb-prev {
+  left: 20px;
+}
+
+.lb-next {
+  right: 20px;
+}
+
+.lb-nav:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* When open: center the modal content */
+#lightbox.open {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Lightbox content wrapper - modal style */
+#lightbox-media,
+#lightbox-panel {
+  /* Reset any previous full-screen styling */
+  height: auto;
+  max-height: 85vh;
+}
+
+/* Create the modal container */
+#lightbox.open #lightbox-media {
+  /* Modal-style container */
+  background: rgba(17, 24, 39, 0.98);
+  border-radius: 16px 0 0 16px;
+  box-shadow: 
+    0 25px 100px rgba(0, 0, 0, 0.6),
+    0 12px 40px rgba(0, 0, 0, 0.4);
+  max-width: 60vw;
+  max-height: 85vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#lightbox.open #lightbox-panel {
+  background: rgba(17, 24, 39, 0.98);
+  border-radius: 0 16px 16px 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  max-width: 380px;
+  max-height: 85vh;
+  width: 380px;
+  padding: 20px;
+}
+
+/* Desktop specific adjustments for modal layout */
+@media (min-width: 769px) {
+  #lightbox.open #lightbox-image,
+  #lightbox.open #lightbox-video {
+    /* Optimize for modal container size */
+    max-width: 100%;
+    max-height: 75vh;
+  }
 }
 
 /* === MEDIA AREA === */
 #lightbox-media {
+  /* Will be overridden by modal styles when open */
   display: flex;
   justify-content: center;
   align-items: center;
-  background: black;
-  width: 100%;
-  height: 100%;
+  overflow: hidden;
+  position: relative;
+  padding: 2vh 2vw;
 }
 
 #lightbox-image,
 #lightbox-video {
+  /* Modal-aware sizing: fit within modal container */
   max-width: 100%;
-  max-height: 100%;
+  max-height: 80vh;
   width: auto;
   height: auto;
-  object-fit: contain; /* ✅ Ensures no zoom/crop */
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  object-fit: contain; /* ✅ No cropping, no distortion - natural scaling */
+  
+  /* Visual enhancement */
+  border-radius: 12px;
+  box-shadow: 
+    0 16px 64px rgba(0, 0, 0, 0.4),
+    0 8px 32px rgba(0, 0, 0, 0.3);
+  
+  /* Perfect centering */
+  display: block;
+  margin: auto;
 }
 
 /* === RIGHT PANEL === */
 #lightbox-panel {
-  background: rgba(17,24,39,.98);
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: -4px 0 20px rgba(0,0,0,.5);
+  /* Default styles - will be overridden by modal styles when open */
   padding: 16px;
-  height: 100%;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -1170,23 +1594,113 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 /* === CLOSE BUTTON === */
 #lightbox-close {
-  position: absolute;
-  top: 14px;
-  right: 14px;
+  position: fixed;
+  top: 20px;
+  right: 20px;
   z-index: 10002;
-  width: 36px;
-  height: 36px;
-  border: 0;
+  width: 40px;
+  height: 40px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.7);
   color: #fff;
   font-size: 20px;
   line-height: 36px;
   cursor: pointer;
+  backdrop-filter: blur(8px);
   pointer-events: auto; /* Always clickable */
 }
 #lightbox-close:hover {
   background: rgba(0, 0, 0, 0.75);
+}
+
+/* === MOBILE RESPONSIVE === */
+@media (max-width: 768px) {
+  /* Standard lightbox mobile styles */
+  #lightbox.open {
+    flex-direction: column;
+    padding: 2vh 2vw;
+  }
+  
+  #lightbox.open #lightbox-media {
+    border-radius: 16px 16px 0 0;
+    max-width: 90vw;
+    max-height: 60vh;
+    width: 90vw;
+  }
+  
+  #lightbox.open #lightbox-panel {
+    border-radius: 0 0 16px 16px;
+    max-width: 90vw;
+    max-height: 35vh;
+    width: 90vw;
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 16px;
+  }
+  
+  #lightbox-image,
+  #lightbox-video {
+    max-width: 100%;
+    max-height: 55vh;
+    border-radius: 8px;
+  }
+  
+  /* Photo-lightbox.js mobile styles */
+  .lb-frame {
+    flex-direction: column;
+    max-width: 95vw;
+    max-height: 95vh;
+  }
+  
+  .lb-img,
+  .lb-video {
+    max-width: 100%;
+    max-height: 60vh;
+    border-radius: 8px;
+  }
+  
+  .lb-panel {
+    width: 100%;
+    max-height: 35vh;
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 16px;
+  }
+  
+  /* Mobile comments section - limit height on small screens */
+  .lb-comments-section {
+    margin-top: 16px; /* Less padding on mobile */
+  }
+  
+  .lb-comments {
+    max-height: 150px; /* Limit on mobile for better UX */
+  }
+  
+  .lb-toolbar {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  
+  .lb-chip {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  
+  /* Mobile navigation buttons for photo-lightbox.js */
+  .lb-nav {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+  
+  .lb-prev {
+    left: 10px;
+  }
+  
+  .lb-next {
+    right: 10px;
+  }
 }
 
 /* === NAV BUTTONS === */
@@ -1221,6 +1735,92 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 /* Prevent page scrolling when lightbox is open */
 body.lightbox-open {
   overflow: hidden;
+}
+
+/* ===== LIGHTBOX TOOLBAR STYLING ===== */
+
+/* Lightbox toolbar styling */
+.lb-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.lb-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.lb-chip:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.lb-chip[aria-pressed="true"] {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #ef4444;
+}
+
+.lb-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Comments section - fills available space with padding from toolbar */
+.lb-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0; /* Allow flexbox to shrink */
+}
+
+.lb-composer {
+  display: flex;
+  gap: 8px;
+}
+
+.lb-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+}
+
+.lb-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.lb-send {
+  padding: 8px 16px;
+  background: #3b82f6;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.2s ease;
+}
+
+.lb-send:hover {
+  background: #2563eb;
 }
 
 

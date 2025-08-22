@@ -17,7 +17,7 @@ function isVideo(item) {
   return item?.kind === 'video' || (item?.mimeType || '').startsWith('video/');
 }
 
-function renderMediaEl(item, { withControls = false, className = 'media-tile' } = {}) {
+function renderMediaEl(item, { withControls = false, className = 'media-tile', useThumb = false } = {}) {
   if (isVideo(item)) {
     const v = document.createElement('video');
     v.src = item.url;
@@ -31,7 +31,7 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile' } 
     return v;
   } else {
     const img = document.createElement('img');
-    img.src = item.thumb || item.url;
+    img.src = useThumb ? (item.thumb || item.url) : (item.url || item.thumb);
     img.alt = item.title || item.caption || '';
     img.loading = 'lazy';
     img.decoding = 'async';
@@ -60,6 +60,8 @@ async function renderStacksSection() {
   const items = dayData?.photos || [];
   if (!items.length) { host.innerHTML = '<p>No media.</p>'; return; }
 
+  // Stack metadata loaded successfully
+
   const stacks = groupIntoStacks(items, 500);
 
   const globalIndex = new Map(items.map((p, i) => [p.id || p.url, i]));
@@ -69,6 +71,8 @@ async function renderStacksSection() {
     const title = meta.title?.trim() || formatDate(st.photos[0]?.taken_at);
     const caption = meta.caption?.trim() || '';
 
+    // Stack metadata processed
+
     // Card shell
     const card = document.createElement('article');
     card.className = 'stack-card social';
@@ -76,7 +80,7 @@ async function renderStacksSection() {
     // Cover media
     const coverWrap = document.createElement('div');
     coverWrap.className = 'stack-cover';
-    const cover = renderMediaEl(st.photos[0], { withControls: false, className: 'stack-cover-media' });
+    const cover = renderMediaEl(st.photos[0], { withControls: false, className: 'stack-cover-media', useThumb: false });
     coverWrap.appendChild(cover);
 
     // Header (title + subline)
@@ -100,7 +104,11 @@ async function renderStacksSection() {
     const grid = document.createElement('div');
     grid.className = 'stack-grid';
     st.photos.forEach((p, idx) => {
-      const el = renderMediaEl(p, { withControls: false, className: idx === 0 ? 'stack-cover-media' : 'stack-thumb' });
+      const el = renderMediaEl(p, { 
+        withControls: false, 
+        className: idx === 0 ? 'stack-cover-media' : 'stack-thumb',
+        useThumb: idx > 0  // Use thumbnails for grid items, full res for cover
+      });
       if (idx > 0) {
         el.addEventListener('click', () => {
           const gi = globalIndex.get(p.id || p.url) ?? 0;
@@ -374,47 +382,115 @@ function openLightbox(index = 0) {
   if (!dayData?.photos?.length) return;
 
   currentPhotoIndex = Math.max(0, Math.min(index, dayData.photos.length - 1));
-  const lb = document.getElementById('lightbox');
   const item = dayData.photos[currentPhotoIndex];
+
+  console.log('🔍 Opening lightbox for photo:', item);
+
+  // Use the newer photo lightbox system for consistency
+  if (window.openPhotoLightbox) {
+    const photos = dayData.photos.map(photo => ({
+      id: photo.id,
+      url: photo.url,
+      thumb: photo.thumb,
+      caption: photo.caption || photo.description || '',
+      title: photo.title || '',
+      type: isVideo(photo) ? 'video' : 'image'
+    }));
+    
+    console.log('✅ Using modern lightbox with photos:', photos);
+    window.openPhotoLightbox(photos, currentPhotoIndex);
+    return;
+  }
+
+  // Fallback to basic lightbox if modern one isn't available
+  const lb = document.getElementById('lightbox');
+  if (!lb) {
+    console.error('❌ No lightbox element found');
+    return;
+  }
 
   const img = document.getElementById('lightbox-image');
   const vid = document.getElementById('lightbox-video');
 
-  if (item.type === 'video') {
+  if (!img || !vid) {
+    console.error('❌ Missing lightbox media elements');
+    return;
+  }
+
+  if (item.type === 'video' || isVideo(item)) {
     vid.src = item.url;
     vid.style.display = 'block';
     img.style.display = 'none';
+    console.log('📹 Showing video:', item.url);
   } else {
     img.src = item.url;
     img.style.display = 'block';
     vid.style.display = 'none';
+    console.log('🖼️ Showing image:', item.url);
   }
 
   const titleEl = document.getElementById('lightbox-title');
   const captionEl = document.getElementById('lightbox-caption');
+  const counterEl = document.getElementById('lightbox-counter');
+  
   if (titleEl) {
     titleEl.textContent = item.title || '';
     titleEl.style.display = item.title ? '' : 'none';
   }
   if (captionEl) {
-    captionEl.textContent = item.caption || '';
-    captionEl.style.display = item.caption ? '' : 'none';
+    captionEl.textContent = item.caption || item.description || '';
+    captionEl.style.display = (item.caption || item.description) ? '' : 'none';
   }
-  document.getElementById('lightbox-counter').textContent = `${currentPhotoIndex + 1} / ${dayData.photos.length}`;
+  if (counterEl) {
+    counterEl.textContent = `${currentPhotoIndex + 1} / ${dayData.photos.length}`;
+  }
 
   lb.classList.add('open');
   document.body.classList.add('lightbox-open');
+  
+  // Lock scroll
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
 
-  document.getElementById('lightbox-prev').disabled = currentPhotoIndex === 0;
-  document.getElementById('lightbox-next').disabled = currentPhotoIndex === dayData.photos.length - 1;
+  const prevBtn = document.getElementById('lightbox-prev');
+  const nextBtn = document.getElementById('lightbox-next');
+  
+  if (prevBtn) prevBtn.disabled = currentPhotoIndex === 0;
+  if (nextBtn) nextBtn.disabled = currentPhotoIndex === dayData.photos.length - 1;
+  
+  console.log('✅ Lightbox opened successfully');
 }
 
 function closeLightbox() {
+  console.log('🔒 Closing lightbox');
+  
+  // Handle modern lightbox close
+  if (window.lbRoot) {
+    window.lbRoot.remove();
+    window.lbRoot = null;
+    console.log('✅ Closed modern lightbox');
+  }
+  
+  // Handle legacy lightbox close
   const lb = document.getElementById('lightbox');
   const vid = document.getElementById('lightbox-video');
-  if (vid) vid.pause?.();
-  lb.classList.remove('open');
+  
+  if (vid) {
+    vid.pause?.();
+    vid.src = ''; // Clear video source
+  }
+  
+  if (lb) {
+    lb.classList.remove('open');
+  }
+  
   document.body.classList.remove('lightbox-open');
+  
+  // Unlock scroll
+  document.documentElement.style.overflow = '';
+  document.body.style.overflow = '';
+  
+  console.log('✅ Lightbox closed successfully');
 }
 
 function previousPhoto() {

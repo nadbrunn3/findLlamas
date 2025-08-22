@@ -161,17 +161,20 @@ window.openPhotoLightbox = (photos, startIndex=0) => {
               <span class="icon">💬</span>
               <span class="count">0</span>
             </button>
+            <button class="lb-chip lb-show-map" type="button">
+              <span class="icon">🗺️</span>
+              <span class="text">Map</span>
+            </button>
           </div>
 
-          <div class="lb-comments" id="lbComments"></div>
+          <!-- Comments section with padding from toolbar -->
+          <div class="lb-comments-section">
+            <div class="lb-comments" id="lbComments"></div>
 
-          <form class="lb-composer" id="lbComposer" autocomplete="off">
-            <input class="lb-input" name="text" placeholder="Add a comment…" maxlength="500" />
-            <button class="lb-send" type="submit">Post</button>
-          </form>
-          
-          <div class="lb-actions" style="margin-top: 12px;">
-            <button type="button" class="lb-action-btn lb-show-map">🗺️ Show on map</button>
+            <form class="lb-composer" id="lbComposer" autocomplete="off">
+              <input class="lb-input" name="text" placeholder="Add a comment…" maxlength="500" />
+              <button class="lb-send" type="submit">Post</button>
+            </form>
           </div>
         </div>
       </div>

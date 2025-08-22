@@ -8,30 +8,27 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
-  <!-- Fullscreen top map -->
+  <!-- Header above map -->
+  <header class="hero">
+    <div class="container">
+      <h1 class="app-name">Finding 🦙 Llamas in</h1>
+      <div class="divider"></div>
+      <h2 class="trip-title">
+        Japan <span class="flag" aria-hidden="true">🇯🇵</span>
+        &amp;
+        South Korea <span class="flag" aria-hidden="true">🇰🇷</span>
+      </h2>
+    </div>
+  </header>
+
+  <!-- Quarter-screen top map -->
   <section class="top-map-wrap">
     <div id="top-map" class="top-map"></div>
     <!-- Optional expand button on mobile -->
     <button class="map-expand" aria-label="Expand map">🗺️</button>
   </section>
 
-  <!-- Header below map -->
-  <header class="trip-header">
-    <div class="container">
-      <h1 class="trip-title">My Trip — Photo Journey</h1>
-    </div>
-  </header>
 
-  <!-- Sticky Mini-Map -->
-  <div id="mini-map-container" class="mini-map-container hidden">
-    <div class="mini-map-header">
-      <span class="mini-map-title">Trip Map</span>
-      <button id="mini-map-toggle" class="mini-map-toggle" aria-label="Toggle mini map">
-        <span class="toggle-icon">−</span>
-      </button>
-    </div>
-    <div id="mini-map" class="mini-map"></div>
-  </div>
 
   <!-- Stack Feed -->
   <main class="stack-feed-container">

@@ -83,5 +83,14 @@
       "caption": "PXL_20250821_133522490.mp4"
     }
   ],
-  "stackMeta": {}
+  "stackMeta": {
+    "stack-0": {
+      "title": "Hallo ich liebe dich",
+      "caption": "WAs ist los hier??"
+    },
+    "stack-1": {
+      "title": "Blödsinn",
+      "caption": ""
+    }
+  }
 }

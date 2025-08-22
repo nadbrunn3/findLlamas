@@ -1,7 +1,7 @@
 import { dataUrl, getApiBase, groupIntoStacks, debounce, urlParam, pushUrlParam, replaceUrlParam, fmtTime, escapeHtml, formatDate } from "./utils.js";
 
 const isMobile = matchMedia('(max-width:768px)').matches;
-let topMap; // no mini-map when sticky hero map is always visible
+let topMap;
 let photoStacks = [];
 let allPhotos = [];
 let stackMetaByDay = {};
@@ -40,7 +40,7 @@ function isVideo(item) {
   );
 }
 
-function renderMediaEl(item, { withControls = false, className = '' } = {}) {
+function renderMediaEl(item, { withControls = false, className = '', useThumb = false } = {}) {
   if (isVideo(item)) {
     // If we have a thumb, show it as poster; otherwise the video will still render
     const v = document.createElement('video');
@@ -54,9 +54,9 @@ function renderMediaEl(item, { withControls = false, className = '' } = {}) {
     if (className) v.className = className;
     return v;
   }
-  // Photo
+  // Photo - use full resolution by default, thumbnail only when explicitly requested
   const img = document.createElement('img');
-  img.src = item.thumb || item.url;   // for photos thumb is fine; if missing, url works
+  img.src = useThumb ? (item.thumb || item.url) : (item.url || item.thumb);
   img.alt = item.title || item.caption || '';
   img.loading = 'lazy';
   img.decoding = 'async';
@@ -117,7 +117,7 @@ async function init(){
   await loadStacks();
   initMaps();
   renderFeed();
-  setupStickyMiniMap();
+
   setupScrollSync();
 
   const initial = urlParam("stack") || (photoStacks[0]?.id);
@@ -161,7 +161,7 @@ async function loadStacks(){
     (dj.photos||[]).forEach(p=> allPhotos.push({ ...p, dayTitle:dj.title, daySlug:previewSlug, ts:+new Date(p.taken_at) }));
   } else {
     const days = await (await fetch(dataUrl("days", "index.json"))).json();
-    await Promise.all(days.map(async d=>{
+  await Promise.all(days.map(async d=>{
       const dj = await (await fetch(dataUrl("days", `${d.slug}.json`))).json();
       stackMetaByDay[d.slug] = dj.stackMeta || {};
       (dj.photos||[]).forEach(p=> allPhotos.push({ ...p, dayTitle:dj.title, daySlug:d.slug, ts:+new Date(p.taken_at) }));
@@ -265,9 +265,7 @@ function addMarkersAndPath(map){
   }
 }
 
-function getMarkerSize(zoom, isTopMap = true) {
-  if (!isTopMap) return 24; // Keep mini-map markers small and fixed
-  
+function getMarkerSize(zoom) {
   // Responsive sizing for top map: smaller base, scales with zoom
   const baseSize = 28; // Reduced from 48
   const zoomFactor = Math.max(0.6, Math.min(1.4, (zoom - 8) * 0.15 + 1));
@@ -278,7 +276,7 @@ function updateMarkerSizes(map) {
   const currentZoom = map.getZoom();
   map.eachLayer(layer => {
     if (layer.stackId && layer.isTopMap) {
-      const newSize = getMarkerSize(currentZoom, true);
+      const newSize = getMarkerSize(currentZoom);
       const prev = layer.getIcon(); // DivIcon
       layer.setIcon(L.divIcon({
         className: prev.options.className,
@@ -422,7 +420,7 @@ function renderFeed(){
         // IMPORTANT: thumbnails must never try to load p.url for videos as <img>
         const el = isVideo(p)
           ? renderMediaEl(p, { withControls: false, className: `drawer-thumbnail ${idx===current?'active':''}` }) // <video poster=thumb>
-          : renderMediaEl(p, { withControls: false, className: `drawer-thumbnail ${idx===current?'active':''}` }); // <img src=thumb>
+          : renderMediaEl(p, { withControls: false, className: `drawer-thumbnail ${idx===current?'active':''}`, useThumb: true }); // <img src=thumb>
         
         el.setAttribute('data-index', idx);
         el.setAttribute('draggable', 'false');
@@ -783,8 +781,33 @@ function scrollToStack(id, { instant=false } = {}){
 
 const panTopMapTo = debounce((id)=>{
   const s = photoStacks.find(x=>x.id===id); if (!s || !topMap) return;
-  topMap.panTo([s.location.lat, s.location.lng], { animate:true, duration:.3 });
-}, 120);
+  if (s.location.lat === null || s.location.lng === null) return; // Skip if no GPS
+  
+  // Calculate appropriate zoom level based on stack size and location
+  const stackPhotoCount = s.photos.length;
+  let targetZoom = 10; // Default zoom for single locations
+  
+  // Adjust zoom based on number of photos in stack
+  if (stackPhotoCount > 10) {
+    targetZoom = 8; // Keep wider view for larger stacks
+  } else if (stackPhotoCount > 5) {
+    targetZoom = 9; // Medium zoom for medium stacks
+  } else {
+    targetZoom = 11; // Closer view for smaller, specific locations
+  }
+  
+  // Don't zoom in too much if we're already zoomed out (keeps context)
+  const currentZoom = topMap.getZoom();
+  if (currentZoom < 6) {
+    targetZoom = Math.min(targetZoom, 8); // Limit zoom when starting from far out
+  }
+  
+  topMap.setView([s.location.lat, s.location.lng], targetZoom, { 
+    animate: true, 
+    duration: 0.5,
+    easeLinearity: 0.1
+  });
+}, 80);
 
 // Backwards-compatible alias
 const panMiniMapTo = panTopMapTo;
@@ -801,31 +824,27 @@ function setupScrollSync(){
     });
     if (best){
       const id = best.target.id;
-      if (id && id!==activeStackId){ activeStackId=id; replaceUrlParam("stack", id); setActive(id); }
+      if (id && id!==activeStackId){ 
+        activeStackId=id; 
+        replaceUrlParam("stack", id); 
+        setActive(id);
+        
+        // Add visual feedback for the active stack
+        document.querySelectorAll(".stack-card").forEach(c=> {
+          c.classList.toggle("map-active", c.id === id);
+        });
+      }
     }
-  }, { root:null, rootMargin:"-20% 0px -40% 0px", threshold:[0.25,0.5,0.75] });
+  }, { 
+    root: null, 
+    rootMargin: "-15% 0px -35% 0px", // More responsive trigger area
+    threshold: [0.1, 0.25, 0.5, 0.75, 0.9] // More precise detection
+  });
 
   photoStacks.forEach(s=>{ const el=document.getElementById(s.id); if (el) io.observe(el); });
 }
 
-function setupStickyMiniMap(){
-  const cont = document.getElementById("mini-map-container");
-  const topSection = document.querySelector(".top-map-wrap");
-  const toggle = document.getElementById("mini-map-toggle");
-  const icon = toggle.querySelector(".toggle-icon");
 
-  // show when top map scrolls out
-  const obs = new IntersectionObserver(([e])=>{
-    cont.classList.toggle("hidden", e.isIntersecting);
-  }, { threshold: 0 });
-  obs.observe(topSection);
-
-  toggle.onclick = ()=>{
-    cont.classList.toggle("hidden");
-    icon.textContent = cont.classList.contains("hidden") ? "+" : "−";
-    setTimeout(()=>miniMap.invalidateSize(), 250);
-  };
-}
 
 // ---------- full-screen map overlay ----------
 let _mapOverlayEl = null;
