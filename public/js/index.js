@@ -174,9 +174,16 @@ async function loadStacks(){
   photoStacks = groupIntoStacks(allPhotos, 500);
 
   // apply saved metadata and tag photos with stack id
+  // stack IDs from groupIntoStacks() are global, but stackMeta is stored
+  // per-day with local "stack-0", "stack-1" IDs. Track how many stacks
+  // we've seen for each day so we can look up the correct metadata key.
+  const dayStackCounters = {};
   photoStacks.forEach(s => {
     const slug = s.photos[0]?.daySlug;
-    const meta = stackMetaByDay[slug]?.[s.id];
+    const idx = dayStackCounters[slug] || 0;
+    dayStackCounters[slug] = idx + 1;
+    const metaKey = `stack-${idx}`;
+    const meta = stackMetaByDay[slug]?.[metaKey];
     if (meta?.title) s.title = meta.title;
     s.caption = meta?.caption || '';
     s.photos.forEach(p => p.stackId = s.id);
