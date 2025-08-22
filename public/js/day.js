@@ -1,4 +1,4 @@
-import { dataUrl, getApiBase, haversineKm, escapeHtml, formatTime, formatDateTime, groupIntoStacks } from "./utils.js";
+import { dataUrl, getApiBase, haversineKm, escapeHtml, formatTime, formatDateTime, groupIntoStacks, formatDate } from "./utils.js";
 
 // Get date from URL parameter
 const urlParams = new URLSearchParams(window.location.search);
@@ -66,7 +66,7 @@ async function renderStacksSection() {
 
   for (const st of stacks) {
     const meta = (dayData.stackMeta && dayData.stackMeta[st.id]) || { title: '', caption: '' };
-    const title = meta.title?.trim() || 'Untitled stop';
+    const title = meta.title?.trim() || formatDate(st.photos[0]?.taken_at);
     const caption = meta.caption?.trim() || '';
 
     // Card shell
@@ -339,7 +339,7 @@ function renderPhotoPost() {
   const captionWrap = document.getElementById('photo-caption-container');
   if (main.title) {
     const t = document.createElement('p');
-    t.className = 'photo-caption';
+    t.className = 'photo-title';
     t.textContent = main.title;
     captionWrap.appendChild(t);
   }
@@ -390,7 +390,16 @@ function openLightbox(index = 0) {
     vid.style.display = 'none';
   }
 
-  document.getElementById('lightbox-caption').textContent = item.caption || item.title || '';
+  const titleEl = document.getElementById('lightbox-title');
+  const captionEl = document.getElementById('lightbox-caption');
+  if (titleEl) {
+    titleEl.textContent = item.title || '';
+    titleEl.style.display = item.title ? '' : 'none';
+  }
+  if (captionEl) {
+    captionEl.textContent = item.caption || '';
+    captionEl.style.display = item.caption ? '' : 'none';
+  }
   document.getElementById('lightbox-counter').textContent = `${currentPhotoIndex + 1} / ${dayData.photos.length}`;
 
   lb.classList.add('open');
