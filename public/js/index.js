@@ -381,7 +381,7 @@ function renderFeed(){
       // Add captions
       if (mainPhoto.title) {
         const t = document.createElement('p');
-        t.className = 'photo-caption';
+        t.className = 'photo-title';
         t.textContent = mainPhoto.title;
         mainContainer.appendChild(t);
       }
