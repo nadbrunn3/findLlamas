@@ -23,19 +23,19 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 /* ===== STICKY HERO MAP ===== */
 /* Sticky hero map */
 .top-map-wrap{
-  position: sticky;
-  top: 0;                     /* pin to top */
+  position: relative;
+  top: 0;
   z-index: 40;
-  padding: 8px 0;
-  background: #0b1020;        /* or your page bg, prevents content "jump" */
+  padding: 0;
 }
 
-/* Short, mobile-first height. On desktop it grows a bit. */
+/* Fullscreen map */
 .top-map{
-  height: clamp(160px, 28vh, 300px);
-  border-radius: 12px;
+  height: 100vh;
+  width: 100%;
+  border-radius: 0;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0,0,0,.2);
+  box-shadow: none;
 }
 
 /* Make sure the map's container doesn't fight scrolling on mobile */
@@ -72,44 +72,35 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .stack-feed, .feed{max-width:660px;margin:0 auto;padding:0 16px;display:grid;gap:16px}
 
 /* ===== CARDS ===== */
-.stack-card, .card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-1),var(--shadow-2);transition:transform .18s ease,box-shadow .18s ease;scroll-margin-top:100px}
+.stack-card, .card{
+  --card-bg: var(--card);
+  --card-text: color-contrast(var(--card-bg) vs #111827, #fff);
+  --card-muted: color-mix(in srgb, var(--card-text) 65%, var(--card-bg));
+  background: var(--card-bg);
+  color: var(--card-text);
+  border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-1),var(--shadow-2);transition:transform .18s ease,box-shadow .18s ease;scroll-margin-top:100px
+}
 .stack-card:hover, .card:hover{transform:translateY(-1px);box-shadow:var(--shadow-1),0 20px 40px rgba(16,24,40,.12)}
+
 .stack-card.active{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1),var(--shadow-2)}
 
 /* ===== CARD HEADER ===== */
 .stack-card-header, .card-head{position:relative;display:grid;row-gap:4px;padding:12px 14px;border-bottom:1px solid var(--border)}
-.stack-card-title, .card-title{font-weight:800;font-size:1.05rem;line-height:1.35;margin:0;color:var(--text)}
-.stack-location-time, .card-sub{color:var(--muted);font-size:.9rem;display:flex;flex-wrap:wrap;gap:.6rem;align-items:center}
+.stack-card-title, .card-title{font-weight:800;font-size:1.05rem;line-height:1.35;margin:0;color:var(--card-text)}
+.stack-location-time, .card-sub{color:var(--card-muted);font-size:.9rem;display:flex;flex-wrap:wrap;gap:.6rem;align-items:center}
 .card-sub .dot::before{content:"•";margin:0 .45rem;color:#cbd5e1}
 .stack-pill{margin-left:auto;background:#eff6ff;border:1px solid #dbeafe;color:#1d4ed8;border-radius:999px;padding:2px 10px;font-weight:700;font-size:.78rem}
 
 .stack-desc {
   margin: 0;
   font-size: 0.95rem;
+  font-weight: 400;
   opacity: 0.9;
-
-  /* Default for light backgrounds */
-  color: #333;
+  color: var(--card-text);
 }
 
-/* If parent card has a dark background */
-@media (prefers-color-scheme: dark) {
-  .stack-desc {
-    color: #fff;
-    opacity: 0.85;
-  }
-}
-
-/* Extra safety: if the stack-card itself is dark */
-.stack-card[style*="background: #000"],
-.stack-card[style*="background-color: #000"],
-.stack-card.dark {
-  color: #fff;
-}
-
-.stack-card.dark .stack-desc {
-  color: #fff;
-}
+/* Dark card helper */
+.stack-card.dark { --card-bg:#000; }
 
 /* New photo indicator */
 .new-photo-bell{position:absolute;top:12px;right:14px;font-size:1.1rem;color:#f59e0b}
@@ -121,11 +112,12 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .media-gradient::after{content:"";position:absolute;left:0;right:0;bottom:0;height:96px;background:linear-gradient(to top,rgba(0,0,0,.35),transparent);pointer-events:none}
 
 /* ===== NAVIGATION ARROWS ===== */
-.stack-photo-nav, .nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.62);color:#fff;border:none;border-radius:12px;padding:12px 14px;cursor:pointer;transition:transform .18s ease,background .18s ease;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:bold;opacity:0;z-index:5}
+.stack-photo-nav, .nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.62);color:#fff;border:none;border-radius:12px;padding:12px 14px;cursor:pointer;transition:opacity .18s ease,transform .18s ease,background .18s ease;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:bold;opacity:0;z-index:5}
 .stack-photo-nav:hover, .nav:hover{background:rgba(0,0,0,.82);transform:translateY(-50%) scale(1.06)}
 .stack-photo-nav.prev, .nav.prev{left:14px}
 .stack-photo-nav.next, .nav.next{right:14px}
 .stack-media-container:hover .stack-photo-nav{opacity:1}
+.card-media:hover .nav{opacity:1}
 .stack-photo-nav:disabled, .nav:disabled{opacity:.5;cursor:not-allowed;transform:translateY(-50%)}
 
 /* ==== Thumbnail Drawer ==== */
@@ -134,8 +126,8 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .drawer-thumbnails::-webkit-scrollbar { display: none; }
 .drawer-thumbnail { width: 88px; height: 66px; border-radius: 10px; overflow: hidden; border: 2px solid transparent; box-shadow: 0 4px 12px rgba(0,0,0,.2); cursor: pointer; transition: transform .2s ease, border-color .2s ease, opacity .2s ease; opacity: .8; flex-shrink: 0; }
 .drawer-thumbnail img, .drawer-thumbnail video { width: 100%; height: 100%; object-fit: contain; display: block; }
-.drawer-thumbnail:hover { transform: translateY(-1px); opacity: 1; }
-.drawer-thumbnail.active { border-color: #8bb8ff; opacity: 1; }
+.drawer-thumbnail:hover { transform: scale(1.03); opacity: 1; }
+.drawer-thumbnail.active { border-color: var(--accent); outline:2px solid var(--accent); outline-offset:2px; opacity: 1; }
 @media (max-width: 768px) { .drawer-thumbnail { width: 76px; height: 58px; border-radius: 8px; } .stack-thumbnail-drawer { margin: 8px 12px 0; } }
 
 /* ==== Persistent Thumbnail Rail (Legacy) ====*/
@@ -193,8 +185,8 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   height: 100%;
   object-fit: contain;
 }
-.rail-thumb:hover { transform: translateY(-2px); opacity: 1; }
-.rail-thumb.active { border-color: #8bb8ff; opacity: 1; }
+.rail-thumb:hover { transform: scale(1.03); opacity: 1; }
+.rail-thumb.active { border-color: var(--accent); outline:2px solid var(--accent); outline-offset:2px; opacity: 1; }
 
 .rail-track.dragging {
   cursor: grabbing;
@@ -226,7 +218,8 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .photo-counter{position:absolute;right:14px;bottom:14px;color:#fff;background:rgba(0,0,0,.55);padding:6px 10px;border-radius:999px;font-weight:700;font-size:.82rem}
 
 /* ===== CAPTION ===== */
-.caption{padding:10px 14px 2px;color:#1f2937;line-height:1.55;font-size:.95rem}
+
+.caption{padding:10px 14px 2px;color:#1f2937;line-height:1.55;font-size:.95rem;font-weight:400}
 
 /* ===== ACTIONS BAR ===== */
 .stack-actions, .card-actions{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-top:1px solid var(--border);background:#fafbfc}
@@ -344,14 +337,25 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 /* lightbox shell */
 .lb-portal { position:fixed; inset:0; z-index:9999; display:none; }
 .lb-portal.on { display:block; }
-.lb-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.85); }
-.lb-frame { position:absolute; inset:4% 6%; background:rgba(10,10,10,.85); border-radius:12px; border:1px solid rgba(255,255,255,.08); display:grid; grid-template-columns: 1fr minmax(280px, 340px); gap:0; overflow:hidden; }
+.lb-backdrop {
+  position:absolute;
+  inset:0;
+  background:radial-gradient(circle at center, rgba(0,0,0,.4) 0%, rgba(0,0,0,.85) 80%);
+}
+.lb-frame {
+  position:absolute;
+  inset:0;
+  background:transparent;
+  display:grid;
+  grid-template-columns: 1fr minmax(280px, 340px);
+  gap:0;
+  overflow:hidden;
+}
 .lb-img,
 .lb-video {
-  max-width:100%;
-  max-height:100%;
-  width:auto;
-  height:auto;
+
+  width:100%;
+  height:100%;
   object-fit:contain;
   grid-column:1/2;
   grid-row:1/2;
@@ -813,13 +817,17 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 .photo-main {
   position: relative;
+  background: var(--card);
+  padding: 4px;
+  border-radius: 12px;
+  box-shadow: var(--shadow-1);
 }
 
 .photo-main-media {
   width: 100%;
   max-height: 500px;
   object-fit: cover;
-  border-radius: 12px;
+  border-radius: 8px;
   cursor: pointer;
   transition: transform 0.2s ease;
 }
@@ -828,10 +836,18 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   transform: none;
 }
 
-.photo-caption {
+.photo-title {
   margin: 12px 0 0 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.photo-caption {
+  margin: 4px 0 0 0;
   color: var(--muted-2);
+  font-size: 0.9rem;
   font-style: italic;
+  font-weight: 400;
 }
 
 .photo-thumbnails {
@@ -839,6 +855,11 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   bottom: 16px;
   right: 16px;
   display: flex;
+  padding: 4px;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(4px);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
 }
 
 .thumbnail {
@@ -850,7 +871,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   cursor: pointer;
   transition: transform 0.2s ease, opacity 0.2s ease;
-  opacity: 0.9;
+  opacity: 0.95;
   margin-left: -16px;
 }
 
@@ -866,7 +887,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .more-photos {
   width: 60px;
   height: 60px;
-  background: rgba(0,0,0,0.6);
+  background: linear-gradient(135deg, rgba(0,0,0,0.6), rgba(0,0,0,0.3));
   border: 2px solid #fff;
   border-radius: 8px;
   display: flex;
@@ -881,7 +902,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 }
 
 .more-photos:hover {
-  background: rgba(0,0,0,0.8);
+  background: linear-gradient(135deg, rgba(0,0,0,0.8), rgba(0,0,0,0.6));
 }
 
 .photo-actions {
@@ -1086,21 +1107,13 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
-  .stack-card.social { background: #111827; border-color: rgba(255,255,255,.08); }
-  .stack-title { color: #e5e7eb; }
-  .stack-subline { color: #9ca3af; }
-  .stack-desc { color: #e5e7eb; opacity: .92; }
+  .stack-card.social { --card-bg: #111827; border-color: rgba(255,255,255,.08); }
+  .stack-desc { opacity: .92; }
   .stack-footer { border-top-color: rgba(255,255,255,.08); }
   .stack-like-btn { background: #1f2937; }
   .stack-like-btn:hover { background: #374151; }
   .stack-like-count { color: #60a5fa; }
 }
-
-/* Auto-contrast if a theme sets very dark background on the card */
-.stack-card.social { --bg: 255; }
-.stack-card.social.dark .stack-title,
-.stack-card.social.dark .stack-subline,
-.stack-card.social.dark .stack-desc { color: #fff; }
 
 /* ===== LIGHTBOX LAYOUT ===== */
 
