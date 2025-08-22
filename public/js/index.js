@@ -537,8 +537,13 @@ async function loadStackInteractions(stackId, block){
 function renderStackComment(c){
   const li = document.createElement('li');
   li.className = 'comment';
+  li.dataset.commentId = c.id || '';
+  
   li.innerHTML = `
-    <div class="meta">${escapeHtml(c.author || 'Anonymous')} • ${new Date(c.timestamp || c.edited || Date.now()).toLocaleString([], {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short'})}</div>
+    <div class="meta">
+      <span>${escapeHtml(c.author || 'Anonymous')} • ${new Date(c.timestamp || c.edited || Date.now()).toLocaleString([], {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short'})}</span>
+      ${c.id && !c.id.startsWith('temp-') ? `<button class="stack-comment-delete" data-comment-id="${c.id}" title="Delete comment">🗑️</button>` : ''}
+    </div>
     <div class="text">${escapeHtml(c.text || '')}</div>
   `;
   return li;
@@ -579,6 +584,70 @@ function bindStackInteractions(stackId, block){
       ul.lastElementChild.remove();
     }
   });
+
+  // Comment delete buttons (event delegation)
+  block.addEventListener('click', async (e) => {
+    if (e.target.classList.contains('stack-comment-delete')) {
+      const commentId = e.target.dataset.commentId;
+      if (!commentId || !confirm('Delete this comment?')) return;
+
+      const commentItem = e.target.closest('.comment');
+      if (!commentItem) return;
+
+      // Optimistic UI - remove comment immediately
+      const originalParent = commentItem.parentNode;
+      const originalNextSibling = commentItem.nextSibling;
+      commentItem.remove();
+
+      try {
+        // Get admin token the same way as the admin panel
+        const getAdminToken = () => {
+          try {
+            const settings = JSON.parse(localStorage.getItem('tripAdminSettings') || '{}');
+            return settings.apiToken || localStorage.getItem('tripAdminPass') || '';
+          } catch {
+            return localStorage.getItem('tripAdminPass') || '';
+          }
+        };
+        
+        const adminToken = getAdminToken();
+        console.log('🔑 Using admin token for stack comment delete:', adminToken ? '***set***' : 'NOT SET');
+        
+        const res = await fetch(`${getApiBase()}/api/stack/${stackId}/comment/${commentId}`, {
+          method: 'DELETE',
+          headers: {
+            'x-admin-token': adminToken
+          }
+        });
+
+        if (!res.ok) {
+          const errorText = await res.text().catch(() => 'Unknown error');
+          throw new Error(`Delete failed: ${res.status} - ${errorText}`);
+        }
+
+        // Update comment count
+        const cnt = block.querySelector('.comment-pill .count');
+        cnt.textContent = Math.max(0, (+cnt.textContent || 0) - 1);
+        
+        console.log('✅ Stack comment deleted successfully');
+      } catch (error) {
+        console.error('❌ Failed to delete stack comment:', error);
+        
+        // Restore comment on error
+        if (originalNextSibling) {
+          originalParent.insertBefore(commentItem, originalNextSibling);
+        } else {
+          originalParent.appendChild(commentItem);
+        }
+        
+        if (error.message.includes('401')) {
+          alert('Failed to delete comment: Unauthorized. Please go to the admin panel (/admin/) and set your admin token in Settings.');
+        } else {
+          alert(`Failed to delete comment: ${error.message}`);
+        }
+      }
+    }
+  });
 }
 
 // ----- Comments Block Helpers (Legacy) -----
@@ -609,21 +678,7 @@ async function loadAndRenderComments(stackId, block){
   }
 }
 
-function renderCommentItem(c){
-  const li = document.createElement('li');
-  li.className = 'comment-item';
-  const initials = (c.author || 'A').trim()[0]?.toUpperCase() || 'A';
-  li.innerHTML = `
-    <div class="comment-avatar">${initials}</div>
-    <div class="comment-bubble">
-      <div class="comment-head">
-        <span class="comment-author">${escapeHtml(c.author || 'Anonymous')}</span>
-        <span class="comment-time">${new Date(c.timestamp || c.edited || Date.now()).toLocaleString([], {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short'})}</span>
-      </div>
-      <div class="comment-text">${escapeHtml(c.text || '')}</div>
-    </div>`;
-  return li;
-}
+// Note: renderCommentItem function removed - now using renderStackComment for stack comments
 
 
 
@@ -670,44 +725,7 @@ function initLikeChip(block, kind, id){
   });
 }
 
-// Bind events for one block
-function bindCommentsBlock(stackId, block){
-  // chip toggles visibility
-  block.querySelector('.chip-cmt')?.addEventListener('click', ()=>{
-    const ul = block.querySelector('.comment-list');
-    ul.hidden = !ul.hidden;
-  });
-
-  // composer
-  const form = block.querySelector('.comment-composer');
-  form.addEventListener('submit', async (e)=>{
-    e.preventDefault();
-    const input = form.querySelector('.comment-input');
-    const text = input.value.trim(); if (!text) return;
-    // optimistic add
-    const temp = { id: 'temp-'+Date.now(), author: 'You', text, timestamp: new Date().toISOString() };
-    const ul = block.querySelector('.comment-list'); ul.hidden = false;
-    ul.appendChild(renderCommentItem(temp));
-    input.value = '';
-
-    try{
-      const res = await fetch(`${getApiBase()}/api/stack/${stackId}/comment`, {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ text })
-      });
-      const out = await res.json();
-      // replace the temp node with server one (optional: re-render)
-      ul.lastElementChild.replaceWith(renderCommentItem(out.comment || temp));
-      // bump counter
-      const cnt = block.querySelector('.comment-count');
-      cnt.textContent = (+cnt.textContent || 0) + 1;
-    }catch{
-      // rollback UI on error
-      ul.lastElementChild.remove();
-    }
-  });
-}
+// Note: bindCommentsBlock function removed - now using integrated deletion in bindStackInteractions
 
 
 // ---------- lightbox (new photo-focused viewer) ----------

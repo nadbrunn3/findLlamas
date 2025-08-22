@@ -13,13 +13,17 @@ function isVideo(item){
 function renderLbComment(c){
   const li = document.createElement('div');
   li.className = 'lb-citem';
+  li.dataset.commentId = c.id || '';
   const initials = (c.author || 'A').trim()[0]?.toUpperCase() || 'A';
   li.innerHTML = `
     <div class="lb-ava">${initials}</div>
     <div class="lb-bubble">
       <div class="lb-head">
-        <span class="lb-author">${escapeHtml(c.author || 'Anonymous')}</span>
-        <span class="lb-time">${new Date(c.timestamp || c.edited || Date.now()).toLocaleString([], {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short'})}</span>
+        <div class="comment-meta">
+          <span class="lb-author">${escapeHtml(c.author || 'Anonymous')}</span>
+          <span class="lb-time">${new Date(c.timestamp || c.edited || Date.now()).toLocaleString([], {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short'})}</span>
+        </div>
+        ${c.id && !c.id.startsWith('temp-') ? `<button class="lb-comment-delete" data-comment-id="${c.id}" title="Delete comment">🗑️</button>` : ''}
       </div>
       <div class="lb-text">${escapeHtml(c.text || '')}</div>
     </div>`;
@@ -119,6 +123,73 @@ function bindLbPanel(photoId){
       list.style.display = isHidden ? 'block' : 'none';
       form.style.display = isHidden ? 'block' : 'none';
     };
+  }
+
+  // comment delete buttons (event delegation) - only bind once per panel
+  if (!panel._deleteHandlerBound) {
+    panel._deleteHandlerBound = true;
+    panel.addEventListener('click', async (e) => {
+      if (e.target.classList.contains('lb-comment-delete')) {
+        const commentId = e.target.dataset.commentId;
+        if (!commentId || !confirm('Delete this comment?')) return;
+
+        const commentItem = e.target.closest('.lb-citem');
+        if (!commentItem) return;
+
+        // Optimistic UI - remove comment immediately
+        const originalParent = commentItem.parentNode;
+        const originalNextSibling = commentItem.nextSibling;
+        commentItem.remove();
+
+        try {
+          // Get admin token the same way as the admin panel
+          const getAdminToken = () => {
+            try {
+              const settings = JSON.parse(localStorage.getItem('tripAdminSettings') || '{}');
+              return settings.apiToken || localStorage.getItem('tripAdminPass') || '';
+            } catch {
+              return localStorage.getItem('tripAdminPass') || '';
+            }
+          };
+          
+          const adminToken = getAdminToken();
+          console.log('🔑 Using admin token for photo comment delete:', adminToken ? '***set***' : 'NOT SET');
+          
+          const res = await fetch(`${api}/api/photo/${photoId}/comment/${commentId}`, {
+            method: 'DELETE',
+            headers: {
+              'x-admin-token': adminToken
+            }
+          });
+
+          if (!res.ok) {
+            const errorText = await res.text().catch(() => 'Unknown error');
+            throw new Error(`Delete failed: ${res.status} - ${errorText}`);
+          }
+
+          // Update comment count
+          const cBtn = panel.querySelector('.lb-comments-btn .count');
+          cBtn.textContent = Math.max(0, (+cBtn.textContent || 0) - 1);
+          
+          console.log('✅ Photo comment deleted successfully');
+        } catch (error) {
+          console.error('❌ Failed to delete photo comment:', error);
+          
+          // Restore comment on error
+          if (originalNextSibling) {
+            originalParent.insertBefore(commentItem, originalNextSibling);
+          } else {
+            originalParent.appendChild(commentItem);
+          }
+          
+          if (error.message.includes('401')) {
+            alert('Failed to delete comment: Unauthorized. Please go to the admin panel (/admin/) and set your admin token in Settings.');
+          } else {
+            alert(`Failed to delete comment: ${error.message}`);
+          }
+        }
+      }
+    });
   }
 
   loadPhotoInteractions(photoId, panel);
