@@ -548,6 +548,7 @@ function initDiscussionState(stackId) {
     discussionState.set(stackId, {
       comments: [],
       expanded: false,
+      manuallyCollapsed: false,
       activeReplyComposer: null
     });
   }
@@ -562,6 +563,8 @@ async function loadThreadedDiscussion(stackId, block, mediaActionsBlock = null) 
     const res = await fetch(`${getApiBase()}/api/stack/${stackId}/interactions`);
     const data = await res.json();
     
+    console.log(`Loading discussion for ${stackId}:`, data.comments?.length, 'comments');
+    
     // Update like count in media actions area
     if (mediaActionsBlock) {
       const likeCountEl = mediaActionsBlock.querySelector('.like-pill .count');
@@ -574,11 +577,32 @@ async function loadThreadedDiscussion(stackId, block, mediaActionsBlock = null) 
     // Process comments into threaded structure
     state.comments = processCommentsIntoThreads(data.comments || []);
     
+    console.log(`Processed into ${state.comments.length} threaded comments for ${stackId}`);
+    state.comments.forEach(comment => {
+      if (comment.replies?.length > 0) {
+        console.log(`- Comment "${comment.text}" has ${comment.replies.length} replies`);
+      }
+    });
+    
     // Update thread count
     updateThreadCount(stackId, block);
     
+    // Auto-expand if there are comments and not manually collapsed, OR if we were already expanded
+    const shouldExpand = (state.comments.length > 0 && !state.manuallyCollapsed) || state.expanded;
+    if (shouldExpand) {
+      state.expanded = true;
+      const threadContainer = block.querySelector('.thread-container');
+      const threadToggle = block.querySelector('.thread-toggle');
+      if (threadContainer && threadToggle) {
+        threadContainer.style.display = 'block';
+        threadToggle.setAttribute('aria-expanded', 'true');
+      }
+      console.log(`Auto-expanding comments for ${stackId}`);
+    }
+    
     // Render if expanded
     if (state.expanded) {
+      console.log(`Rendering ${state.comments.length} comments for ${stackId}`);
       renderThreadedComments(stackId, block);
     }
   } catch(e) {
@@ -678,6 +702,8 @@ function bindDiscussionThread(stackId, block) {
   
   threadToggle.addEventListener('click', () => {
     state.expanded = !state.expanded;
+    // Track manual collapse/expand
+    state.manuallyCollapsed = !state.expanded;
     threadToggle.setAttribute('aria-expanded', state.expanded);
     
     if (state.expanded) {
@@ -992,29 +1018,7 @@ function bindReplyComposer(stackId, composer, parentCommentId) {
     textarea.disabled = true;
     
     try {
-      // Optimistic update
-      const tempReply = {
-        id: 'temp-reply-' + Date.now(),
-        author: 'You',
-        text,
-        timestamp: new Date().toISOString(),
-        parentId: parentCommentId,
-        replies: []
-      };
-      
-      const state = discussionState.get(stackId);
-      const parentComment = findCommentById(state.comments, parentCommentId);
-      if (parentComment) {
-        parentComment.replies = parentComment.replies || [];
-        parentComment.replies.push(tempReply);
-        
-        // Close composer and re-render
-        closeReplyComposer(composer);
-        renderThreadedComments(stackId, composer.closest('.stack-interactions'));
-        updateThreadCount(stackId, composer.closest('.stack-interactions'));
-      }
-      
-      // Submit to server (assuming your API supports parent comment replies)
+      // Submit to server directly (no optimistic updates to avoid race conditions)
       const res = await fetch(`${getApiBase()}/api/stack/${stackId}/comment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1023,51 +1027,41 @@ function bindReplyComposer(stackId, composer, parentCommentId) {
       
       if (res.ok) {
         const result = await res.json();
-        // Replace temp reply with real one
-        if (parentComment) {
-          const replyIndex = parentComment.replies.findIndex(r => r.id === tempReply.id);
-          if (replyIndex !== -1) {
-            parentComment.replies[replyIndex] = { ...result.comment, replies: [] };
-            renderThreadedComments(stackId, composer.closest('.stack-interactions'));
-          }
-        }
+        console.log('Reply posted successfully:', result.comment);
+        
+        // Close composer first
+        closeReplyComposer(composer);
+        
+        // Reload discussion from server to get all replies
+        await loadThreadedDiscussion(stackId, composer.closest('.stack-interactions'));
         
         // Show success feedback
         showSuccessToast('Reply posted');
         
-        // Also update ARIA status
-        statusRegion.textContent = 'Reply posted';
-        setTimeout(() => statusRegion.textContent = '', 2000);
+        // Update ARIA status
+        const statusRegion = document.querySelector('[aria-live="polite"]');
+        if (statusRegion) {
+          statusRegion.textContent = 'Reply posted successfully';
+          setTimeout(() => statusRegion.textContent = '', 3000);
+        }
       } else {
         throw new Error('Failed to post reply');
       }
     } catch (error) {
       console.error('Failed to post reply:', error);
       
-      // Remove optimistic reply
-      const state = discussionState.get(stackId);
-      const parentComment = findCommentById(state.comments, parentCommentId);
-      if (parentComment && parentComment.replies) {
-        parentComment.replies = parentComment.replies.filter(r => !r.id.startsWith('temp-'));
-        renderThreadedComments(stackId, composer.closest('.stack-interactions'));
-        updateThreadCount(stackId, composer.closest('.stack-interactions'));
-      }
-      
-      // Reset button state and show composer again with text
+      // Reset button state and keep composer open with text
       submitBtn.disabled = false;
       submitBtn.classList.remove('loading');
       submitBtn.textContent = 'Post';
       textarea.disabled = false;
       
-      showInlineReplyComposer(stackId, parentCommentId, 
-        composer.closest('.stack-interactions').querySelector(`[data-comment-id="${parentCommentId}"]`));
-      const newComposer = composer.closest('.stack-interactions').querySelector('.inline-reply-composer');
-      if (newComposer) {
-        newComposer.querySelector('.reply-textarea').value = text;
+      // Show error message
+      const statusRegion = document.querySelector('[aria-live="polite"]');
+      if (statusRegion) {
+        statusRegion.textContent = 'Failed to post reply. Please try again.';
+        setTimeout(() => statusRegion.textContent = '', 3000);
       }
-      
-      statusRegion.textContent = 'Failed to post reply. Please try again.';
-      setTimeout(() => statusRegion.textContent = '', 3000);
     }
   });
 }
