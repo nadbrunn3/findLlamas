@@ -281,7 +281,7 @@ function renderPhotoPost() {
         <p class="photo-meta">${formatDateTime(main.taken_at)} • ${items.length} item${items.length > 1 ? 's' : ''}</p>
       </div>
       <div id="photo-main" class="photo-main"></div>
-      ${items.length > 1 ? `<div id="photo-thumbs" class="photo-thumbnails"></div>` : ''}
+      <div id="photo-caption-container"></div>
       <div class="photo-actions">
         <button class="action-btn like-btn" onclick="toggleLike()">
           <span class="icon">♥</span>
@@ -308,29 +308,12 @@ function renderPhotoPost() {
   const mainEl = renderMediaEl(main, { withControls: isVideo(main), className: 'photo-main-media' });
   mainWrap.appendChild(mainEl);
 
-  // Click to open lightbox for images; videos keep controls/play
-  if (!isVideo(main)) {
-    mainEl.style.cursor = 'zoom-in';
-    mainEl.addEventListener('click', () => openLightbox(0));
-  }
-
-  // Captions
-  if (main.title) {
-    const t = document.createElement('p');
-    t.className = 'photo-caption';
-    t.textContent = main.title;
-    mainWrap.appendChild(t);
-  }
-  if (main.caption) {
-    const c = document.createElement('p');
-    c.className = 'photo-caption';
-    c.textContent = main.caption;
-    mainWrap.appendChild(c);
-  }
-
-  // Thumbnails
+  // Thumbnails overlay
   if (items.length > 1) {
-    const thumbs = document.getElementById('photo-thumbs');
+    const thumbs = document.createElement('div');
+    thumbs.id = 'photo-thumbs';
+    thumbs.className = 'photo-thumbnails';
+    mainWrap.appendChild(thumbs);
     const thumbItems = items.slice(1, 5);
     thumbItems.forEach((it, idx) => {
       const el = renderMediaEl(it, { withControls: false, className: 'thumbnail' });
@@ -344,6 +327,27 @@ function renderPhotoPost() {
       more.addEventListener('click', () => openLightbox(5));
       thumbs.appendChild(more);
     }
+  }
+
+  // Click to open lightbox for images; videos keep controls/play
+  if (!isVideo(main)) {
+    mainEl.style.cursor = 'zoom-in';
+    mainEl.addEventListener('click', () => openLightbox(0));
+  }
+
+  // Captions
+  const captionWrap = document.getElementById('photo-caption-container');
+  if (main.title) {
+    const t = document.createElement('p');
+    t.className = 'photo-caption';
+    t.textContent = main.title;
+    captionWrap.appendChild(t);
+  }
+  if (main.caption) {
+    const c = document.createElement('p');
+    c.className = 'photo-caption';
+    c.textContent = main.caption;
+    captionWrap.appendChild(c);
   }
 }
 
