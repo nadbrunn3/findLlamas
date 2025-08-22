@@ -1,4 +1,4 @@
-import { dataUrl, getApiBase, haversineKm, escapeHtml, formatTime, formatDateTime, groupIntoStacks } from "./utils.js";
+import { dataUrl, getApiBase, haversineKm, escapeHtml, formatTime, formatDateTime, groupIntoStacks, formatDate } from "./utils.js";
 
 // Get date from URL parameter
 const urlParams = new URLSearchParams(window.location.search);
@@ -66,7 +66,7 @@ async function renderStacksSection() {
 
   for (const st of stacks) {
     const meta = (dayData.stackMeta && dayData.stackMeta[st.id]) || { title: '', caption: '' };
-    const title = meta.title?.trim() || 'Untitled stop';
+    const title = meta.title?.trim() || formatDate(st.photos[0]?.taken_at);
     const caption = meta.caption?.trim() || '';
 
     // Card shell
