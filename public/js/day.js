@@ -469,7 +469,24 @@ function addComment(event) {
   const input = event.target.querySelector('input');
   const text = input.value.trim();
   if (!text) return;
-  console.log('Comment added:', text);
+
+  // Render the new comment
+  const list = document.getElementById('comments-list');
+  const item = document.createElement('div');
+  item.className = 'comment-item';
+  item.innerHTML = `
+    <div class="comment-author">You</div>
+    <div class="comment-text">${escapeHtml(text)}</div>
+    <div class="comment-time">${new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}</div>
+  `;
+  list.appendChild(item);
+
+  // Update comment count on the button
+  const countEl = document.querySelector('.comment-btn .count');
+  if (countEl) {
+    countEl.textContent = String((parseInt(countEl.textContent, 10) || 0) + 1);
+  }
+
   input.value = '';
 }
 
