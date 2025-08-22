@@ -160,12 +160,25 @@ async function loadStacks(){
     stackMetaByDay[previewSlug] = dj.stackMeta || {};
     (dj.photos||[]).forEach(p=> allPhotos.push({ ...p, dayTitle:dj.title, daySlug:previewSlug, ts:+new Date(p.taken_at) }));
   } else {
-    const days = await (await fetch(dataUrl("days", "index.json"))).json();
-  await Promise.all(days.map(async d=>{
-      const dj = await (await fetch(dataUrl("days", `${d.slug}.json`))).json();
-      stackMetaByDay[d.slug] = dj.stackMeta || {};
-      (dj.photos||[]).forEach(p=> allPhotos.push({ ...p, dayTitle:dj.title, daySlug:d.slug, ts:+new Date(p.taken_at) }));
-    }));
+    try {
+      const res = await fetch(dataUrl("days", "index.json"));
+      const days = res.ok ? await res.json() : [];
+      if (Array.isArray(days) && days.length > 0) {
+        await Promise.all(days.map(async d=>{
+          try {
+            const dj = await (await fetch(dataUrl("days", `${d.slug}.json`))).json();
+            stackMetaByDay[d.slug] = dj.stackMeta || {};
+            (dj.photos||[]).forEach(p=> allPhotos.push({ ...p, dayTitle:dj.title, daySlug:d.slug, ts:+new Date(p.taken_at) }));
+          } catch (e) {
+            console.warn(`Failed to load day ${d.slug}:`, e);
+          }
+        }));
+      } else {
+        console.log("No days found in index.json");
+      }
+    } catch (e) {
+      console.warn("Failed to load days index:", e);
+    }
   }
 
   allPhotos.sort((a,b)=>a.ts-b.ts);
@@ -368,21 +381,17 @@ function renderFeed(){
       // Clear previous content
       mainContainer.innerHTML = '';
       
-      // Create main media element
+      // Create main media element (no controls in stacks)
       const mainEl = renderMediaEl(mainPhoto, {
-        withControls: isVideo(mainPhoto),
+        withControls: false,
         className: 'stack-main-photo'
       });
       mainContainer.appendChild(mainEl);
 
-      if (isVideo(mainPhoto)) {
-        mainEl.addEventListener('click', () => {
-          if (mainEl.paused) mainEl.play();
-        });
-      } else {
-        mainEl.style.cursor = 'zoom-in';
-        mainEl.addEventListener('click', () => openLightboxForStack(stack, current));
-      }
+      // All media (photos and videos) open in lightbox when clicked
+      // Videos do not play inline in stacks
+      mainEl.style.cursor = 'zoom-in';
+      mainEl.addEventListener('click', () => openLightboxForStack(stack, current));
       
       // Add captions
       if (mainPhoto.title) {

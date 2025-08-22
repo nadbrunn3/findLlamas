@@ -1267,6 +1267,12 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   border-radius:12px;
 }
 
+/* Videos in stacks are disabled from playing - no controls or interaction */
+.stack-main-photo video {
+  pointer-events: none;
+  background: #000;
+}
+
 /* Thumbnail sizes handled by main thumbnail styles */
 .photo-main-media { max-height:45vh; }
 
