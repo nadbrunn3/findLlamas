@@ -109,7 +109,7 @@ export function groupIntoStacks(photos, radiusMeters = 500) {
     const id = `stack-${seq++}`;
     const s = {
       id,
-      title: first.caption || first.dayTitle,
+      title: '',
       location: loc,
       photos: [],
       takenAt: first.taken_at || first.takenAt || first.ts || null,
@@ -215,6 +215,11 @@ export function escapeHtml(text) {
 export function formatTime(iso) {
   if (!iso) return '';
   return new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+
+export function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString();
 }
 
 export function formatDateTime(iso) {
