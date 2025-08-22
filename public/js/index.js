@@ -1,4 +1,4 @@
-import { dataUrl, getApiBase, groupIntoStacks, debounce, urlParam, pushUrlParam, replaceUrlParam, fmtTime, escapeHtml } from "./utils.js";
+import { dataUrl, getApiBase, groupIntoStacks, debounce, urlParam, pushUrlParam, replaceUrlParam, fmtTime, escapeHtml, formatDate } from "./utils.js";
 
 const isMobile = matchMedia('(max-width:768px)').matches;
 let topMap; // no mini-map when sticky hero map is always visible
@@ -184,7 +184,8 @@ async function loadStacks(){
     dayStackCounters[slug] = idx + 1;
     const metaKey = `stack-${idx}`;
     const meta = stackMetaByDay[slug]?.[metaKey];
-    if (meta?.title) s.title = meta.title;
+    const title = meta?.title?.trim();
+    s.title = title || formatDate(s.takenAt);
     s.caption = meta?.caption || '';
     s.photos.forEach(p => p.stackId = s.id);
   });
