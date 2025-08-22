@@ -40,7 +40,7 @@ function isVideo(item) {
   );
 }
 
-function renderMediaEl(item, { withControls = false, className = '', useThumb = false } = {}) {
+function renderMediaEl(item, { withControls = false, className = '', useThumb = false, autoplay = false } = {}) {
   if (isVideo(item)) {
     // If we have a thumb, show it as poster; otherwise the video will still render
     const v = document.createElement('video');
@@ -50,8 +50,14 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
     v.playsInline = true;
     v.loop = true;
     v.controls = !!withControls;
+    v.autoplay = autoplay;
     v.setAttribute('preload', 'metadata');
     if (className) v.className = className;
+    // In some browsers autoplay on newly-created elements may not kick in
+    if (autoplay) {
+      // play() can reject; ignore failures (e.g., autoplay policy)
+      v.play().catch(() => {});
+    }
     return v;
   }
   // Photo - use full resolution by default, thumbnail only when explicitly requested
@@ -384,9 +390,16 @@ function renderFeed(){
       // Create main media element (no controls in stacks)
       const mainEl = renderMediaEl(mainPhoto, {
         withControls: false,
-        className: 'stack-main-photo'
+        className: 'stack-main-photo',
+        autoplay: true
       });
       mainContainer.appendChild(mainEl);
+      if (mainEl.tagName === 'VIDEO') {
+        // Ensure the video starts once it can play
+        mainEl.addEventListener('loadeddata', () => {
+          mainEl.play().catch(() => {});
+        });
+      }
 
       // All media (photos and videos) open in lightbox when clicked
       // Videos do not play inline in stacks

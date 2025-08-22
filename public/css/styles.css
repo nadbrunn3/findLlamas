@@ -1267,9 +1267,8 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   border-radius:12px;
 }
 
-/* Videos in stacks are disabled from playing - no controls or interaction */
+/* Videos in stacks should not show controls but remain interactive for lightbox */
 .stack-main-photo video {
-  pointer-events: none;
   background: #000;
 }
 
