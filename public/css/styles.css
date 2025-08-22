@@ -788,70 +788,85 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 /* ==== Day View Styles ==== */
 .photo-post-card {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 20px;
   margin: 20px 0;
-  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-1), var(--shadow-2);
 }
 
 .photo-header h2 {
   margin: 0 0 8px 0;
-  color: #e5e7eb;
+  color: var(--text);
   font-size: 1.5rem;
 }
 
 .photo-meta {
-  color: #9aa3af;
+  color: var(--muted);
   font-size: 0.9rem;
   margin: 0 0 16px 0;
 }
 
-.photo-main img {
+
+.photo-main {
+  position: relative;
+}
+
+.photo-main-media {
   width: 100%;
   max-height: 500px;
-  object-fit: contain;
+  object-fit: cover;
   border-radius: 12px;
   cursor: pointer;
   transition: transform 0.2s ease;
 }
 
-.photo-main img:hover {
+.photo-main-media:hover {
   transform: none;
 }
 
 .photo-caption {
   margin: 12px 0 0 0;
-  color: #d1d5db;
+  color: var(--muted-2);
   font-style: italic;
 }
 
 .photo-thumbnails {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 8px;
-  margin: 16px 0;
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
 }
 
 .thumbnail {
-  width: 100%;
-  height: 80px;
-  object-fit: contain;
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border: 2px solid #fff;
   border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   cursor: pointer;
   transition: transform 0.2s ease, opacity 0.2s ease;
-  opacity: 0.8;
+  opacity: 0.9;
+  margin-left: -16px;
+}
+
+.thumbnail:first-child {
+  margin-left: 0;
 }
 
 .thumbnail:hover {
-  transform: none;
+  transform: scale(1.05);
   opacity: 1;
 }
 
 .more-photos {
-  height: 80px;
+  width: 60px;
+  height: 60px;
   background: rgba(0,0,0,0.6);
+  border: 2px solid #fff;
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -860,6 +875,8 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s ease;
+  margin-left: -16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
 .more-photos:hover {
@@ -871,7 +888,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   gap: 12px;
   margin: 16px 0;
   padding: 12px 0;
-  border-top: 1px solid rgba(255,255,255,0.1);
+  border-top: 1px solid var(--border);
 }
 
 .action-btn {
@@ -879,23 +896,23 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  border: 1px solid rgba(255,255,255,0.2);
-  background: rgba(255,255,255,0.05);
-  color: #d1d5db;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .action-btn:hover {
-  background: rgba(255,255,255,0.1);
+  background: var(--border);
   transform: translateY(-1px);
 }
 
 .comments-section {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid rgba(255,255,255,0.1);
+  border-top: 1px solid var(--border);
 }
 
 .comments-list {
@@ -912,9 +929,9 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .comment-form input {
   flex: 1;
   padding: 8px 12px;
-  border: 1px solid rgba(255,255,255,0.2);
-  background: rgba(255,255,255,0.05);
-  color: #e5e7eb;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
   border-radius: 8px;
 }
 
@@ -949,13 +966,11 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
     margin: 16px 0;
     border-radius: 12px;
   }
-  
-  .photo-thumbnails {
-    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-  }
-  
+
   .thumbnail {
-    height: 60px;
+    width: 48px;
+    height: 48px;
+    margin-left: -12px;
   }
   
   .lightbox-nav {
@@ -999,14 +1014,18 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 /* Video and Image consistent styling */
 .photo-main img, .photo-main video,
 .photo-thumbnails img, .photo-thumbnails video,
-.media-tile, .thumbnail, .photo-main-media {
+.media-tile {
   display:block;
   width:100%;
   object-fit:contain;
   border-radius:12px;
 }
 
-.thumbnail { width:100px; height:80px; }
+.thumbnail, .photo-main-media {
+  object-fit: cover;
+}
+
+.thumbnail { width:60px; height:60px; }
 .photo-main-media { max-height:60vh; }
 
 /* ===== SOCIAL STACK CARDS ===== */
