@@ -17,6 +17,39 @@ let lbEscHandler = null;
 
 const currentLocation = { lat: 35.6762, lng: 139.6503, name: "Tokyo, Japan" };
 
+// --- Reverse geocode caching ---
+const GEO_CACHE_KEY = 'geocodeCache';
+const geocodeCache = JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || '{}');
+
+async function reverseGeocode(lat, lon) {
+  const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+  if (geocodeCache[key]) return geocodeCache[key];
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      const name = data.display_name || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+      geocodeCache[key] = name;
+      localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(geocodeCache));
+      return name;
+    }
+  } catch (e) {
+    console.warn('reverse geocode failed', e);
+  }
+  return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+}
+
+async function resolveStackLocations() {
+  const jobs = photoStacks.map(async (s) => {
+    const { lat, lng } = s.location;
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      s.location.label = await reverseGeocode(lat, lng);
+    }
+  });
+  await Promise.all(jobs);
+}
+
 // Expose getApiBase to global window for lightbox script
 window.getApiBase = getApiBase;
 
@@ -115,6 +148,7 @@ init();
 
 async function init(){
   await loadStacks();
+  await resolveStackLocations();
   initMaps();
   renderFeed();
 
