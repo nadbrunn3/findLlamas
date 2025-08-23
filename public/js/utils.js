@@ -106,7 +106,12 @@ export function groupIntoStacks(photos, radiusMeters = 500) {
         }
       : { lat: null, lng: null, label: "Location unknown" };
 
-    const id = `stack-${seq++}`;
+    // Generate persistent ID based on first photo's unique properties
+    const photoId = first.id || first.url || '';
+    const timestamp = first.taken_at || first.takenAt || first.ts || 0;
+    const location = hasGPS ? `${first.lat.toFixed(6)}_${first.lon.toFixed(6)}` : 'no_gps';
+    const id = `stack_${simpleHash(photoId + timestamp + location)}`;
+    
     const s = {
       id,
       title: first.caption || first.dayTitle,
@@ -192,6 +197,18 @@ export function groupIntoStacks(photos, radiusMeters = 500) {
   }));
 }
 
+
+// Simple hash function for generating consistent IDs
+function simpleHash(str) {
+  let hash = 0;
+  if (str.length === 0) return hash.toString(36);
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return Math.abs(hash).toString(36);
+}
 
 // --- misc ---
 export const debounce = (fn, ms=120) => { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
