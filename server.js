@@ -79,17 +79,10 @@ async function upsertDayIndex(day) {
 }
 
 // Simple auth guard (for admin-only ops)
-function requireAdmin(req, reply) {
+function requireAdmin(req) {
   if (!ADMIN_TOKEN) return true; // disabled
   const h = req.headers['x-admin-token'] || req.headers['authorization'] || '';
-  const ok =
-    (typeof h === 'string' && h.replace(/^Bearer\s+/i, '') === ADMIN_TOKEN) ||
-    false;
-  if (!ok) {
-    reply.code(401).send({ error: 'Unauthorized' });
-    return false;
-  }
-  return true;
+  return typeof h === 'string' && h.replace(/^Bearer\s+/i, '') === ADMIN_TOKEN;
 }
 
 // ---- Immich helpers ---------------------------------------------------------
@@ -518,7 +511,10 @@ app.get('/api/day/:slug', async (req, reply) => {
 // full overwrite (editor)
 app.put('/api/day/:slug', async (req, reply) => {
   try {
-    if (!requireAdmin(req, reply)) return;
+    if (!requireAdmin(req)) {
+      reply.code(401).send({ error: 'Unauthorized' });
+      return;
+    }
     const body = req.body;
     if (!body || typeof body !== 'object') return reply.code(400).send({ error: 'Invalid JSON' });
     await writeJson(dayFile(req.params.slug), body);
@@ -532,7 +528,10 @@ app.put('/api/day/:slug', async (req, reply) => {
 // update a single photo's title and/or caption
 app.patch('/api/day/:slug/photo/:id', async (req, reply) => {
   try {
-    if (!requireAdmin(req, reply)) return;
+    if (!requireAdmin(req)) {
+      reply.code(401).send({ error: 'Unauthorized' });
+      return;
+    }
     const { caption, description, title } = req.body || {};
     const file = dayFile(req.params.slug);
     const day = await readJson(file);
@@ -558,7 +557,10 @@ app.patch('/api/day/:slug/photo/:id', async (req, reply) => {
 // update stack metadata: title and/or caption (with migration)
 app.patch('/api/day/:slug/stack/:stackId', async (req, reply) => {
   try {
-    if (!requireAdmin(req, reply)) return;
+    if (!requireAdmin(req)) {
+      reply.code(401).send({ error: 'Unauthorized' });
+      return;
+    }
     const { caption, description, title } = req.body || {};
     const file = dayFile(req.params.slug);
     const day = await readJson(file);
@@ -595,7 +597,10 @@ app.patch('/api/day/:slug/stack/:stackId', async (req, reply) => {
 // append-only publish (safer for two people)
 app.post('/api/publish', async (req, reply) => {
   try {
-    if (!requireAdmin(req, reply)) return;
+    if (!requireAdmin(req)) {
+      reply.code(401).send({ error: 'Unauthorized' });
+      return;
+    }
     const { date, title, photos = [] } = req.body || {};
     if (!date || !Array.isArray(photos)) {
       return reply.code(400).send({ error: 'date and photos[] required' });
@@ -689,31 +694,50 @@ app.post('/api/photo/:photoId/comment', async (req, reply) => {
 
 app.put('/api/photo/:photoId/comment/:commentId', async (req, reply) => {
   try {
-    if (!requireAdmin(req, reply)) return;
+    const adminOk = requireAdmin(req);
     const { text } = req.body || {};
     if (!text) return reply.code(400).send({ error: 'text required' });
+
     const file = interactionsPathForPhoto(req.params.photoId);
     const data = (await readJson(file)) || { reactions: {}, comments: [] };
     const c = data.comments.find(x => x.id === req.params.commentId);
     if (!c) return reply.code(404).send({ error: 'comment not found' });
+
+    // allow if admin OR same anonId
+    const isOwner = c.authorId && req.anonId === c.authorId;
+    if (!(adminOk || isOwner)) return reply.code(403).send({ error: 'forbidden' });
+
     c.text = String(text).trim();
     c.edited = new Date().toISOString();
     await writeJson(file, data);
     reply.send({ ok: true, comment: c });
-  } catch { reply.code(500).send({ error: 'edit failed' }); }
+  } catch {
+    reply.code(500).send({ error: 'edit failed' });
+  }
 });
 
 app.delete('/api/photo/:photoId/comment/:commentId', async (req, reply) => {
   try {
-    if (!requireAdmin(req, reply)) return;
+    const adminToken =
+      ADMIN_TOKEN &&
+      ((req.headers['x-admin-token'] || '').replace(/^Bearer\s+/i, '') === ADMIN_TOKEN);
+
     const file = interactionsPathForPhoto(req.params.photoId);
     const data = (await readJson(file)) || { reactions: {}, comments: [] };
     const idx = data.comments.findIndex(x => x.id === req.params.commentId);
     if (idx === -1) return reply.code(404).send({ error: 'comment not found' });
+
+    const c = data.comments[idx];
+    const isOwner = c.authorId && req.anonId === c.authorId;
+
+    if (!(adminToken || isOwner)) return reply.code(403).send({ error: 'forbidden' });
+
     data.comments.splice(idx, 1);
     await writeJson(file, data);
     reply.send({ ok: true });
-  } catch { reply.code(500).send({ error: 'delete failed' }); }
+  } catch {
+    reply.code(500).send({ error: 'delete failed' });
+  }
 });
 
 // Stack interactions (same shape)
@@ -762,31 +786,48 @@ app.post('/api/stack/:stackId/comment', async (req, reply) => {
 
 app.put('/api/stack/:stackId/comment/:commentId', async (req, reply) => {
   try {
-    if (!requireAdmin(req, reply)) return;
+    const adminOk = requireAdmin(req);
     const { text } = req.body || {};
     if (!text) return reply.code(400).send({ error: 'text required' });
     const file = interactionsPathForStack(req.params.stackId);
     const data = (await readJson(file)) || { reactions: {}, comments: [] };
     const c = data.comments.find(x => x.id === req.params.commentId);
     if (!c) return reply.code(404).send({ error: 'comment not found' });
+
+    const isOwner = c.authorId && req.anonId === c.authorId;
+    if (!(adminOk || isOwner)) return reply.code(403).send({ error: 'forbidden' });
+
     c.text = String(text).trim();
     c.edited = new Date().toISOString();
     await writeJson(file, data);
     reply.send({ ok: true, comment: c });
-  } catch { reply.code(500).send({ error: 'edit failed' }); }
+  } catch {
+    reply.code(500).send({ error: 'edit failed' });
+  }
 });
 
 app.delete('/api/stack/:stackId/comment/:commentId', async (req, reply) => {
   try {
-    if (!requireAdmin(req, reply)) return;
+    const adminToken =
+      ADMIN_TOKEN &&
+      ((req.headers['x-admin-token'] || '').replace(/^Bearer\s+/i, '') === ADMIN_TOKEN);
+
     const file = interactionsPathForStack(req.params.stackId);
     const data = (await readJson(file)) || { reactions: {}, comments: [] };
     const idx = data.comments.findIndex(x => x.id === req.params.commentId);
     if (idx === -1) return reply.code(404).send({ error: 'comment not found' });
+
+    const c = data.comments[idx];
+    const isOwner = c.authorId && req.anonId === c.authorId;
+
+    if (!(adminToken || isOwner)) return reply.code(403).send({ error: 'forbidden' });
+
     data.comments.splice(idx, 1);
     await writeJson(file, data);
     reply.send({ ok: true });
-  } catch { reply.code(500).send({ error: 'delete failed' }); }
+  } catch {
+    reply.code(500).send({ error: 'delete failed' });
+  }
 });
 
 if (IMMICH_ALBUM_ID) {
