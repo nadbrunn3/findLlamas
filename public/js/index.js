@@ -2099,7 +2099,6 @@ function setupTabs(){
   const tabs = document.querySelectorAll('.tab-button');
   const footprintsView = document.getElementById('footprints-view');
   const photosView = document.getElementById('photos-view');
-  let photosRendered = false;
 
   tabs.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -2109,10 +2108,7 @@ function setupTabs(){
       if (btn.dataset.tab === 'photos') {
         footprintsView.hidden = true;
         photosView.hidden = false;
-        if (!photosRendered) {
-          renderPhotoGrid();
-          photosRendered = true;
-        }
+        renderPhotoGrid();
       } else {
         footprintsView.hidden = false;
         photosView.hidden = true;
