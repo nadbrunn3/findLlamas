@@ -95,10 +95,45 @@ async function renderStacksSection() {
       </div>
     `;
 
-    // Description
+    // Description with collapsible functionality
+    const descContainer = document.createElement('div');
+    descContainer.className = 'stack-desc-container';
+    
     const desc = document.createElement('p');
     desc.className = 'stack-desc';
     desc.textContent = caption;
+    
+    // Check if description is long enough to need collapsing
+    const needsCollapse = caption && caption.length > 50; // Adjust threshold as needed
+    
+    if (needsCollapse) {
+      const toggle = document.createElement('span');
+      toggle.className = 'stack-desc-toggle';
+      toggle.textContent = 'Read more';
+      
+      toggle.addEventListener('click', () => {
+        const isExpanded = desc.classList.contains('expanded');
+        if (isExpanded) {
+          desc.classList.remove('expanded');
+          toggle.textContent = 'Read more';
+        } else {
+          desc.classList.add('expanded');
+          toggle.textContent = 'Read less';
+        }
+      });
+      descContainer.appendChild(desc);
+      descContainer.appendChild(toggle);
+      
+      // Check if content actually needs collapsing after DOM insertion
+      setTimeout(() => {
+        const MAX_HEIGHT = 72; // ~3 lines at 15px font size
+        if (desc.scrollHeight <= MAX_HEIGHT) {
+          toggle.style.display = 'none';
+        }
+      }, 0);
+    } else {
+      descContainer.appendChild(desc);
+    }
 
     // Media grid (rest)
     const grid = document.createElement('div');
@@ -135,7 +170,7 @@ async function renderStacksSection() {
     // Assemble
     card.appendChild(coverWrap);
     card.appendChild(header);
-    if (caption) card.appendChild(desc);
+    if (caption) card.appendChild(descContainer);
     if (st.photos.length > 1) card.appendChild(grid);
     card.appendChild(footer);
     host.appendChild(card);

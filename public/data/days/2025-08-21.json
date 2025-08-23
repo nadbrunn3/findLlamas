@@ -73,8 +73,8 @@
   ],
   "stackMeta": {
     "stack-0": {
-      "title": "Hi There",
-      "caption": "✅ Better contrast: The input fields now have a light gray background instead of white\n✅ Improved readability: Dark gray text (#333) on light gray background provides good contrast\n✅ Consistent styling: All input fields now have the same color scheme\n✅ Professional appearance: The light gray background looks more polished than pure white"
+      "title": "Hello There",
+      "caption": "How it works now: Daily bucket API fetches assets (which may include the whole month) Date filtering ensures only assets from the specific day are returned Debug logging shows which assets are found and filtered Consistent results every time you import The import now correctly only imports photos from the specific day you select, not the entire month! 🎉"
     }
   }
 }

@@ -459,7 +459,7 @@ function renderFeed(){
         <div class="stack-location-time">${stack.location.label} • ${t}</div>
         ${hasNew ? '<span class="new-photo-bell" aria-label="New photos">🔔</span>' : ''}
       </div>
-      ${stack.caption ? `<p class="caption">${escapeHtml(stack.caption)}</p>` : ''}
+      <div class="stack-desc-container-main" data-stack-id="${stack.id}"></div>
 
       <!-- PERMANENT inline interactions -->
       <section class="stack-interactions" data-stack-id="${stack.id}">
@@ -623,6 +623,9 @@ function renderFeed(){
     
     // Initialize thumbnails with proper media elements
     populateThumbnails();
+    
+    // Initialize collapsible description
+    initCollapsibleDescription(stack, card);
 
     // Bind interactions functionality using new threaded discussion system
     const interactionsBlock = card.querySelector('.stack-interactions');
@@ -641,6 +644,58 @@ function renderFeed(){
     loadThreadedDiscussion(stack.id, interactionsBlock, mediaActionsBlock);
   });
   localStorage.setItem("stackPhotoCounts", JSON.stringify(newCounts));
+}
+
+// Initialize collapsible description functionality
+function initCollapsibleDescription(stack, card) {
+  const container = card.querySelector('.stack-desc-container-main');
+  if (!container || !stack.caption) return;
+  
+  const caption = stack.caption.trim();
+  if (!caption) return;
+  
+  // Create description container
+  const descContainer = document.createElement('div');
+  descContainer.className = 'stack-desc-container';
+  
+  const desc = document.createElement('p');
+  desc.className = 'stack-desc';
+  desc.textContent = caption;
+  
+  // Check if description is long enough to need collapsing
+  const needsCollapse = caption.length > 50;
+  
+  if (needsCollapse) {
+    const toggle = document.createElement('span');
+    toggle.className = 'stack-desc-toggle';
+    toggle.textContent = 'Read more';
+    
+    toggle.addEventListener('click', () => {
+      const isExpanded = desc.classList.contains('expanded');
+      if (isExpanded) {
+        desc.classList.remove('expanded');
+        toggle.textContent = 'Read more';
+      } else {
+        desc.classList.add('expanded');
+        toggle.textContent = 'Read less';
+      }
+    });
+    
+    descContainer.appendChild(desc);
+    descContainer.appendChild(toggle);
+    
+    // Check if content actually needs collapsing after DOM insertion
+    setTimeout(() => {
+      const MAX_HEIGHT = 72; // ~3 lines at 15px font size
+      if (desc.scrollHeight <= MAX_HEIGHT) {
+        toggle.style.display = 'none';
+      }
+    }, 0);
+  } else {
+    descContainer.appendChild(desc);
+  }
+  
+  container.appendChild(descContainer);
 }
 
 // ----- Threaded Discussion System -----
