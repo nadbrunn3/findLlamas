@@ -560,14 +560,16 @@ function openFullscreenMapWithPhotos(photos, focusIndex = 0) {
 
          // Click handler to open lightbox
          marker.on('click', () => {
-           // Close fullscreen map
+           // Close fullscreen map overlay first so the lightbox isn't hidden
            closeFullscreenMap();
 
-           // Small delay then open lightbox
+           // Open the lightbox on the corresponding photo after a brief delay
            setTimeout(() => {
              const originalIndex = photos.findIndex(p => p.id === photo.id || p.url === photo.url);
-             if (window.openPhotoLightbox) {
+             if (typeof window.openPhotoLightbox === 'function') {
                window.openPhotoLightbox(photos, originalIndex >= 0 ? originalIndex : index);
+             } else {
+               console.error('openPhotoLightbox function not available');
              }
            }, 100);
          });
