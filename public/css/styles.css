@@ -1930,34 +1930,46 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   bottom: 16px;
   right: 16px;
   display: flex;
-  padding: 4px;
+  gap: 8px;
+  padding: 8px;
   background: rgba(0,0,0,0.45);
   backdrop-filter: blur(4px);
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  overflow-x: auto;
+  max-width: 80%;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
 }
 
-/* Legacy thumbnail styles - now handled by main thumbnail styles */
+.photo-thumbnails::-webkit-scrollbar { display: none; }
 
-.more-photos {
+.photo-thumbnails .thumbnail {
+  flex: 0 0 auto;
   width: 60px;
   height: 60px;
-  background: linear-gradient(135deg, rgba(0,0,0,0.6), rgba(0,0,0,0.3));
   border: 2px solid #fff;
   border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s ease;
-  margin-left: -16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  overflow: hidden;
+  scroll-snap-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border 0.2s ease;
 }
 
-.more-photos:hover {
-  background: linear-gradient(135deg, rgba(0,0,0,0.8), rgba(0,0,0,0.6));
+.photo-thumbnails .thumbnail:first-child { margin-left: -8px; }
+.photo-thumbnails .thumbnail:last-child { margin-right: -8px; }
+
+.photo-thumbnails .thumbnail:hover,
+.photo-thumbnails .thumbnail:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+}
+
+.photo-thumbnails .thumbnail:focus-visible { outline: 2px solid #fff; }
+
+.photo-thumbnails .thumbnail.active {
+  border: 3px solid var(--accent-color, #3b82f6);
+  transform: scale(1.02);
 }
 
 .photo-actions {
@@ -2086,12 +2098,19 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 /* Video and Image consistent styling */
 .photo-main img, .photo-main video,
-.photo-thumbnails img, .photo-thumbnails video,
 .media-tile {
   display:block;
   width:100%;
   object-fit:contain;
   border-radius:12px;
+}
+
+.photo-thumbnails img, .photo-thumbnails video {
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  border-radius:8px;
 }
 
 /* Videos in stacks are disabled from playing - no controls or interaction */

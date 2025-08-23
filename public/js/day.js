@@ -11,6 +11,8 @@ if (!daySlug) {
 
 let dayData = null;
 let map = null;
+let mainWrap = null;
+let thumbStrip = null;
 
 // ---------- media helpers ----------
 function isVideo(item) {
@@ -311,37 +313,40 @@ function renderPhotoPost() {
   `;
   container.innerHTML = headerHtml;
 
-  // Main media
-  const mainWrap = document.getElementById('photo-main');
-  const mainEl = renderMediaEl(main, { withControls: isVideo(main), className: 'photo-main-media' });
-  mainWrap.appendChild(mainEl);
+  // Main media container
+  mainWrap = document.getElementById('photo-main');
 
   // Thumbnails overlay
   if (items.length > 1) {
-    const thumbs = document.createElement('div');
-    thumbs.id = 'photo-thumbs';
-    thumbs.className = 'photo-thumbnails';
-    mainWrap.appendChild(thumbs);
-    const thumbItems = items.slice(1, 5);
-    thumbItems.forEach((it, idx) => {
-      const el = renderMediaEl(it, { withControls: false, className: 'thumbnail' });
-      el.addEventListener('click', () => openLightbox(idx + 1));
-      thumbs.appendChild(el);
+    const strip = document.createElement('div');
+    strip.id = 'photo-thumbs';
+    strip.className = 'photo-thumbnails';
+    mainWrap.appendChild(strip);
+    thumbStrip = strip;
+
+    items.forEach((it, idx) => {
+      const el = renderMediaEl(it, { withControls: false, className: 'thumbnail', useThumb: true });
+      el.tabIndex = 0;
+      el.addEventListener('click', () => { showMainPhoto(idx); openLightbox(idx); });
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          showMainPhoto(idx);
+          openLightbox(idx);
+        }
+      });
+      strip.appendChild(el);
     });
-    if (items.length > 5) {
-      const more = document.createElement('div');
-      more.className = 'more-photos';
-      more.textContent = `+${items.length - 5}`;
-      more.addEventListener('click', () => openLightbox(5));
-      thumbs.appendChild(more);
-    }
+
+    strip.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        strip.scrollBy({ left: e.deltaY, behavior: 'smooth' });
+        e.preventDefault();
+      }
+    });
   }
 
-  // Click to open lightbox for images; videos keep controls/play
-  if (!isVideo(main)) {
-    mainEl.style.cursor = 'zoom-in';
-    mainEl.addEventListener('click', () => openLightbox(0));
-  }
+  showMainPhoto(0);
 
   // Captions
   const captionWrap = document.getElementById('photo-caption-container');
@@ -356,6 +361,29 @@ function renderPhotoPost() {
     c.className = 'photo-caption';
     c.textContent = main.caption;
     captionWrap.appendChild(c);
+  }
+}
+
+function showMainPhoto(index) {
+  if (!dayData?.photos?.length || !mainWrap) return;
+  currentPhotoIndex = Math.max(0, Math.min(index, dayData.photos.length - 1));
+  const item = dayData.photos[currentPhotoIndex];
+  const newEl = renderMediaEl(item, { withControls: isVideo(item), className: 'photo-main-media' });
+  const old = mainWrap.querySelector('.photo-main-media');
+  if (old) {
+    mainWrap.replaceChild(newEl, old);
+  } else {
+    mainWrap.appendChild(newEl);
+  }
+  if (!isVideo(item)) {
+    newEl.style.cursor = 'zoom-in';
+    newEl.addEventListener('click', () => openLightbox(currentPhotoIndex));
+  }
+  if (thumbStrip) {
+    const thumbs = thumbStrip.querySelectorAll('.thumbnail');
+    thumbs.forEach((t, i) => t.classList.toggle('active', i === currentPhotoIndex));
+    const active = thumbs[currentPhotoIndex];
+    if (active) active.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   }
 }
 
@@ -383,6 +411,7 @@ function openLightbox(index = 0) {
 
   currentPhotoIndex = Math.max(0, Math.min(index, dayData.photos.length - 1));
   const item = dayData.photos[currentPhotoIndex];
+  showMainPhoto(currentPhotoIndex);
 
   console.log('🔍 Opening lightbox for photo:', item);
 
