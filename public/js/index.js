@@ -467,9 +467,13 @@ function renderFeed(){
         <div class="discussion-thread">
           <div class="thread-header">
             <button class="thread-toggle" type="button" aria-expanded="false">
-              <span class="thread-count">View 0 comments</span>
-          </button>
-      </div>
+              <span class="thread-count">View 0 comments ▾</span>
+            </button>
+            <div class="thread-sort segmented" hidden>
+              <button type="button" data-sort="newest" aria-pressed="true">Newest</button>
+              <button type="button" data-sort="oldest" aria-pressed="false">Oldest</button>
+            </div>
+          </div>
 
           <div class="thread-container" style="display: none;">
             <div class="thread-empty" style="display: none;">
@@ -651,7 +655,8 @@ function initDiscussionState(stackId) {
       comments: [],
       expanded: false,
       manuallyCollapsed: false,
-      activeReplyComposer: null
+      activeReplyComposer: null,
+      sort: 'newest'
     });
   }
   return discussionState.get(stackId);
@@ -739,7 +744,13 @@ function updateThreadCount(stackId, block) {
   const state = discussionState.get(stackId);
   const threadCount = block.querySelector('.thread-count');
   const threadToggle = block.querySelector('.thread-toggle');
+  const sortControl = block.querySelector('.thread-sort');
   const totalComments = state ? countTotalComments(state.comments) : 0;
+
+  if (sortControl) {
+    sortControl.hidden = !(state && state.expanded);
+    if (state) updateSortButtons(stackId, block);
+  }
   
   if (totalComments === 0) {
     threadCount.textContent = 'Add a comment';
@@ -765,6 +776,16 @@ function updateThreadCount(stackId, block) {
       threadToggle.classList.remove('expanded');
     }
   }
+}
+
+// Update active state of sort buttons
+function updateSortButtons(stackId, block) {
+  const state = discussionState.get(stackId);
+  const sortControl = block.querySelector('.thread-sort');
+  if (!state || !sortControl) return;
+  sortControl.querySelectorAll('button').forEach(btn => {
+    btn.setAttribute('aria-pressed', btn.dataset.sort === state.sort);
+  });
 }
 
 // Count total comments including replies (recursive for unlimited depth)
@@ -799,10 +820,11 @@ function bindLikeInteractions(stackId, block) {
 // Bind discussion thread interactions
 function bindDiscussionThread(stackId, block) {
   const state = initDiscussionState(stackId);
-  
+
   // Thread toggle
   const threadToggle = block.querySelector('.thread-toggle');
   const threadContainer = block.querySelector('.thread-container');
+  const sortControl = block.querySelector('.thread-sort');
   
   if (!threadToggle || !threadContainer) {
     console.error('❌ Missing required thread elements for stack:', stackId);
@@ -827,6 +849,23 @@ function bindDiscussionThread(stackId, block) {
     // Update the thread count text based on new state
     updateThreadCount(stackId, block);
   });
+
+  // Sort control
+  if (sortControl) {
+    sortControl.addEventListener('click', (e) => {
+      if (e.target.tagName === 'BUTTON') {
+        const sort = e.target.dataset.sort;
+        if (sort && state.sort !== sort) {
+          state.sort = sort;
+          updateSortButtons(stackId, block);
+          renderThreadedComments(stackId, block);
+        }
+      }
+    });
+
+    // Initialize sort buttons
+    updateSortButtons(stackId, block);
+  }
   
   // Main comment composer
   bindCommentComposer(stackId, block);
@@ -955,8 +994,12 @@ function renderThreadedComments(stackId, block) {
   
   emptyState.style.display = 'none';
   
-  // Display comments in chronological order (newest first)
-  const sortedComments = [...state.comments].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  // Display comments based on selected sort order
+  const sortedComments = [...state.comments].sort((a, b) => {
+    return state.sort === 'newest'
+      ? new Date(b.timestamp) - new Date(a.timestamp)
+      : new Date(a.timestamp) - new Date(b.timestamp);
+  });
   
   // Render each comment thread with staggered animation
   sortedComments.forEach((comment, index) => {

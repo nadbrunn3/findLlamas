@@ -719,6 +719,9 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 /* Thread Header */
 .thread-header {
   margin-bottom: .5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .thread-toggle {
@@ -749,7 +752,10 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   cursor: pointer;
 }
 
-/* Sort options removed */
+/* Sort segmented control */
+.segmented{display:inline-flex;border:1px solid rgba(255,255,255,.12);border-radius:999px;overflow:hidden}
+.segmented button{background:transparent;color:#9aa3b2;padding:6px 12px;border:0;font-weight:700;cursor:pointer}
+.segmented button[aria-pressed="true"]{background:#3b82f6;color:#fff}
 
 /* Thread Container - Completely flat, seamless with page */
 .thread-container {
