@@ -193,6 +193,17 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 /* ===== MEDIA CONTAINER ===== */
 .stack-photo-area, .stack-media-container, .card-media{position:relative;background:transparent}
 .stack-main-photo, .card-media img.main-photo{width:100%;height:auto;display:block;cursor:default;transition:transform .18s ease;object-fit:cover;max-height:35vh !important;border-radius:0}
+
+/* Ensure videos in stacks are displayed properly */
+.stack-main-photo video,
+video.stack-main-photo {
+  width: 100% !important;
+  height: auto !important;
+  display: block !important;
+  object-fit: cover !important;
+  max-height: 35vh !important;
+  border-radius: 0;
+}
 .stack-main-photo:hover, .card-media img.main-photo:hover{transform:none}
 .media-gradient::after{content:"";position:absolute;left:0;right:0;bottom:0;height:96px;background:linear-gradient(to top,rgba(0,0,0,.35),transparent);pointer-events:none}
 
@@ -265,13 +276,30 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   transition: outline 0.2s ease; /* smooth transition when switching active thumbnails */
 }
 
+/* Video thumbnails styling */
+.drawer-thumbnail video,
+video.drawer-thumbnail {
+  width: 50px !important;
+  height: 38px !important;
+  object-fit: cover !important;
+  border-radius: 4px;
+  display: block !important;
+}
+
 @media (max-width: 768px) { 
   .thumbnail,
   .drawer-thumbnail { 
     width: 64px; 
     height: 48px; 
     border-radius: 6px; 
-  } 
+  }
+  
+  .drawer-thumbnail video,
+  video.drawer-thumbnail {
+    width: 64px !important;
+    height: 48px !important;
+  }
+  
   .stack-thumbnail-drawer { 
     margin: 8px 12px 0; 
   }
@@ -2285,9 +2313,35 @@ input[placeholder*="comment" i]::placeholder,
   border-radius:12px;
 }
 
-/* Videos in stacks are disabled from playing - no controls or interaction */
+/* Video play overlay styling */
+.video-play-overlay {
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: auto;
+}
+
+.video-play-overlay:hover {
+  background: rgba(255,255,255,0.95) !important;
+  transform: translate(-50%, -50%) scale(1.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* Ensure video wrapper maintains proper sizing */
+.stack-main-photo > div {
+  width: 100% !important;
+  max-height: 35vh !important;
+  overflow: hidden;
+}
+
+.stack-cover-media > div {
+  width: 100% !important;
+  max-height: 28vh !important;
+  overflow: hidden;
+}
+
+/* Videos in stacks are now playable with custom controls */
 .stack-main-photo video {
-  pointer-events: none;
+  pointer-events: auto;
   background: #000;
 }
 

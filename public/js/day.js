@@ -14,7 +14,18 @@ let map = null;
 
 // ---------- media helpers ----------
 function isVideo(item) {
-  return item?.kind === 'video' || (item?.mimeType || '').startsWith('video/');
+  const mt = (item?.mimeType || '').toLowerCase();
+  const url = (item?.url || '').toLowerCase();
+  const caption = (item?.caption || '').toLowerCase();
+  const title = (item?.title || '').toLowerCase();
+  const k = (item?.kind || '').toLowerCase();
+  return (
+    k === 'video' ||
+    mt.startsWith('video/') ||
+    /\.(mp4|webm|mov|m4v)$/i.test(url) ||
+    /\.(mp4|webm|mov|m4v)$/i.test(caption) ||
+    /\.(mp4|webm|mov|m4v)$/i.test(title)
+  );
 }
 
 function renderMediaEl(item, { withControls = false, className = 'media-tile', useThumb = false } = {}) {
@@ -28,6 +39,44 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
     v.controls = !!withControls;
     v.setAttribute('preload', 'metadata');
     v.className = className;
+    
+    // Add simple play button overlay for stack cover videos
+    if (className.includes('stack-cover-media')) {
+      // Add play button overlay
+      const playOverlay = document.createElement('div');
+      playOverlay.className = 'video-play-overlay';
+      playOverlay.innerHTML = '▶';
+      playOverlay.style.cssText = `
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(255,255,255,0.8);
+        color: #000;
+        border-radius: 50%;
+        width: 45px;
+        height: 45px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        cursor: pointer;
+        transition: all 0.3s;
+        z-index: 10;
+        border: 2px solid rgba(255,255,255,0.9);
+      `;
+      
+      // Create wrapper for video + overlay
+      const wrapper = document.createElement('div');
+      wrapper.style.position = 'relative';
+      wrapper.style.display = 'inline-block';
+      wrapper.style.width = '100%';
+      wrapper.appendChild(v);
+      wrapper.appendChild(playOverlay);
+      
+      return wrapper;
+    }
+    
     return v;
   } else {
     const img = document.createElement('img');

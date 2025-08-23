@@ -139,12 +139,34 @@ window.fetchPhotoInteractions = fetchPhotoInteractions;
 function isVideo(item) {
   const mt = (item?.mimeType || '').toLowerCase();
   const url = (item?.url || '').toLowerCase();
+  const caption = (item?.caption || '').toLowerCase();
+  const title = (item?.title || '').toLowerCase();
   const k = (item?.kind || '').toLowerCase();
-  return (
+  
+  const result = (
     k === 'video' ||
     mt.startsWith('video/') ||
-    /\.(mp4|webm|mov|m4v)$/i.test(url)
+    /\.(mp4|webm|mov|m4v)$/i.test(url) ||
+    /\.(mp4|webm|mov|m4v)$/i.test(caption) ||
+    /\.(mp4|webm|mov|m4v)$/i.test(title)
   );
+  
+  // Debug logging for video detection
+  if (result) {
+    console.log('🎬 Video detected:', {
+      url: item.url,
+      caption: item.caption,
+      title: item.title,
+      mimeType: item.mimeType,
+      kind: item.kind,
+      detectedBy: k === 'video' ? 'kind' : 
+                  mt.startsWith('video/') ? 'mimeType' : 
+                  /\.(mp4|webm|mov|m4v)$/i.test(url) ? 'url' :
+                  /\.(mp4|webm|mov|m4v)$/i.test(caption) ? 'caption' : 'title'
+    });
+  }
+  
+  return result;
 }
 
 function renderMediaEl(item, { withControls = false, className = '', useThumb = false } = {}) {
@@ -159,6 +181,60 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
     v.controls = !!withControls;
     v.setAttribute('preload', 'metadata');
     if (className) v.className = className;
+    
+    // Add simple play button overlay for stack videos
+    if (className.includes('stack-main-photo')) {
+      // Add play button overlay
+      const playOverlay = document.createElement('div');
+      playOverlay.className = 'video-play-overlay';
+      playOverlay.innerHTML = '▶';
+      playOverlay.style.cssText = `
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(255,255,255,0.8);
+        color: #000;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        cursor: pointer;
+        transition: all 0.3s;
+        z-index: 10;
+        border: 2px solid rgba(255,255,255,0.9);
+      `;
+      
+      // Create wrapper for video + overlay
+      const wrapper = document.createElement('div');
+      wrapper.style.position = 'relative';
+      wrapper.style.display = 'inline-block';
+      wrapper.style.width = '100%';
+      wrapper.appendChild(v);
+      wrapper.appendChild(playOverlay);
+      
+      // Debug logging
+      console.log('🎥 Creating video with play overlay:', {
+        url: item.url,
+        thumb: item.thumb,
+        className: className,
+        withControls: withControls
+      });
+      
+      return wrapper;
+    }
+    
+    // Debug logging for non-stack videos
+    console.log('🎥 Creating video element:', {
+      url: item.url,
+      thumb: item.thumb,
+      className: className,
+      withControls: withControls
+    });
+    
     return v;
   }
   // Photo - use full resolution by default, thumbnail only when explicitly requested
@@ -541,10 +617,15 @@ function renderFeed(){
       });
       mainContainer.appendChild(mainEl);
 
-      // All media (photos and videos) open in lightbox when clicked
-      // Videos do not play inline in stacks
-      mainEl.style.cursor = 'zoom-in';
-      mainEl.addEventListener('click', () => openLightboxForStack(stack, current));
+      // All media opens in lightbox when clicked
+      if (!isVideo(mainPhoto)) {
+        mainEl.style.cursor = 'zoom-in';
+        mainEl.addEventListener('click', () => openLightboxForStack(stack, current));
+      } else {
+        // For videos, clicking the play button or video opens lightbox
+        mainEl.style.cursor = 'pointer';
+        mainEl.addEventListener('click', () => openLightboxForStack(stack, current));
+      }
       
       // Caption removed - never display picture names
       

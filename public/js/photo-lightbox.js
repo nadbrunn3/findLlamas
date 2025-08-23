@@ -6,8 +6,16 @@ function likeKey(kind, id){ return `liked:${kind}:${id}`; }
 function isVideo(item){
   const mt = (item?.mimeType || '').toLowerCase();
   const url = (item?.url || '').toLowerCase();
+  const caption = (item?.caption || '').toLowerCase();
+  const title = (item?.title || '').toLowerCase();
   const k = (item?.kind || '').toLowerCase();
-  return k === 'video' || mt.startsWith('video/') || /\.(mp4|webm|mov|m4v)$/i.test(url);
+  return (
+    k === 'video' || 
+    mt.startsWith('video/') || 
+    /\.(mp4|webm|mov|m4v)$/i.test(url) ||
+    /\.(mp4|webm|mov|m4v)$/i.test(caption) ||
+    /\.(mp4|webm|mov|m4v)$/i.test(title)
+  );
 }
 
 function renderLbComment(c){
