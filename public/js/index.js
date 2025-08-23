@@ -465,7 +465,6 @@ function renderFeed(){
       <div class="stack-card-header">
         ${stack.title ? `<h2 class="stack-card-title">${escapeHtml(stack.title)}</h2>` : ''}
         <div class="stack-location-time">${stack.location.label} • ${t}</div>
-        ${hasNew ? '<span class="new-photo-bell" aria-label="New photos">🔔</span>' : ''}
       </div>
       <div class="stack-desc-container-main" data-stack-id="${stack.id}"></div>
 
