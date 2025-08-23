@@ -591,8 +591,6 @@ async function loadThreadedDiscussion(stackId, block, mediaActionsBlock = null) 
     const res = await fetch(`${getApiBase()}/api/stack/${stackId}/interactions`);
     const data = await res.json();
     
-    console.log(`Loading discussion for ${stackId}:`, data.comments?.length, 'comments');
-    
     // Update like count in media actions area
     if (mediaActionsBlock) {
       const likeCountEl = mediaActionsBlock.querySelector('.like-pill .count');
@@ -604,13 +602,6 @@ async function loadThreadedDiscussion(stackId, block, mediaActionsBlock = null) 
     
     // Process comments into threaded structure
     state.comments = processCommentsIntoThreads(data.comments || []);
-    
-    console.log(`Processed into ${state.comments.length} threaded comments for ${stackId}`);
-    state.comments.forEach(comment => {
-      if (comment.replies?.length > 0) {
-        console.log(`- Comment "${comment.text}" has ${comment.replies.length} replies`);
-      }
-    });
     
     // Update thread count
     updateThreadCount(stackId, block);
@@ -625,12 +616,10 @@ async function loadThreadedDiscussion(stackId, block, mediaActionsBlock = null) 
         threadContainer.style.display = 'block';
         threadToggle.setAttribute('aria-expanded', 'true');
       }
-      console.log(`Auto-expanding comments for ${stackId}`);
     }
     
     // Render if expanded
     if (state.expanded) {
-      console.log(`Rendering ${state.comments.length} comments for ${stackId}`);
       renderThreadedComments(stackId, block);
     }
   } catch(e) {
@@ -645,24 +634,25 @@ async function loadThreadedDiscussion(stackId, block, mediaActionsBlock = null) 
   }
 }
 
-// Process flat comments into threaded structure
+// Process flat comments into nested threaded structure (unlimited depth)
 function processCommentsIntoThreads(comments) {
   const threaded = [];
   const commentMap = new Map();
   
-  // First pass: create map of all comments
+  // First pass: create map of all comments with empty replies array
   comments.forEach(c => {
     commentMap.set(c.id, { ...c, replies: [] });
   });
   
-  // Second pass: organize into threads
+  // Second pass: build the tree structure
   comments.forEach(c => {
     const comment = commentMap.get(c.id);
     if (c.parentId && commentMap.has(c.parentId)) {
-      // It's a reply
-      commentMap.get(c.parentId).replies.push(comment);
+      // It's a reply - add to parent's replies array
+      const parent = commentMap.get(c.parentId);
+      parent.replies.push(comment);
     } else {
-      // It's a top-level comment
+      // It's a top-level comment - add to root
       threaded.push(comment);
     }
   });
@@ -703,11 +693,28 @@ function updateThreadCount(stackId, block) {
   }
 }
 
-// Count total comments including replies
+// Count total comments including replies (recursive for unlimited depth)
 function countTotalComments(comments) {
   return comments.reduce((total, comment) => {
-    return total + 1 + countTotalComments(comment.replies || []);
+    // Count this comment + all its nested replies
+    const repliesCount = comment.replies ? countTotalComments(comment.replies) : 0;
+    return total + 1 + repliesCount;
   }, 0);
+}
+
+// Helper function to analyze comment depth distribution
+function analyzeCommentDepths(comments, depth = 0) {
+  const depths = {};
+  comments.forEach(comment => {
+    depths[depth] = (depths[depth] || 0) + 1;
+    if (comment.replies && comment.replies.length > 0) {
+      const childDepths = analyzeCommentDepths(comment.replies, depth + 1);
+      Object.keys(childDepths).forEach(d => {
+        depths[d] = (depths[d] || 0) + childDepths[d];
+      });
+    }
+  });
+  return depths;
 }
 
 // Bind like interactions (simplified from old system)
@@ -899,6 +906,12 @@ function renderCommentThread(comment, container, stackId, depth = 0) {
   const li = document.createElement('li');
   li.className = `comment${isReply ? ' reply' : ''}`;
   li.dataset.commentId = comment.id;
+  li.dataset.depth = depth; // Track nesting depth for styling
+  
+  // Add CSS custom property for dynamic indentation
+  if (isReply) {
+    li.style.setProperty('--reply-depth', depth);
+  }
   
   // Get user initials for avatar
   const initials = (comment.author || 'A').trim().split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
@@ -915,9 +928,9 @@ function renderCommentThread(comment, container, stackId, depth = 0) {
         <time class="time" datetime="${comment.timestamp}" title="${fullTimestamp}">${timeAgo}</time>
       </div>
       <div class="body">${escapeHtml(comment.text || '').replace(/\n/g, '<br>')}</div>
-      ${!isReply ? `<div class="actions">
+      <div class="actions">
         <button class="reply" type="button">Reply</button>
-      </div>` : ''}
+      </div>
       <form class="reply-composer" hidden>
         <div class="reply-chip">
           <span>Replying to <strong class="reply-target">${escapeHtml(comment.author || 'Anonymous')}</strong></span>
@@ -934,32 +947,139 @@ function renderCommentThread(comment, container, stackId, depth = 0) {
   
   container.appendChild(li);
   
-  // Bind reply action if it's a parent comment
-  if (!isReply) {
-    const replyBtn = li.querySelector('.reply');
-    if (replyBtn) {
-      replyBtn.addEventListener('click', () => {
-        showInlineReplyComposer(stackId, comment.id, li);
-      });
-    }
+  // Add has-replies class if this comment has replies
+  if (comment.replies && comment.replies.length > 0) {
+    li.classList.add('has-replies');
   }
   
-  // Render replies (only for parent comments) - always show as threaded
-  if (!isReply && comment.replies && comment.replies.length > 0) {
+  // Bind reply action for all comments (parent and replies)
+  const replyBtn = li.querySelector('.reply');
+  if (replyBtn) {
+    replyBtn.addEventListener('click', () => {
+      showInlineReplyComposer(stackId, comment.id, li);
+    });
+  }
+  
+  // Render replies for all comments (unlimited nesting)
+  if (comment.replies && comment.replies.length > 0) {
     // Sort replies chronologically (oldest first for natural conversation flow)
     const sortedReplies = [...comment.replies].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     
-    // Show all replies by default
-    sortedReplies.forEach((reply, index) => {
-      renderCommentThread(reply, container, stackId, depth + 1);
+    // Collapse if more than 3 replies (only for top-level comments)
+    const shouldCollapse = depth === 0 && sortedReplies.length > 3;
+    const visibleReplies = shouldCollapse ? sortedReplies.slice(0, 3) : sortedReplies;
+    const hiddenReplies = shouldCollapse ? sortedReplies.slice(3) : [];
+    
+    // Create a container for replies to help with thread line positioning
+    const repliesContainer = document.createElement('div');
+    repliesContainer.className = 'replies-container';
+    repliesContainer.style.position = 'relative';
+    
+    // Render visible replies
+    visibleReplies.forEach((reply, index) => {
+      renderCommentThread(reply, repliesContainer, stackId, depth + 1);
       
       // Add slight staggered delay for replies
-      const replyElements = container.querySelectorAll('.comment.reply');
+      const replyElements = repliesContainer.querySelectorAll('.comment.reply');
       const lastReply = replyElements[replyElements.length - 1];
       if (lastReply) {
         lastReply.style.animationDelay = `${0.1 + (index * 0.03)}s`;
       }
     });
+    
+    // Add vertical thread line if we have replies
+    if (visibleReplies.length > 0) {
+      const threadLine = document.createElement('div');
+      threadLine.className = 'thread-line';
+      // Calculate height to span all visible replies
+      const firstReply = repliesContainer.querySelector('.comment.reply');
+      const lastVisibleReply = repliesContainer.querySelectorAll('.comment.reply');
+      if (firstReply && lastVisibleReply.length > 0) {
+        // Set height to cover from start to end of replies
+        threadLine.style.height = '100%';
+      }
+      repliesContainer.style.position = 'relative';
+      repliesContainer.prepend(threadLine);
+    }
+    
+    container.appendChild(repliesContainer);
+    
+    // Add "View more replies" button if collapsed
+    if (shouldCollapse) {
+      const expandBtn = document.createElement('button');
+      expandBtn.className = 'expand-replies';
+      expandBtn.type = 'button';
+      expandBtn.innerHTML = `View ${hiddenReplies.length} more ${hiddenReplies.length === 1 ? 'reply' : 'replies'}`;
+      expandBtn.dataset.commentId = comment.id;
+      
+      const expandContainer = document.createElement('div');
+      expandContainer.className = 'expand-replies-container';
+      // Calculate indentation based on current depth
+      const baseIndent = depth > 0 ? 2.5 : 3.5;
+      const depthIndent = depth > 1 ? (depth - 1) * 1.5 : 0;
+      expandContainer.style.marginLeft = `${baseIndent + depthIndent}rem`;
+      expandContainer.appendChild(expandBtn);
+      container.appendChild(expandContainer);
+      
+      // Bind expand functionality
+      expandBtn.addEventListener('click', () => {
+        // Remove the expand button
+        expandContainer.remove();
+        
+        // Render hidden replies in the existing replies container
+        const existingRepliesContainer = container.querySelector('.replies-container');
+        hiddenReplies.forEach((reply, index) => {
+          renderCommentThread(reply, existingRepliesContainer, stackId, depth + 1);
+          
+          // Add slight staggered delay for newly visible replies
+          const replyElements = existingRepliesContainer.querySelectorAll('.comment.reply');
+          const lastReply = replyElements[replyElements.length - 1];
+          if (lastReply) {
+            lastReply.style.animationDelay = `${0.1 + ((visibleReplies.length + index) * 0.03)}s`;
+          }
+        });
+        
+        // Update the thread line height to cover all replies now
+        const threadLine = existingRepliesContainer.querySelector('.thread-line');
+        if (threadLine) {
+          threadLine.style.height = '100%';
+        }
+        
+        // Add collapse button
+        const collapseBtn = document.createElement('button');
+        collapseBtn.className = 'collapse-replies';
+        collapseBtn.type = 'button';
+        collapseBtn.innerHTML = 'Show fewer replies';
+        collapseBtn.dataset.commentId = comment.id;
+        
+        const collapseContainer = document.createElement('div');
+        collapseContainer.className = 'collapse-replies-container';
+        // Use same indentation calculation as expand button
+        collapseContainer.style.marginLeft = `${baseIndent + depthIndent}rem`;
+        collapseContainer.appendChild(collapseBtn);
+        container.appendChild(collapseContainer);
+        
+        // Bind collapse functionality
+        collapseBtn.addEventListener('click', () => {
+          // Remove hidden replies and collapse button
+          const existingRepliesContainer = container.querySelector('.replies-container');
+          hiddenReplies.forEach(reply => {
+            const replyElement = existingRepliesContainer.querySelector(`[data-comment-id="${reply.id}"]`);
+            if (replyElement) replyElement.remove();
+          });
+          collapseContainer.remove();
+          
+          // Update thread line height
+          const threadLine = existingRepliesContainer.querySelector('.thread-line');
+          if (threadLine) {
+            threadLine.style.height = '100%';
+          }
+          
+          // Re-add expand button
+          container.appendChild(expandContainer);
+        });
+      });
+    }
   }
 }
 
@@ -1055,7 +1175,6 @@ function bindReplyComposer(stackId, composer, parentCommentId) {
       
       if (res.ok) {
         const result = await res.json();
-        console.log('Reply posted successfully:', result.comment);
         
         // Close composer first
         closeReplyComposer(composer);
