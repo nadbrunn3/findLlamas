@@ -29,7 +29,12 @@ async function reverseGeocode(lat, lon) {
     const res = await fetch(url);
     if (res.ok) {
       const data = await res.json();
-      const name = data.display_name || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+      const addr = data.address || {};
+      const city = addr.city || addr.town || addr.village || addr.hamlet;
+      const region = addr.state || addr.region || addr.province || addr.state_district;
+      const country = addr.country;
+      const nameParts = [region, city, country].filter(Boolean);
+      const name = nameParts.length ? nameParts.join(', ') : `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
       geocodeCache[key] = name;
       localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(geocodeCache));
       return name;
