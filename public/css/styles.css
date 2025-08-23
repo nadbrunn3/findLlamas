@@ -417,7 +417,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .section-content.collapsed{max-height:0;opacity:0}
 .stack-comments{padding:16px;border-top:1px solid var(--border);background:#fafbfc}
 .comment-composer{display:flex;gap:8px;align-items:flex-end;margin-bottom:12px}
-.comment-input{flex:1;background:#fff;border:1px solid var(--border);color:#000;padding:8px 12px;border-radius:8px;font-size:14px;resize:vertical;min-height:40px;font-family:inherit}
+.comment-input{flex:1;background:#fff;border:1px solid var(--border);color:#111827 !important;padding:8px 12px;border-radius:8px;font-size:14px;resize:vertical;min-height:40px;font-family:inherit}
 .comment-input::placeholder{color:#999}
 .comment-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(139,184,255,.1)}
 .comment-submit{background:var(--accent);border:none;color:#fff;padding:8px 16px;border-radius:8px;cursor:pointer;transition:all .2s ease;font-size:14px;font-weight:500}
@@ -616,7 +616,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .stack-comments .comment-text { margin:.15rem 0; }
 .stack-comments .comment-time { font-size:.75rem; opacity:.6; }
 .stack-comments .comment-composer { display:flex; gap:.5rem; }
-.stack-comments .comment-input { flex:1; border:1px solid #e5e7eb; border-radius:8px; padding:.5rem .6rem; background:#fff; color:#000 !important;}
+.stack-comments .comment-input { flex:1; border:1px solid #e5e7eb; border-radius:8px; padding:.5rem .6rem; background:#fff; color:#111827 !important;}
 .stack-comments .comment-submit { border:1px solid #8bb8ff; color:#2b6cb0; background: #547dc9; border-radius:8px; padding:.45rem .8rem; }
 
 /* lightbox shell */
@@ -1789,7 +1789,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .comment-input{
   width:100%; border:1px solid rgba(255,255,255,.12);
   background: rgba(255,255,255,.06);
-  color:#132a59; border-radius: 12px; padding:.6rem .75rem;
+  color:#111827 !important; border-radius: 12px; padding:.6rem .75rem;
   font-size:.95rem;
 }
 .comment-input::placeholder{ color:#9aa3af; }
@@ -1814,7 +1814,63 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   }
   .comment-bubble{ background:#f9fafb; border-color:#e5e7eb; }
   .comment-text{ color:#1f2937; }
-  .comment-input{ background:#fff; border-color:#e5e7eb; color:#111827; }
+  .comment-input{ background:#fff !important; border-color:#e5e7eb; color:#111827 !important; }
+}
+
+/* UNIVERSAL COMMENT INPUT FIX - targets all possible comment inputs */
+.comment-input,
+#comment-input,
+textarea[name="text"],
+textarea[placeholder*="comment" i],
+input[placeholder*="comment" i],
+.comment-composer textarea,
+.comment-composer input,
+.lb-input,
+.reply-composer textarea {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+.comment-input::placeholder,
+#comment-input::placeholder,
+textarea[name="text"]::placeholder,
+textarea[placeholder*="comment" i]::placeholder,
+input[placeholder*="comment" i]::placeholder,
+.comment-composer textarea::placeholder,
+.comment-composer input::placeholder,
+.lb-input::placeholder,
+.reply-composer textarea::placeholder {
+  color: #6b7280 !important;
+}
+
+/* Dark mode override */
+@media (prefers-color-scheme: dark) {
+  .comment-input,
+  #comment-input,
+  textarea[name="text"],
+  textarea[placeholder*="comment" i],
+  input[placeholder*="comment" i],
+  .comment-composer textarea,
+  .comment-composer input,
+  .lb-input,
+  .reply-composer textarea {
+    background: #374151 !important;
+    color: #f9fafb !important;
+    border: 1px solid #4b5563 !important;
+  }
+
+  .comment-input::placeholder,
+  #comment-input::placeholder,
+  textarea[name="text"]::placeholder,
+  textarea[placeholder*="comment" i]::placeholder,
+  input[placeholder*="comment" i]::placeholder,
+  .comment-composer textarea::placeholder,
+  .comment-composer input::placeholder,
+  .lb-input::placeholder,
+  .reply-composer textarea::placeholder {
+    color: #9ca3af !important;
+  }
 }
 
 /* small screens */
