@@ -414,13 +414,7 @@ function renderFeed(){
       mainEl.style.cursor = 'zoom-in';
       mainEl.addEventListener('click', () => openLightboxForStack(stack, current));
       
-      // Add captions
-      if (mainPhoto.title) {
-        const t = document.createElement('p');
-        t.className = 'photo-title';
-        t.textContent = mainPhoto.title;
-        mainContainer.appendChild(t);
-      }
+      // Add caption if available
       if (mainPhoto.caption) {
         const c = document.createElement('p');
         c.className = 'photo-caption';
