@@ -423,7 +423,15 @@ function renderFeed(){
   host.innerHTML = "";
   const seenCounts = JSON.parse(localStorage.getItem("stackPhotoCounts") || "{}");
   const newCounts = {};
-  photoStacks.forEach((stack,i)=>{
+  
+  // Sort stacks by newest photo timestamp (newest stacks first)
+  const sortedStacks = [...photoStacks].sort((a, b) => {
+    const aNewest = Math.max(...a.photos.map(p => p.ts || 0));
+    const bNewest = Math.max(...b.photos.map(p => p.ts || 0));
+    return bNewest - aNewest;
+  });
+  
+  sortedStacks.forEach((stack,i)=>{
     newCounts[stack.id] = stack.photos.length;
     const hasNew = stack.photos.length > (seenCounts[stack.id] || 0);
     const card = document.createElement("div");
@@ -523,7 +531,13 @@ function renderFeed(){
       mainEl.style.cursor = 'zoom-in';
       mainEl.addEventListener('click', () => openLightboxForStack(stack, current));
       
-      // Caption removed - no longer displaying picture names
+      // Add caption if available
+      if (mainPhoto.caption) {
+        const c = document.createElement('p');
+        c.className = 'photo-caption';
+        c.textContent = mainPhoto.caption;
+        mainContainer.appendChild(c);
+      }
       
       // Update thumbnail active states
       if (drawer) {

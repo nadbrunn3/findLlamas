@@ -378,8 +378,14 @@ function renderPhotoPost() {
     mainEl.addEventListener('click', () => openLightbox(0));
   }
 
-  // Caption removed - no longer displaying picture names
+  // Caption
   const captionWrap = document.getElementById('photo-caption-container');
+  if (main.caption) {
+    const c = document.createElement('p');
+    c.className = 'photo-caption';
+    c.textContent = main.caption;
+    captionWrap.appendChild(c);
+  }
 }
 
 // Lightbox functionality (image + video)
@@ -461,8 +467,8 @@ function openLightbox(index = 0) {
     titleEl.style.display = item.title ? '' : 'none';
   }
   if (captionEl) {
-    captionEl.textContent = '';
-    captionEl.style.display = 'none';
+    captionEl.textContent = item.caption || item.description || '';
+    captionEl.style.display = (item.caption || item.description) ? '' : 'none';
   }
   if (counterEl) {
     counterEl.textContent = `${currentPhotoIndex + 1} / ${dayData.photos.length}`;

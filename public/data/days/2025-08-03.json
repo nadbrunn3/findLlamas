@@ -1,0 +1,94 @@
+{
+  "date": "2025-08-03",
+  "segment": "day",
+  "slug": "2025-08-03",
+  "title": "Day — 2025-08-03",
+  "stats": {},
+  "polyline": {
+    "type": "LineString",
+    "coordinates": []
+  },
+  "points": [],
+  "photos": [
+    {
+      "id": "41262382-6233-479d-bf04-7811c8db5ad6",
+      "url": "/api/immich/assets/41262382-6233-479d-bf04-7811c8db5ad6/original",
+      "thumb": "/api/immich/assets/41262382-6233-479d-bf04-7811c8db5ad6/thumb",
+      "taken_at": "2025-08-03T13:25:45.986+00:00",
+      "lat": null,
+      "lon": null,
+      "title": "",
+      "caption": "PXL_20250803_132545986.jpg"
+    },
+    {
+      "id": "42750561-14f9-40d7-a362-5e71ac0866d2",
+      "url": "/api/immich/assets/42750561-14f9-40d7-a362-5e71ac0866d2/original",
+      "thumb": "/api/immich/assets/42750561-14f9-40d7-a362-5e71ac0866d2/thumb",
+      "taken_at": "2025-08-03T13:25:58.146+00:00",
+      "lat": null,
+      "lon": null,
+      "title": "",
+      "caption": "PXL_20250803_132558146.jpg"
+    },
+    {
+      "id": "54c2d4e4-28a1-4d96-8fb7-a1aadf884081",
+      "url": "/api/immich/assets/54c2d4e4-28a1-4d96-8fb7-a1aadf884081/original",
+      "thumb": "/api/immich/assets/54c2d4e4-28a1-4d96-8fb7-a1aadf884081/thumb",
+      "taken_at": "2025-08-03T13:25:58.859+00:00",
+      "lat": null,
+      "lon": null,
+      "title": "",
+      "caption": "PXL_20250803_132558859.jpg"
+    },
+    {
+      "id": "3c883c40-d1e1-4880-a68a-93df92cc33f9",
+      "url": "/api/immich/assets/3c883c40-d1e1-4880-a68a-93df92cc33f9/original",
+      "thumb": "/api/immich/assets/3c883c40-d1e1-4880-a68a-93df92cc33f9/thumb",
+      "taken_at": "2025-08-03T13:25:59.971+00:00",
+      "lat": null,
+      "lon": null,
+      "title": "",
+      "caption": "PXL_20250803_132559971.jpg"
+    },
+    {
+      "id": "151b17b2-694f-4ce4-8827-34fcd26ffcb0",
+      "url": "/api/immich/assets/151b17b2-694f-4ce4-8827-34fcd26ffcb0/original",
+      "thumb": "/api/immich/assets/151b17b2-694f-4ce4-8827-34fcd26ffcb0/thumb",
+      "taken_at": "2025-08-03T13:26:01.09+00:00",
+      "lat": null,
+      "lon": null,
+      "title": "",
+      "caption": "PXL_20250803_132601090.jpg"
+    },
+    {
+      "id": "4cdb5461-473d-4cdd-92cf-4ae34f270a38",
+      "url": "/api/immich/assets/4cdb5461-473d-4cdd-92cf-4ae34f270a38/original",
+      "thumb": "/api/immich/assets/4cdb5461-473d-4cdd-92cf-4ae34f270a38/thumb",
+      "taken_at": "2025-08-03T13:26:02.216+00:00",
+      "lat": null,
+      "lon": null,
+      "title": "",
+      "caption": "PXL_20250803_132602216.jpg"
+    },
+    {
+      "id": "ae93f04b-4653-4cf2-9369-d3f1d6f96650",
+      "url": "/api/immich/assets/ae93f04b-4653-4cf2-9369-d3f1d6f96650/original",
+      "thumb": "/api/immich/assets/ae93f04b-4653-4cf2-9369-d3f1d6f96650/thumb",
+      "taken_at": "2025-08-03T13:26:08.666+00:00",
+      "lat": null,
+      "lon": null,
+      "title": "",
+      "caption": "PXL_20250803_132608666.jpg"
+    },
+    {
+      "id": "d60a0873-62c9-43ad-bb48-49728f4e3652",
+      "url": "/api/immich/assets/d60a0873-62c9-43ad-bb48-49728f4e3652/original",
+      "thumb": "/api/immich/assets/d60a0873-62c9-43ad-bb48-49728f4e3652/thumb",
+      "taken_at": "2025-08-03T15:53:35.437+00:00",
+      "lat": null,
+      "lon": null,
+      "title": "",
+      "caption": "PXL_20250803_155335437.jpg"
+    }
+  ]
+}
