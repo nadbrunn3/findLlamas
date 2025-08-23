@@ -84,9 +84,10 @@ async function upsertDayIndex(day) {
 
 // Simple auth guard (for admin-only ops)
 function requireAdmin(req) {
-  if (!ADMIN_TOKEN) return true; // disabled
+  if (!ADMIN_TOKEN) return true; // disabled when no token configured
   const h = req.headers['x-admin-token'] || req.headers['authorization'] || '';
-  return typeof h === 'string' && h.replace(/^Bearer\s+/i, '') === ADMIN_TOKEN;
+  const token = typeof h === 'string' ? h.replace(/^Bearer\s+/i, '') : '';
+  return token === ADMIN_TOKEN;
 }
 
 // ---- Immich helpers ---------------------------------------------------------
@@ -184,83 +185,170 @@ async function getAssetsForDay({ date, albumId }) {
     }
   }
 
-  // 1) Try getting random assets and filter by date (works for your Immich version)
+  // 1) Try timeline bucket API first (fastest approach)
   try {
-    // First, let's get available buckets to see if this date has photos
-    const buckets = await immichFetchJSON('/api/timeline/buckets?size=DAY');
-    const targetBucket = date; // YYYY-MM-DD format
-    const hasBucket = Array.isArray(buckets) && buckets.some(b =>
-      b.timeBucket && b.timeBucket.startsWith(targetBucket)
-    );
-
-    if (!hasBucket) {
-      app.log.info(`No photos found for date ${date} in timeline buckets`);
-      return [];
-    }
-
-    // Get a larger sample of random assets and filter
-    // This is not ideal but works for your Immich version
-    const BATCH_SIZE = 100;
-    const MAX_ATTEMPTS = 5;
-    const found = [];
-
-    for (let attempt = 0; attempt < MAX_ATTEMPTS && found.length < 50; attempt++) {
-      try {
-        const randomAssets = await immichFetchJSON('/api/assets/random?count=' + BATCH_SIZE);
-        const assetsArray = Array.isArray(randomAssets) ? randomAssets : [];
-
-        const dayAssets = assetsArray.filter(a => {
-          const t = a?.exifInfo?.dateTimeOriginal || a?.localDateTime || a?.fileCreatedAt || a?.createdAt;
-          if (!t) return false;
-
-          const ts = new Date(t).getTime();
-          const inRange = !Number.isNaN(ts) && ts >= +start && ts < +end;
-
-          return inRange;
-        });
-
-        // Add unique assets (avoid duplicates)
-        dayAssets.forEach(asset => {
-          if (!found.some(f => f.id === asset.id)) {
-            found.push(asset);
-          }
-        });
-
-        app.log.info(`Attempt ${attempt + 1}: Found ${dayAssets.length} assets for ${date}, total: ${found.length}`);
-      } catch (e) {
-        app.log.warn(`Random assets attempt ${attempt + 1} failed:`, e.message);
-      }
-    }
-
-    if (found.length > 0) {
-      app.log.info(`Successfully found ${found.length} assets for ${date}`);
-      return found.map(mapAssetToPhoto);
-    }
-  } catch (e) {
-    app.log.warn({ msg: 'Timeline buckets check failed', err: String(e) });
-  }
-
-  // 2) Fallback: Try timeline bucket API (may work better in future)
-  try {
-    const bucketData = await immichFetchJSON(`/api/timeline/bucket?size=DAY&timeBucket=${date}`);
-    if (bucketData && bucketData.id && Array.isArray(bucketData.id) && bucketData.id.length > 0) {
-      // Get individual assets by ID
-      const assets = [];
-      for (const assetId of bucketData.id.slice(0, 100)) { // Limit to first 100
+    app.log.info(`Fetching assets for date ${date} using timeline bucket API`);
+    
+    // Try daily bucket first
+    const dailyBucket = await immichFetchJSON(`/api/timeline/bucket?size=DAY&timeBucket=${date}`);
+    if (dailyBucket && dailyBucket.id && Array.isArray(dailyBucket.id) && dailyBucket.id.length > 0) {
+      app.log.info(`Found ${dailyBucket.id.length} assets in daily bucket for ${date}`);
+      
+      // Get all assets by ID in parallel
+      const assetPromises = dailyBucket.id.map(async (assetId) => {
         try {
-          const asset = await immichFetchJSON(`/api/assets/${assetId}`);
-          if (asset) assets.push(asset);
+          return await immichFetchJSON(`/api/assets/${assetId}`);
         } catch (e) {
           app.log.warn(`Failed to fetch asset ${assetId}:`, e.message);
+          return null;
         }
-      }
-      if (assets.length > 0) {
-        app.log.info(`Timeline bucket approach found ${assets.length} assets for ${date}`);
-        return assets.map(mapAssetToPhoto);
+      });
+      
+      const allAssets = (await Promise.all(assetPromises)).filter(Boolean);
+      
+      // Filter by the specific date with strict date matching
+      const dayAssets = allAssets.filter(a => {
+        const t = a?.exifInfo?.dateTimeOriginal || a?.localDateTime || a?.fileCreatedAt || a?.createdAt;
+        if (!t) return false;
+        
+        const ts = new Date(t).getTime();
+        const inRange = !Number.isNaN(ts) && ts >= +start && ts < +end;
+        
+        // Debug logging for the target date
+        if (t.includes(date)) {
+          app.log.info(`Daily bucket - Found asset for ${date}: ${t}, inRange: ${inRange}, type: ${a?.type || 'unknown'}, id: ${a?.id}`);
+        }
+        
+        return inRange;
+      });
+      
+      if (dayAssets.length > 0) {
+        app.log.info(`Successfully found ${dayAssets.length} assets for ${date} from daily bucket (filtered from ${allAssets.length} total)`);
+        return dayAssets.map(mapAssetToPhoto);
       }
     }
   } catch (e) {
-    app.log.warn({ msg: 'Timeline bucket approach failed', err: String(e) });
+    app.log.warn({ msg: 'Daily timeline bucket approach failed', err: String(e) });
+  }
+
+  // 2) Fallback: Try monthly bucket and filter by date
+  try {
+    const targetMonth = date.substring(0, 7); // YYYY-MM format
+    app.log.info(`Trying monthly bucket for ${targetMonth}`);
+    
+    const monthlyBucket = await immichFetchJSON(`/api/timeline/bucket?size=MONTH&timeBucket=${targetMonth}`);
+    if (monthlyBucket && monthlyBucket.id && Array.isArray(monthlyBucket.id) && monthlyBucket.id.length > 0) {
+      app.log.info(`Found ${monthlyBucket.id.length} assets in monthly bucket for ${targetMonth}`);
+      
+      // Get all assets by ID in parallel
+      const assetPromises = monthlyBucket.id.map(async (assetId) => {
+        try {
+          return await immichFetchJSON(`/api/assets/${assetId}`);
+        } catch (e) {
+          app.log.warn(`Failed to fetch asset ${assetId}:`, e.message);
+          return null;
+        }
+      });
+      
+      const allAssets = (await Promise.all(assetPromises)).filter(Boolean);
+      
+      // Filter by the specific date with strict date matching
+      const dayAssets = allAssets.filter(a => {
+        const t = a?.exifInfo?.dateTimeOriginal || a?.localDateTime || a?.fileCreatedAt || a?.createdAt;
+        if (!t) return false;
+        
+        const ts = new Date(t).getTime();
+        const inRange = !Number.isNaN(ts) && ts >= +start && ts < +end;
+        
+        // Debug logging for the target date
+        if (t.includes(date)) {
+          app.log.info(`Monthly bucket - Found asset for ${date}: ${t}, inRange: ${inRange}, type: ${a?.type || 'unknown'}, id: ${a?.id}`);
+        }
+        
+        return inRange;
+      });
+      
+      if (dayAssets.length > 0) {
+        app.log.info(`Successfully found ${dayAssets.length} assets for ${date} from monthly bucket`);
+        return dayAssets.map(mapAssetToPhoto);
+      }
+    }
+  } catch (e) {
+    app.log.warn({ msg: 'Monthly timeline bucket approach failed', err: String(e) });
+  }
+
+  // 3) Comprehensive approach: Get ALL assets to ensure we don't miss any
+  try {
+    app.log.info(`Getting ALL assets for ${date} using comprehensive approach`);
+    
+    const allAssets = [];
+    const seenIds = new Set();
+    const MAX_BATCHES = 20; // Increased to ensure complete coverage
+    const BATCH_SIZE = 5000;
+    let consecutiveDuplicateBatches = 0;
+    const MAX_CONSECUTIVE_DUPLICATES = 3; // Stop after 3 consecutive batches with >90% duplicates
+    
+    // Get batches until we've covered the entire library
+    for (let batch = 0; batch < MAX_BATCHES; batch++) {
+      const randomAssets = await immichFetchJSON('/api/assets/random?count=' + BATCH_SIZE);
+      const assetsArray = Array.isArray(randomAssets) ? randomAssets : [];
+      
+      if (assetsArray.length === 0) {
+        app.log.info(`Batch ${batch + 1}: No more assets available`);
+        break;
+      }
+      
+      // Add unique assets
+      let newAssets = 0;
+      for (const asset of assetsArray) {
+        if (!seenIds.has(asset.id)) {
+          seenIds.add(asset.id);
+          allAssets.push(asset);
+          newAssets++;
+        }
+      }
+      
+      const duplicateRatio = 1 - (newAssets / assetsArray.length);
+      app.log.info(`Batch ${batch + 1}: ${assetsArray.length} total, ${newAssets} new unique (${(duplicateRatio * 100).toFixed(1)}% duplicates)`);
+      
+      // Check if we're getting mostly duplicates
+      if (duplicateRatio > 0.9) {
+        consecutiveDuplicateBatches++;
+        if (consecutiveDuplicateBatches >= MAX_CONSECUTIVE_DUPLICATES) {
+          app.log.info(`Stopping after ${consecutiveDuplicateBatches} consecutive batches with >90% duplicates`);
+          break;
+        }
+      } else {
+        consecutiveDuplicateBatches = 0; // Reset counter
+      }
+    }
+    
+    app.log.info(`Total unique assets retrieved: ${allAssets.length}`);
+
+    // Filter by the specific date with strict date matching
+    const dayAssets = allAssets.filter(a => {
+      const t = a?.exifInfo?.dateTimeOriginal || a?.localDateTime || a?.fileCreatedAt || a?.createdAt;
+      if (!t) return false;
+      
+      const ts = new Date(t).getTime();
+      const inRange = !Number.isNaN(ts) && ts >= +start && ts < +end;
+      
+      // Debug logging for the target date
+      if (t.includes(date)) {
+        app.log.info(`Found asset for ${date}: ${t}, inRange: ${inRange}, type: ${a?.type || 'unknown'}, id: ${a?.id}`);
+      }
+      
+      return inRange;
+    });
+
+    if (dayAssets.length > 0) {
+      app.log.info(`Found ${dayAssets.length} assets for ${date} from ${allAssets.length} total assets`);
+      return dayAssets.map(mapAssetToPhoto);
+    }
+    
+    app.log.info(`No assets found for ${date} in ${allAssets.length} total assets`);
+  } catch (e) {
+    app.log.warn({ msg: 'Comprehensive approach failed', err: String(e) });
   }
 
   app.log.warn(`No assets found for date ${date}`);
@@ -488,10 +576,39 @@ app.get('/api/admin/config', async (req, reply) => {
     immichAlbumId: IMMICH_ALBUM_ID || '',
     hasImmichKeys: IMMICH_API_KEYS.length > 0,
     hasAdminToken: !!ADMIN_TOKEN,
-    serverPort: PORT
+    serverPort: PORT,
+    // Add more detailed status information
+    immichConfigured: !!(IMMICH_URL && IMMICH_API_KEYS.length > 0),
+    configSource: 'environment', // Always prioritize .env
+    missingConfig: []
   };
   
+  // Check what's missing
+  if (!IMMICH_URL) config.missingConfig.push('IMMICH_URL');
+  if (IMMICH_API_KEYS.length === 0) config.missingConfig.push('IMMICH_API_KEYS');
+  
   reply.send(config);
+});
+
+// Helper endpoint to get .env template
+app.get('/api/admin/env-template', async (req, reply) => {
+  const template = `# Immich Configuration
+IMMICH_URL=https://your-immich-url.com
+IMMICH_API_KEYS=your_api_key_1,your_api_key_2
+IMMICH_ALBUM_ID=your_album_id
+
+# Admin Token (optional)
+ADMIN_TOKEN=your_admin_token
+
+# Cookie Secret for anonymous users
+ANON_COOKIE_SECRET=your_long_random_string_here
+
+# Server Configuration
+PORT=4000
+REPO_DIR=.
+`;
+  
+  reply.type('text/plain').send(template);
 });
 
 // ---- Routes: Day JSON --------------------------------------------------------
@@ -567,8 +684,23 @@ app.patch('/api/day/:slug/stack/:stackId', async (req, reply) => {
     }
     const { caption, description, title } = req.body || {};
     const file = dayFile(req.params.slug);
-    const day = await readJson(file);
-    if (!day) return reply.code(404).send({ error: 'day not found' });
+    let day = await readJson(file);
+    
+    // Create day file if it doesn't exist
+    if (!day) {
+      const slug = req.params.slug;
+      day = {
+        date: slug,
+        segment: 'day',
+        slug: slug,
+        title: `Day — ${slug}`,
+        stats: {},
+        polyline: { type: 'LineString', coordinates: [] },
+        points: [],
+        photos: []
+      };
+      app.log.info(`Creating new day file for ${slug}`);
+    }
 
     const key = String(req.params.stackId);
 
@@ -595,6 +727,38 @@ app.patch('/api/day/:slug/stack/:stackId', async (req, reply) => {
     reply.send({ ok: true });
   } catch (e) {
     reply.code(500).send({ error: 'update failed' });
+  }
+});
+
+// delete photo from day
+app.delete('/api/day/:slug/photo/:photoId', async (req, reply) => {
+  try {
+    if (!requireAdmin(req)) {
+      reply.code(401).send({ error: 'Unauthorized' });
+      return;
+    }
+    
+    const file = dayFile(req.params.slug);
+    const day = await readJson(file);
+    if (!day) return reply.code(404).send({ error: 'day not found' });
+    
+    if (!Array.isArray(day.photos)) {
+      return reply.code(404).send({ error: 'no photos in day' });
+    }
+    
+    const photoIndex = day.photos.findIndex(p => p.id === req.params.photoId);
+    if (photoIndex === -1) {
+      return reply.code(404).send({ error: 'photo not found' });
+    }
+    
+    // Remove the photo from the array
+    day.photos.splice(photoIndex, 1);
+    
+    await writeJson(file, day);
+    reply.send({ ok: true, message: 'Photo deleted successfully' });
+  } catch (e) {
+    app.log.error('Delete photo error:', e);
+    reply.code(500).send({ error: 'delete failed' });
   }
 });
 
