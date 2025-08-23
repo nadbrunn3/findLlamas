@@ -72,7 +72,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .stack-feed-container{background:transparent;min-height:auto;padding:16px 0}
 
 /* ===== VIEW TABS ===== */
-.view-tabs{max-width:600px;margin:0 auto;padding:0 12px;display:flex;gap:1rem;font-weight:600;justify-content:center}
+.view-tabs{max-width:600px;width:100%;margin:0 auto;padding:0 12px;display:flex;gap:1rem;font-weight:600;justify-content:center}
 .tab-button{background:none;border:0;padding:.5rem 0;cursor:pointer;font-size:1rem;color:var(--muted)}
 .tab-button.active{color:var(--text);border-bottom:2px solid var(--text)}
 
