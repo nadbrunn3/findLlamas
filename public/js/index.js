@@ -17,49 +17,123 @@ let lbEscHandler = null;
 
 const currentLocation = { lat: 35.6762, lng: 139.6503, name: "Tokyo, Japan" };
 
-// --- Reverse geocode caching ---
-const GEO_CACHE_KEY = 'geocodeCache';
-const geocodeCache = JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || '{}');
+// Cache key for localStorage
+const GEO_CACHE_KEY = "reverse_geocode_cache";
+let geocodeCache = JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || "{}");
 
+// Utility: delay to avoid hitting Nominatim too fast
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Utility: fetch with timeout support
+async function fetchWithTimeout(resource, options = {}) {
+  const { timeout = 8000 } = options;
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(resource, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(id);
+    return response;
+  } catch (err) {
+    clearTimeout(id);
+    throw err;
+  }
+}
+
+// Reverse geocode lat/lon into "Region, District, Country"
 async function reverseGeocode(lat, lon) {
   const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+
+  // Use cache if available
   if (geocodeCache[key]) return geocodeCache[key];
+
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`;
+
   try {
-    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`;
-    const res = await fetch(url);
-    if (res.ok) {
-      const data = await res.json();
-      const name = data.display_name || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
-      geocodeCache[key] = name;
-      localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(geocodeCache));
-      return name;
+    const res = await fetchWithTimeout(url, {
+      headers: {
+        "User-Agent": "FindPenguinApp/1.0 (your_email@example.com)", // REQUIRED
+        "Accept-Language": "en", // Optional, force English names
+      },
+      timeout: 8000,
+    });
+
+    if (!res.ok) {
+      console.warn("Reverse geocode failed:", res.status, await res.text());
+      return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
     }
+
+    const data = await res.json();
+    const addr = data.address || {};
+
+    /**
+     * Prefer finer-grained locality levels if available:
+     *  - For Japan: "ward" (Shibuya), then "city" (Tokyo), then "prefecture" (Tokyo)
+     */
+    const district =
+      addr.suburb ||
+      addr.city_district ||
+      addr.district ||
+      addr.borough ||
+      addr.ward; // ← important for Japanese addresses
+
+    const city =
+      addr.city ||
+      addr.town ||
+      addr.village ||
+      addr.municipality ||
+      addr.locality;
+
+    const region =
+      addr.state ||
+      addr.region ||
+      addr.province ||
+      addr.state_district;
+
+    const country = addr.country;
+
+    // Build a clean name: city → district → country
+    let nameParts = [city, district, country].filter(Boolean);
+
+    // If district and city are the same, skip duplicates
+    nameParts = nameParts.filter(
+      (part, idx) => nameParts.indexOf(part) === idx
+    );
+
+    const name =
+      nameParts.length > 0
+        ? nameParts.join(", ")
+        : `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+
+    // Save to cache
+    geocodeCache[key] = name;
+    localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(geocodeCache));
+
+    return name;
   } catch (e) {
-    console.warn('reverse geocode failed', e);
+    console.warn("Reverse geocode failed:", e);
+    return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
   }
-  return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
 }
 
+// Sequentially resolve labels for all stacks (safe for Nominatim)
 async function resolveStackLocations() {
-  const jobs = photoStacks.map(async (s) => {
+  for (const s of photoStacks) {
     const { lat, lng } = s.location;
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      await delay(1100); // throttle to avoid 429s
       s.location.label = await reverseGeocode(lat, lng);
     }
-  });
-  await Promise.all(jobs);
+  }
 }
 
-// Expose getApiBase to global window for lightbox script
+// Expose globals if needed elsewhere
 window.getApiBase = getApiBase;
-
-// Expose interaction functions for lightbox script
 window.fetchPhotoInteractions = fetchPhotoInteractions;
-window.reactPhoto = reactPhoto;
-window.commentPhoto = commentPhoto;
 
-// Expose lightbox functions
-window.closeLightbox = closeLightbox;
+
 
 // ---- Video/Media helpers ----
 function isVideo(item) {
