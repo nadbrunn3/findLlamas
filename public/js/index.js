@@ -1987,21 +1987,28 @@ function bindCommentsBlock(stackId, block){
 }
 
 
-// ---------- lightbox (new photo-focused viewer) ----------
+// ---------- unified lightbox management ----------
 function closeLightbox(){
-  // Handle global lbRoot reference
+  console.log('🔒 Closing lightbox - unified system');
+  
+  // Force close all lightbox types immediately
+  const allLightboxes = document.querySelectorAll('.lb-portal, .lightbox, [class*="lightbox"], [id*="lightbox"]');
+  allLightboxes.forEach(lb => {
+    lb.classList.remove('on', 'open');
+    lb.style.display = 'none';
+  });
+  
+  // Clear all lightbox references
   if (window.lbRoot) {
-    window.lbRoot.remove();
-    window.lbRoot = null;
+    window.lbRoot.classList.remove('on');
+    window.lbRoot.style.display = 'none';
   }
-  
-  // Handle local lbRoot reference
   if (lbRoot) {
-    lbRoot.remove();
-    lbRoot = null;
+    lbRoot.classList.remove('on');
+    lbRoot.style.display = 'none';
   }
   
-  // Clean up event handlers
+  // Clean up ALL event handlers
   if (window.lbEscHandler) {
     document.removeEventListener('keydown', window.lbEscHandler);
     window.lbEscHandler = null;
@@ -2011,29 +2018,44 @@ function closeLightbox(){
     lbEscHandler = null;
   }
   
-  // unlock page scroll
+  // Remove lightbox-open class from body
+  document.body.classList.remove('lightbox-open');
+  
+  // Force unlock page scroll immediately
   document.documentElement.style.overflow = '';
   document.body.style.overflow = '';
+  document.documentElement.style.position = '';
+  document.body.style.position = '';
+  
+  console.log('✅ All lightboxes closed and scroll unlocked');
 }
 
 function openLightboxForStack(stack, startIndex=0){
-  // Convert stack photos to the format expected by the new lightbox
-  const photos = stack.photos.map(photo => ({
-    id: photo.id,
-    url: photo.url,
-    thumb: photo.thumb || photo.url,
-    caption: photo.caption || '',
-    taken_at: photo.taken_at,
-    lat: photo.lat,
-    lon: photo.lon,
-    mimeType: photo.mimeType,
-    kind: photo.kind
-  }));
+  console.log('🔍 Opening lightbox for stack:', stack.id, 'startIndex:', startIndex);
   
-  // Use the new lightbox API
-  if (window.openPhotoLightbox) {
-    window.openPhotoLightbox(photos, startIndex);
-  }
+  // First, ensure any existing lightbox is properly closed
+  closeLightbox();
+  
+  // Small delay to ensure cleanup is complete
+  setTimeout(() => {
+    // Convert stack photos to the format expected by the new lightbox
+    const photos = stack.photos.map(photo => ({
+      id: photo.id,
+      url: photo.url,
+      thumb: photo.thumb || photo.url,
+      caption: photo.caption || '',
+      taken_at: photo.taken_at,
+      lat: photo.lat,
+      lon: photo.lon,
+      mimeType: photo.mimeType,
+      kind: photo.kind
+    }));
+    
+    // Use the new lightbox API
+    if (window.openPhotoLightbox) {
+      window.openPhotoLightbox(photos, startIndex);
+    }
+  }, 100);
 }
 
 // ---------- sync ----------
@@ -2202,6 +2224,9 @@ function openMapOverlayAt(lat, lon, title=''){
 
 // expose if you call from other modules
 window.openMapOverlayAt = openMapOverlayAt;
+
+// Make closeLightbox globally available
+window.closeLightbox = closeLightbox;
 window.closeMapOverlay   = closeMapOverlay;
 
 // Patch close function to dispatch event for page map panning

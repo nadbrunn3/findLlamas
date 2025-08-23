@@ -463,21 +463,27 @@ function openLightbox(index = 0) {
 
   console.log('🔍 Opening lightbox for photo:', item);
 
-  // Use the newer photo lightbox system for consistency
-  if (window.openPhotoLightbox) {
-    const photos = dayData.photos.map(photo => ({
-      id: photo.id,
-      url: photo.url,
-      thumb: photo.thumb,
-      caption: photo.caption || photo.description || '',
-      title: photo.title || '',
-      type: isVideo(photo) ? 'video' : 'image'
-    }));
-    
-    console.log('✅ Using modern lightbox with photos:', photos);
-    window.openPhotoLightbox(photos, currentPhotoIndex);
-    return;
-  }
+  // First, ensure any existing lightbox is properly closed
+  closeLightbox();
+
+  // Small delay to ensure cleanup is complete
+  setTimeout(() => {
+    // Use the newer photo lightbox system for consistency
+    if (window.openPhotoLightbox) {
+      const photos = dayData.photos.map(photo => ({
+        id: photo.id,
+        url: photo.url,
+        thumb: photo.thumb,
+        caption: photo.caption || photo.description || '',
+        title: photo.title || '',
+        type: isVideo(photo) ? 'video' : 'image'
+      }));
+      
+      console.log('✅ Using modern lightbox with photos:', photos);
+      window.openPhotoLightbox(photos, currentPhotoIndex);
+      return;
+    }
+  }, 100);
 
   // Fallback to basic lightbox if modern one isn't available
   const lb = document.getElementById('lightbox');
@@ -539,35 +545,50 @@ function openLightbox(index = 0) {
 }
 
 function closeLightbox() {
-  console.log('🔒 Closing lightbox');
+  console.log('🔒 Closing lightbox - unified system from day.js');
   
-  // Handle modern lightbox close
-  if (window.lbRoot) {
-    window.lbRoot.remove();
-    window.lbRoot = null;
-    console.log('✅ Closed modern lightbox');
+  // Use the unified close function from index.js if available
+  if (window.closeLightbox && window.closeLightbox !== closeLightbox) {
+    window.closeLightbox();
+    return;
   }
   
-  // Handle legacy lightbox close
-  const lb = document.getElementById('lightbox');
-  const vid = document.getElementById('lightbox-video');
+  // Force close all lightbox types immediately
+  const allLightboxes = document.querySelectorAll('.lb-portal, .lightbox, [class*="lightbox"], [id*="lightbox"]');
+  allLightboxes.forEach(lb => {
+    lb.classList.remove('on', 'open');
+    lb.style.display = 'none';
+  });
   
+  // Handle specific video cleanup
+  const vid = document.getElementById('lightbox-video');
   if (vid) {
     vid.pause?.();
     vid.src = ''; // Clear video source
   }
   
-  if (lb) {
-    lb.classList.remove('open');
+  // Clear all lightbox references
+  if (window.lbRoot) {
+    window.lbRoot.classList.remove('on');
+    window.lbRoot.style.display = 'none';
   }
   
+  // Clean up ALL event handlers
+  if (window.lbEscHandler) {
+    document.removeEventListener('keydown', window.lbEscHandler);
+    window.lbEscHandler = null;
+  }
+  
+  // Remove lightbox-open class from body
   document.body.classList.remove('lightbox-open');
   
-  // Unlock scroll
+  // Force unlock page scroll immediately
   document.documentElement.style.overflow = '';
   document.body.style.overflow = '';
+  document.documentElement.style.position = '';
+  document.body.style.position = '';
   
-  console.log('✅ Lightbox closed successfully');
+  console.log('✅ All lightboxes closed and scroll unlocked from day.js');
 }
 
 function previousPhoto() {

@@ -219,145 +219,171 @@ function bindLbPanel(photoId){
 // Cache lightbox DOM for better performance
 let cachedLightboxEl = null;
 
-// --- Optimized lightweight lightbox with per-photo interactions ---
+// --- ORIGINAL STYLE LIGHTBOX WITH FIXES ---
 window.openPhotoLightbox = (photos, startIndex=0) => {
   let i = startIndex;
 
-  // Store reference for close function
-  if (window.lbRoot) {
-    window.lbRoot = null;
-  }
+  // Remove any existing lightbox properly
+  const existing = document.querySelector('.lb-portal');
+  if (existing) existing.remove();
 
-  // Use cached element or create once
-  let el = cachedLightboxEl;
-  if (!el) {
-    el = document.createElement("div");
-    el.className = "lb-portal lightbox-root";
-    el.innerHTML = `
-      <div class="lb-backdrop lightbox-backdrop" data-lb-backdrop></div>
-      <div class="lb-frame lightbox-shell" role="dialog" aria-modal="true">
-        <button class="lb-close" data-lb-close aria-label="Close (Esc)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M6 6l12 12M18 6l-12 12"/>
-          </svg>
-        </button>
-        <img class="lb-img" alt="">
-        <video class="lb-video" controls style="display:none"></video>
-        <button class="lb-nav lb-prev lightbox-prev" aria-label="Prev">‹</button>
-        <button class="lb-nav lb-next lightbox-next" aria-label="Next">›</button>
+  // Create lightbox with original structure
+  const el = document.createElement("div");
+  el.className = "lb-portal lightbox-root";
+  el.innerHTML = `
+    <div class="lb-backdrop lightbox-backdrop" data-lb-backdrop></div>
+    <div class="lb-frame lightbox-shell" role="dialog" aria-modal="true">
+      <button class="lb-close" data-lb-close aria-label="Close (Esc)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M6 6l12 12M18 6l-12 12"/>
+        </svg>
+      </button>
+      <img class="lb-img" alt="">
+      <video class="lb-video" controls style="display:none"></video>
+      <button class="lb-nav lb-prev lightbox-prev" aria-label="Prev">‹</button>
+      <button class="lb-nav lb-next lightbox-next" aria-label="Next">›</button>
 
-        <div class="lb-panel lightbox-side" id="lbPanel">
-          <div class="lb-toolbar">
-            <button class="lb-chip lb-like" aria-pressed="false">
-              <span class="icon">♥</span>
-              <span class="count">0</span>
-            </button>
-            <button class="lb-chip lb-comments-btn">
-              <span class="icon">💬</span>
-              <span class="count">0</span>
-            </button>
-            <button class="lb-chip lb-show-map" type="button">
-              <span class="icon">🗺️</span>
-              <span class="text">Map</span>
-            </button>
-          </div>
+      <div class="lb-panel lightbox-side" id="lbPanel">
+        <div class="lb-toolbar">
+          <button class="lb-chip lb-like" aria-pressed="false">
+            <span class="icon">♥</span>
+            <span class="count">0</span>
+          </button>
+          <button class="lb-chip lb-comments-btn">
+            <span class="icon">💬</span>
+            <span class="count">0</span>
+          </button>
+          <button class="lb-chip lb-show-map" type="button">
+            <span class="icon">🗺️</span>
+            <span class="text">Map</span>
+          </button>
+        </div>
 
-          <!-- Comments section with padding from toolbar -->
-          <div class="lb-comments-section">
-            <div class="lb-comments" id="lbComments"></div>
+        <!-- Comments section with padding from toolbar -->
+        <div class="lb-comments-section">
+          <div class="lb-comments" id="lbComments"></div>
 
-            <form class="lb-composer" id="lbComposer" autocomplete="off">
-              <input class="lb-input" name="text" placeholder="Add a comment…" maxlength="500" />
-              <button class="lb-send" type="submit">Post</button>
-            </form>
-          </div>
+          <form class="lb-composer" id="lbComposer" autocomplete="off">
+            <input class="lb-input" name="text" placeholder="Add a comment…" maxlength="500" />
+            <button class="lb-send" type="submit">Post</button>
+          </form>
         </div>
       </div>
-    `;
-    
-    // Cache the element
-    cachedLightboxEl = el;
-    
-    // Only append to body once
-    if (!document.querySelector('.lb-portal')) {
-      document.body.appendChild(el);
+    </div>
+  `;
+  
+  // Add to DOM immediately
+  document.body.appendChild(el);
+  
+  // Store reference for close function
+  window.lbRoot = el;
+
+  // Make visible with original CSS classes
+  el.classList.add('on');
+
+  // lock page scroll while lightbox is open
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+
+  // close handlers
+  el.querySelector('[data-lb-close]').addEventListener('click', () => {
+    if (window.closeLightbox) {
+      window.closeLightbox();
+    } else {
+      el.classList.remove("on");
+      setTimeout(() => {
+        document.documentElement.style.overflow = '';
+        document.body.style.overflow = '';
+      }, 50);
     }
-    
-    // Store reference for close function
-    window.lbRoot = el;
-
-    // lock page scroll while lightbox is open
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-
-    // close handlers
-    el.querySelector('[data-lb-close]').addEventListener('click', window.closeLightbox || (() => el.classList.remove("on")));
-    el.querySelector('[data-lb-backdrop]').addEventListener('click', (e)=>{
-      // click on the dark backdrop (not inside the shell) closes
-      if (e.target === e.currentTarget) {
-        if (window.closeLightbox) window.closeLightbox();
-        else el.classList.remove("on");
-      }
-    });
-    
-    // Navigation handlers
-    el.querySelector(".lb-prev").onclick = () => show(i-1);
-    el.querySelector(".lb-next").onclick = () => show(i+1);
-    
-    // Map action button
-    const showOnMapBtn = el.querySelector('.lb-show-map');
-    
-    function syncActionsForCurrentPhoto(){
-      const p = photos[i] || {};
-      const hasCoords = Number.isFinite(p.lat) && Number.isFinite(p.lon);
-      showOnMapBtn.disabled = !hasCoords;
-      showOnMapBtn.title = hasCoords ? 'Open map at this photo' : 'No GPS for this photo';
-    }
-    
-    showOnMapBtn.addEventListener('click', ()=>{
-      const p = photos[i];
-      if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
-
-      // Close the lightbox first (clean UI)
-      if (window.closeLightbox) window.closeLightbox();
-      else el.classList.remove("on");
-
-      const latlng = [p.lat, p.lon];
-
-      // Prefer the rich overlay map when available
-      if (window.openMapOverlayAt) {
-        window.openMapOverlayAt(p.lat, p.lon, '');
-
-        // When overlay closes, pan page map (if present)
-        const onClose = ()=>{
-          if (window.topMap?.panTo) window.topMap.panTo(latlng);
-          document.removeEventListener('map:closed', onClose);
-        };
-        document.addEventListener('map:closed', onClose);
-        return;
-      }
-
-      // Fallback: pan existing page map or open Google Maps
-      if (window.topMap?.panTo) {
-        window.topMap.panTo(latlng);
+  });
+  
+  el.querySelector('[data-lb-backdrop]').addEventListener('click', (e)=>{
+    // click on the dark backdrop (not inside the shell) closes
+    if (e.target === e.currentTarget) {
+      if (window.closeLightbox) {
+        window.closeLightbox();
       } else {
-        const url = `https://maps.google.com/?q=${p.lat},${p.lon}`;
-        window.open(url, '_blank');
+        el.classList.remove("on");
+        setTimeout(() => {
+          document.documentElement.style.overflow = '';
+          document.body.style.overflow = '';
+        }, 50);
       }
-    });
-    
-    // Keyboard handler with escape
-    window.lbEscHandler = (e)=>{
-      if (!el.classList.contains("on")) return;
-      if (e.key==="Escape") {
-        if (window.closeLightbox) window.closeLightbox();
-        else el.classList.remove("on");
-      }
-      if (e.key==="ArrowLeft") show(i-1);
-      if (e.key==="ArrowRight") show(i+1);
-    };
-    document.addEventListener("keydown", window.lbEscHandler);
+    }
+  });
+  
+  // Navigation handlers
+  el.querySelector(".lb-prev").onclick = () => show(i-1);
+  el.querySelector(".lb-next").onclick = () => show(i+1);
+  
+  // Map action button
+  const showOnMapBtn = el.querySelector('.lb-show-map');
+  
+  function syncActionsForCurrentPhoto(){
+    const p = photos[i] || {};
+    const hasCoords = Number.isFinite(p.lat) && Number.isFinite(p.lon);
+    showOnMapBtn.disabled = !hasCoords;
+    showOnMapBtn.title = hasCoords ? 'Open map at this photo' : 'No GPS for this photo';
   }
+  
+  showOnMapBtn.addEventListener('click', ()=>{
+    const p = photos[i];
+    if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
+
+    // Close the lightbox first (clean UI)
+    if (window.closeLightbox) {
+      window.closeLightbox();
+    } else {
+      el.classList.remove("on");
+      setTimeout(() => {
+        document.documentElement.style.overflow = '';
+        document.body.style.overflow = '';
+      }, 50);
+    }
+
+    const latlng = [p.lat, p.lon];
+
+    // Prefer the rich overlay map when available
+    if (window.openMapOverlayAt) {
+      window.openMapOverlayAt(p.lat, p.lon, '');
+
+      // When overlay closes, pan page map (if present)
+      const onClose = ()=>{
+        if (window.topMap?.panTo) window.topMap.panTo(latlng);
+        document.removeEventListener('map:closed', onClose);
+      };
+      document.addEventListener('map:closed', onClose);
+      return;
+    }
+
+    // Fallback: pan existing page map or open Google Maps
+    if (window.topMap?.panTo) {
+      window.topMap.panTo(latlng);
+    } else {
+      const url = `https://maps.google.com/?q=${p.lat},${p.lon}`;
+      window.open(url, '_blank');
+    }
+  });
+  
+  // Keyboard handler with escape
+  window.lbEscHandler = (e)=>{
+    if (!el.classList.contains("on")) return;
+    if (e.key==="Escape") {
+      if (window.closeLightbox) {
+        window.closeLightbox();
+      } else {
+        el.classList.remove("on");
+        setTimeout(() => {
+          document.documentElement.style.overflow = '';
+          document.body.style.overflow = '';
+        }, 50);
+      }
+    }
+    if (e.key==="ArrowLeft") show(i-1);
+    if (e.key==="ArrowRight") show(i+1);
+  };
+  document.addEventListener("keydown", window.lbEscHandler);
 
   const img = el.querySelector(".lb-img");
   const vid = el.querySelector(".lb-video");
@@ -396,12 +422,4 @@ window.openPhotoLightbox = (photos, startIndex=0) => {
   }
 
   show(i);
-  el.classList.add("on");
-  
-  // Store reference for close function when opened
-  window.lbRoot = el;
-  
-  // lock page scroll while lightbox is open
-  document.documentElement.style.overflow = 'hidden';
-  document.body.style.overflow = 'hidden';
 };
