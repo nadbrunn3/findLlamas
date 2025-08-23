@@ -469,10 +469,7 @@ function renderFeed(){
             <button class="thread-toggle" type="button" aria-expanded="false">
               <span class="thread-count">View 0 comments ▾</span>
             </button>
-            <div class="thread-sort segmented" hidden>
-              <button type="button" data-sort="newest" aria-pressed="true">Newest</button>
-              <button type="button" data-sort="oldest" aria-pressed="false">Oldest</button>
-            </div>
+
           </div>
 
           <div class="thread-container" style="display: none;">
@@ -710,8 +707,7 @@ function initDiscussionState(stackId) {
       comments: [],
       expanded: false,
       manuallyCollapsed: false,
-      activeReplyComposer: null,
-      sort: 'newest'
+      activeReplyComposer: null
     });
   }
   return discussionState.get(stackId);
@@ -799,13 +795,7 @@ function updateThreadCount(stackId, block) {
   const state = discussionState.get(stackId);
   const threadCount = block.querySelector('.thread-count');
   const threadToggle = block.querySelector('.thread-toggle');
-  const sortControl = block.querySelector('.thread-sort');
   const totalComments = state ? countTotalComments(state.comments) : 0;
-
-  if (sortControl) {
-    sortControl.hidden = !(state && state.expanded);
-    if (state) updateSortButtons(stackId, block);
-  }
   
   if (totalComments === 0) {
     threadCount.textContent = 'Add a comment';
@@ -833,15 +823,7 @@ function updateThreadCount(stackId, block) {
   }
 }
 
-// Update active state of sort buttons
-function updateSortButtons(stackId, block) {
-  const state = discussionState.get(stackId);
-  const sortControl = block.querySelector('.thread-sort');
-  if (!state || !sortControl) return;
-  sortControl.querySelectorAll('button').forEach(btn => {
-    btn.setAttribute('aria-pressed', btn.dataset.sort === state.sort);
-  });
-}
+
 
 // Count total comments including replies (recursive for unlimited depth)
 function countTotalComments(comments) {
@@ -905,22 +887,7 @@ function bindDiscussionThread(stackId, block) {
     updateThreadCount(stackId, block);
   });
 
-  // Sort control
-  if (sortControl) {
-    sortControl.addEventListener('click', (e) => {
-      if (e.target.tagName === 'BUTTON') {
-        const sort = e.target.dataset.sort;
-        if (sort && state.sort !== sort) {
-          state.sort = sort;
-          updateSortButtons(stackId, block);
-          renderThreadedComments(stackId, block);
-        }
-      }
-    });
 
-    // Initialize sort buttons
-    updateSortButtons(stackId, block);
-  }
   
   // Main comment composer
   bindCommentComposer(stackId, block);
@@ -1049,11 +1016,9 @@ function renderThreadedComments(stackId, block) {
   
   emptyState.style.display = 'none';
   
-  // Display comments based on selected sort order
+  // Display comments in chronological order (newest first)
   const sortedComments = [...state.comments].sort((a, b) => {
-    return state.sort === 'newest'
-      ? new Date(b.timestamp) - new Date(a.timestamp)
-      : new Date(a.timestamp) - new Date(b.timestamp);
+    return new Date(b.timestamp) - new Date(a.timestamp);
   });
   
   // Render each comment thread with staggered animation
