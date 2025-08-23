@@ -769,19 +769,26 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 /* Comment List - Flat Design */
 .comment-list {
+  --avatar: 26px;     /* top-level */
+  --gap: 10px;        /* avatar ↔ text */
+  --row-y: 10px;      /* row padding */
   list-style: none;
   padding: 0;
-  margin: 0;
+  margin: .25rem 0 .5rem;
   display: flex;
   flex-direction: column;
+  max-height: 280px;
+  overflow: auto;
+  scroll-padding: 10px;
 }
 
 /* Comment Item - Clean borderless rows */
 .comment {
-  display: flex;
-  gap: 1rem; /* 16px gap between avatar and content */
+  display: grid;
+  grid-template-columns: var(--avatar) 1fr;
+  column-gap: var(--gap);
   align-items: flex-start;
-  padding: 1rem 0; /* Add vertical padding */
+  padding: var(--row-y) 0;
   border-bottom: 1px solid rgba(0,0,0,.06); /* Hairline divider */
   opacity: 0;
   animation: commentFadeIn .3s ease forwards;
@@ -930,8 +937,8 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 /* Comment Avatar - Proper Sizing */
 .avatar {
-  width: 32px;
-  height: 32px;
+  width: var(--avatar);
+  height: var(--avatar);
   border-radius: 50%;
   background: linear-gradient(135deg, #4f46e5, #8b5cf6);
   color: #fff;
@@ -944,30 +951,12 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   flex-shrink: 0;
 }
 
-/* Scale avatars based on reply depth */
+/* replies a touch smaller */
 .comment.reply .avatar {
-  width: calc(32px - var(--reply-depth, 1) * 2px); /* Shrink by 2px per depth level */
-  height: calc(32px - var(--reply-depth, 1) * 2px);
-  font-size: calc(0.75rem - var(--reply-depth, 1) * 0.05rem);
+  width: 22px;
+  height: 22px;
+  font-size: .65rem;
   background: linear-gradient(135deg, #6b7280, #9ca3af);
-  min-width: 20px; /* Minimum avatar size */
-  min-height: 20px;
-}
-
-@media (max-width: 768px) {
-  .avatar {
-    width: 28px;
-    height: 28px;
-    font-size: .7rem;
-  }
-  
-  .comment.reply .avatar {
-    width: calc(28px - var(--reply-depth, 1) * 1.5px); /* Mobile: smaller shrink rate */
-    height: calc(28px - var(--reply-depth, 1) * 1.5px);
-    font-size: calc(0.7rem - var(--reply-depth, 1) * 0.03rem);
-    min-width: 18px; /* Mobile minimum avatar size */
-    min-height: 18px;
-  }
 }
 
 /* Content - Main content area */
@@ -1689,12 +1678,6 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .chip[aria-pressed="true"]{ transform: translateY(-1px); }
 
 /* list */
-.comment-list{
-  list-style:none; padding:0; margin: .25rem 0 .5rem;
-  display:flex; flex-direction:column; gap:.5rem;
-  max-height: 280px; overflow:auto;
-  scroll-padding: 10px;
-}
 .comment-item{
   display:grid; grid-template-columns: 36px 1fr; gap:.6rem; align-items:flex-start;
 }
