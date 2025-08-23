@@ -47,18 +47,6 @@
       "caption": "IMG_5817.jpg"
     },
     {
-      "id": "c3d4c230-0122-4935-b44d-198a3c4f46ea",
-      "kind": "photo",
-      "mimeType": "image/*",
-      "duration": null,
-      "url": "/api/immich/assets/c3d4c230-0122-4935-b44d-198a3c4f46ea/original",
-      "thumb": "/api/immich/assets/c3d4c230-0122-4935-b44d-198a3c4f46ea/thumb",
-      "taken_at": "2025-08-01T12:38:31+00:00",
-      "lat": null,
-      "lon": null,
-      "caption": "IMG_5818.jpg"
-    },
-    {
       "id": "39d42ad5-2b2f-4102-8884-50dffe056b78",
       "kind": "photo",
       "mimeType": "image/*",
@@ -69,18 +57,6 @@
       "lat": null,
       "lon": null,
       "caption": "IMG_5819.jpg"
-    },
-    {
-      "id": "1594785e-5bca-4938-a4f8-e571354040d6",
-      "kind": "photo",
-      "mimeType": "image/*",
-      "duration": null,
-      "url": "/api/immich/assets/1594785e-5bca-4938-a4f8-e571354040d6/original",
-      "thumb": "/api/immich/assets/1594785e-5bca-4938-a4f8-e571354040d6/thumb",
-      "taken_at": "2025-08-01T12:38:31+00:00",
-      "lat": null,
-      "lon": null,
-      "caption": "IMG_5821.jpg"
     },
     {
       "id": "bf9d8a0c-3084-4081-add9-97437c65a886",
