@@ -2,7 +2,7 @@
 
 import { groupIntoStacks } from "/js/utils.js";
 
-const MAPBOX_STYLE = 'mapbox://styles/mapbox/satellite-streets-v12';
+const MAPBOX_STYLE = 'mapbox://styles/mapbox/legacy-satellite-v1';
 // Use provided Mapbox token by default; replace with your own for production.
 mapboxgl.accessToken =
   mapboxgl.accessToken ||
