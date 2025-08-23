@@ -753,8 +753,8 @@ async function loadThreadedDiscussion(stackId, block, mediaActionsBlock = null) 
     // Update thread count
     updateThreadCount(stackId, block);
     
-    // Auto-expand if there are comments and not manually collapsed, OR if we were already expanded
-    const shouldExpand = (state.comments.length > 0 && !state.manuallyCollapsed) || state.expanded;
+    // Keep comments collapsed by default - only expand if manually expanded before
+    const shouldExpand = state.expanded && !state.manuallyCollapsed;
     if (shouldExpand) {
       state.expanded = true;
       const threadContainer = block.querySelector('.thread-container');

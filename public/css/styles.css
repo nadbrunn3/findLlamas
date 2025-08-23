@@ -68,7 +68,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#eef2ff;border:1px solid #e0e7ff;color:#3730a3;font-weight:700;font-size:.78rem}
 
 /* ===== PAGE LAYOUT ===== */
-.page, .stack-feed-container{max-width:600px;margin:12px auto 32px;padding:0 12px;display:grid;grid-template-columns:1fr;gap:12px}
+.page, .stack-feed-container{max-width:600px !important;margin:12px auto 32px;padding:0 12px;display:grid;grid-template-columns:1fr;gap:12px}
 .stack-feed-container{background:transparent;min-height:auto;padding:16px 0}
 
 /* ===== STICKY COMPACT MAP ===== */
@@ -114,7 +114,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 
 /* ===== FEED ===== */
-.stack-feed, .feed{max-width:480px;margin:0 auto;padding:0 12px;display:grid;gap:12px}
+.stack-feed, .feed{max-width:600px !important;margin:0 auto;padding:0 12px;display:grid;gap:12px}
 
 /* ===== CARDS ===== */
 .stack-card, .card{
@@ -192,7 +192,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 /* ===== MEDIA CONTAINER ===== */
 .stack-photo-area, .stack-media-container, .card-media{position:relative;background:transparent}
-.stack-main-photo, .card-media img.main-photo{width:100%;height:auto;display:block;cursor:default;transition:transform .18s ease;object-fit:cover;max-height:35vh;border-radius:0}
+.stack-main-photo, .card-media img.main-photo{width:100%;height:auto;display:block;cursor:default;transition:transform .18s ease;object-fit:cover;max-height:35vh !important;border-radius:0}
 .stack-main-photo:hover, .card-media img.main-photo:hover{transform:none}
 .media-gradient::after{content:"";position:absolute;left:0;right:0;bottom:0;height:96px;background:linear-gradient(to top,rgba(0,0,0,.35),transparent);pointer-events:none}
 
@@ -441,16 +441,14 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   .container, .header-inner, .page{padding:0 12px}
   .trip-title, .title{font-size:2rem}
 
-  .stack-feed, .feed{gap:12px;padding:0 12px}
-
   .nav{padding:10px 12px}
 
-  .stack-card-header, .card-head{padding:12px 14px}
-  .stack-actions, .card-actions{padding:10px 14px}
+  .stack-card-header, .card-head{padding:12px 16px}
+  .stack-actions, .card-actions{padding:10px 16px}
 
-  /* Reduce stack heights on mobile for better scrolling */
-  .stack-main-photo, .card-media img.main-photo{max-height:40vh}
-  .stack-cover-media{max-height:22vh}
+  /* Keep consistent stack heights */
+  .stack-main-photo, .card-media img.main-photo{max-height:35vh !important}
+  .stack-cover-media{max-height:28vh !important}
   .photo-main-media{max-height:35vh}
 
 }
@@ -459,10 +457,10 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   .stack-actions, .card-actions{flex-wrap:wrap;gap:8px}
   .stack-action-btn, .action-btn{padding:6px 12px;font-size:.85rem}
   
-  /* Further reduce stack heights on small mobile screens */
-  .stack-main-photo, .card-media img.main-photo{max-height:35vh}
-  .stack-cover-media{max-height:20vh}
-  .photo-main-media{max-height:30vh}
+  /* Keep consistent stack heights on small screens too */
+  .stack-main-photo, .card-media img.main-photo{max-height:35vh !important}
+  .stack-cover-media{max-height:28vh !important}
+  .photo-main-media{max-height:35vh}
 }
 
 /* ===== FOCUS & ACCESSIBILITY ===== */
