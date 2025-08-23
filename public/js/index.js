@@ -1087,6 +1087,23 @@ function renderCommentThread(comment, container, stackId, depth = 0) {
   // Add has-replies class if this comment has replies
   if (comment.replies && comment.replies.length > 0) {
     li.classList.add('has-replies');
+    
+    // Add collapse toggle button to actions
+    const actions = li.querySelector('.actions');
+    const collapseToggle = document.createElement('button');
+    collapseToggle.className = 'collapse-toggle';
+    collapseToggle.type = 'button';
+    collapseToggle.textContent = `${comment.replies.length} ${comment.replies.length === 1 ? 'reply' : 'replies'}`;
+    actions.appendChild(collapseToggle);
+    
+    // Add click handler for collapse toggle
+    collapseToggle.addEventListener('click', () => {
+      li.classList.toggle('collapsed');
+      const repliesContainer = li.nextElementSibling;
+      if (repliesContainer && repliesContainer.classList.contains('replies-container')) {
+        repliesContainer.style.display = li.classList.contains('collapsed') ? 'none' : 'block';
+      }
+    });
   }
   
   // Bind reply action for all comments (parent and replies)
@@ -1139,7 +1156,8 @@ function renderCommentThread(comment, container, stackId, depth = 0) {
       repliesContainer.prepend(threadLine);
     }
     
-    container.appendChild(repliesContainer);
+    // Insert replies container as next sibling to parent comment for CSS selector to work
+    li.parentNode.insertBefore(repliesContainer, li.nextSibling);
     
     // Add "View more replies" button if collapsed
     if (shouldCollapse) {

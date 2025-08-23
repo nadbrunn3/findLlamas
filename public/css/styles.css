@@ -144,7 +144,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .stack-pill{margin-left:auto;background:#eff6ff;border:1px solid #dbeafe;color:#1d4ed8;border-radius:999px;padding:2px 10px;font-weight:700;font-size:.78rem}
 
 .stack-desc-container {
-  margin: 0 16px 12px;
+  margin: 0 16px 6px; /* Reduced from 12px to 6px */
   padding: 0;
 }
 
@@ -753,13 +753,14 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 /* Discussion Thread Container - Completely flat, no card styling */
 .discussion-thread {
-  margin-top: .75rem;
+  margin-top: .25rem; /* Reduced from .75rem to .25rem */
+  padding: 0 20px 16px; /* Add horizontal and bottom padding */
   /* No background, border, or shadow - pure flat list */
 }
 
 /* Thread Header */
 .thread-header {
-  margin-bottom: .5rem;
+  margin-bottom: .25rem; /* Reduced from .5rem to .25rem */
 }
 
 .thread-toggle {
@@ -868,48 +869,50 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   margin-left: calc(var(--indent-reply) * 5);
 }
 
-/* Reply Connector Lines - Aligned to Avatar Centers */
-.comment.reply::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: calc(var(--avatar-reply-size) / -2 - var(--gap));
-  width: 2px;
-  height: 100%;
-  background: var(--divider);
-  border-radius: 2px;
+/* Collapsible parent comments with replies */
+.comment.has-replies {
+  position: relative;
 }
 
-.comment.reply::after {
-  content: "";
-  position: absolute;
-  top: calc(var(--avatar-reply-size) / 2);
-  left: calc(var(--avatar-reply-size) / -2 - var(--gap));
-  width: 12px;
-  height: 2px;
-  background: var(--divider);
-  border-radius: 2px;
+.comment.has-replies .actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
-/* Adjust connector lines for deeper nesting levels */
-.comment.reply[data-depth="2"]::before,
-.comment.reply[data-depth="2"]::after {
-  left: calc(var(--avatar-reply-size) / -2 - var(--gap) - var(--indent-reply));
+.comment.has-replies .collapse-toggle {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.comment.reply[data-depth="3"]::before,
-.comment.reply[data-depth="3"]::after {
-  left: calc(var(--avatar-reply-size) / -2 - var(--gap) - var(--indent-reply) * 2);
+.comment.has-replies .collapse-toggle:hover {
+  background: rgba(107, 114, 128, 0.1);
+  color: var(--text);
 }
 
-.comment.reply[data-depth="4"]::before,
-.comment.reply[data-depth="4"]::after {
-  left: calc(var(--avatar-reply-size) / -2 - var(--gap) - var(--indent-reply) * 3);
+.comment.has-replies .collapse-toggle::before {
+  content: "▼";
+  font-size: 0.75rem;
+  transition: transform 0.2s ease;
 }
 
-.comment.reply[data-depth="5"]::before,
-.comment.reply[data-depth="5"]::after {
-  left: calc(var(--avatar-reply-size) / -2 - var(--gap) - var(--indent-reply) * 4);
+.comment.has-replies.collapsed .collapse-toggle::before {
+  transform: rotate(-90deg);
+}
+
+/* Hide replies when parent is collapsed */
+.comment.has-replies.collapsed ~ .replies-container {
+  display: none;
 }
 
 /* Mobile adjustments for comment threading */
@@ -976,28 +979,9 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   margin-right: 0.25rem;
 }
 
-/* Comment Avatar - Proper Sizing */
+/* Avatars removed - hide any avatar elements */
 .avatar {
-  width: var(--avatar-size);
-  height: var(--avatar-size);
-  border-radius: 50%;
-  background: linear-gradient(135deg, #4f46e5, #8b5cf6);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: .75rem;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-
-/* Reply avatars - smaller and consistent */
-.comment.reply .avatar {
-  width: var(--avatar-reply-size);
-  height: var(--avatar-reply-size);
-  font-size: .65rem;
-  background: linear-gradient(135deg, #6b7280, #9ca3af);
+  display: none;
 }
 
 @media (max-width: 768px) {
@@ -1045,17 +1029,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   white-space: pre-wrap;
 }
 
-/* Reply specific styles */
-.comment.reply .author {
-  font-size: .8125rem; /* 13px */
-  color: #6b7280;
-}
-
-.comment.reply .body {
-  font-size: .8125rem; /* 13px */
-  color: #6b7280;
-  max-width: 60ch;
-}
+/* Reply specific styles - now same as main comments */
 
 /* Actions - Buttons row */
 .actions {
