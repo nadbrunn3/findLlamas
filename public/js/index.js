@@ -1,7 +1,10 @@
 import { dataUrl, getApiBase, groupIntoStacks, debounce, urlParam, pushUrlParam, replaceUrlParam, fmtTime, escapeHtml, formatDate } from "./utils.js";
 
-const MAPBOX_STYLE = 'mapbox://styles/<user>/<vibrant-satellite-style>';
-mapboxgl.accessToken = mapboxgl.accessToken || 'YOUR_MAPBOX_ACCESS_TOKEN';
+const MAPBOX_STYLE = 'mapbox://styles/mapbox/satellite-streets-v12';
+// Use Mapbox's public demo token by default; replace with your own for production.
+mapboxgl.accessToken =
+  mapboxgl.accessToken ||
+  'pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYzM3A0NHBmcWl3N3gifQ.-6l5pXn6VxDSHLyfXDBlnA';
 
 const isMobile = matchMedia('(max-width:768px)').matches;
 let topMap;
@@ -2079,16 +2082,14 @@ function setActive(id){
 }
 
 function updateMarkerClasses(){
-  if (!topMap) return;
   // Update marker visual states based on activeStackId
-  topMap.eachLayer(layer => {
-    if (layer.stackId) {
-      const marker = layer.getElement ? layer.getElement() : layer._icon;
-      if (marker) {
-        marker.classList.toggle('active', layer.stackId === activeStackId);
-      }
-    }
-  });
+  mapMarkers
+    .filter(m => m.isTopMap)
+    .forEach(({ marker, stackId }) => {
+      marker
+        .getElement()
+        .classList.toggle('active', stackId === activeStackId);
+    });
 }
 
 function scrollToStack(id, { instant=false } = {}){

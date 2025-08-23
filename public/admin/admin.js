@@ -2,8 +2,11 @@
 
 import { groupIntoStacks } from "/js/utils.js";
 
-const MAPBOX_STYLE = 'mapbox://styles/<user>/<vibrant-satellite-style>';
-mapboxgl.accessToken = mapboxgl.accessToken || 'YOUR_MAPBOX_ACCESS_TOKEN';
+const MAPBOX_STYLE = 'mapbox://styles/mapbox/satellite-streets-v12';
+// Use Mapbox's public demo token by default; replace with your own for production.
+mapboxgl.accessToken =
+  mapboxgl.accessToken ||
+  'pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYzM3A0NHBmcWl3N3gifQ.-6l5pXn6VxDSHLyfXDBlnA';
 
 const PASS_KEY = 'tripAdminPass';
 const SETTINGS_KEY = 'tripAdminSettings';
