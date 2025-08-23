@@ -508,7 +508,7 @@ function openFullscreenMapWithPhotos(photos, focusIndex = 0) {
   document.addEventListener('keydown', escHandler);
   
   // Create Leaflet map
-  const fullscreenMap = L.map('fullscreen-photo-map', {
+  let fullscreenMap = L.map('fullscreen-photo-map', {
     zoomControl: true,
     dragging: true,
     scrollWheelZoom: true,
