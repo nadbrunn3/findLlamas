@@ -295,7 +295,7 @@ window.openPhotoLightbox = (photos, startIndex=0) => {
 
       // Prefer the rich overlay map when available
       if (window.openMapOverlayAt) {
-        window.openMapOverlayAt(p.lat, p.lon, p.caption || '');
+        window.openMapOverlayAt(p.lat, p.lon, '');
 
         // When overlay closes, pan page map (if present)
         const onClose = ()=>{
