@@ -39,10 +39,29 @@ function saveSettings(obj) {
 }
 
   // ----- Admin Helper Functions -----
-  function getAdminToken() {
+  async function getAdminToken() {
     const settings = loadSettings();
-    // Return local token if set, otherwise rely on server-side token
-    return settings.apiToken || '';
+    // If local token is set, use it (for overrides)
+    if (settings.apiToken) {
+      return settings.apiToken;
+    }
+    
+    // Otherwise, check if server has admin token configured
+    try {
+      const res = await fetch(`${apiBase()}/api/admin/config`);
+      if (res.ok) {
+        const config = await res.json();
+        if (config.hasAdminToken) {
+          // Server has admin token configured, we don't need to send one
+          // The server will use its own ADMIN_TOKEN from .env
+          return 'server-configured';
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to check server admin token:', error);
+    }
+    
+    return '';
   }
   function apiBase() { return window.location.origin; }
 
@@ -60,12 +79,19 @@ function saveSettings(obj) {
   }
 
   async function patchStackMeta(slug, stackId, meta) {
+    const adminToken = await getAdminToken();
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    
+    // Only add admin token header if we have a real token (not 'server-configured')
+    if (adminToken !== 'server-configured') {
+      headers['x-admin-token'] = adminToken;
+    }
+
     const res = await fetch(`${apiBase()}/api/day/${encodeURIComponent(slug)}/stack/${encodeURIComponent(stackId)}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-admin-token': getAdminToken()
-      },
+      headers,
       body: JSON.stringify(meta) // { title, caption }
     });
     if (!res.ok) throw new Error(await res.text());
@@ -246,15 +272,104 @@ function selectTab(name, btn) {
 function renderTripsTab(panel) {
   panel.innerHTML = '';
 
+  // Add Immich status indicator
+  const statusEl = document.createElement('div');
+  statusEl.id = 'immich-status';
+  statusEl.style.marginBottom = '1rem';
+  statusEl.style.padding = '0.5rem';
+  statusEl.style.borderRadius = '4px';
+  statusEl.style.fontSize = '0.9rem';
+  panel.appendChild(statusEl);
+
+  // Load and display Immich status
+  async function updateImmichStatus() {
+    try {
+      const res = await fetch(`${apiBase()}/api/admin/config`);
+      if (res.ok) {
+        const config = await res.json();
+        if (config.immichConfigured) {
+          statusEl.innerHTML = `
+            <span style="color: green;">✅ Immich configured</span>
+            <br><small>URL: ${config.immichUrl}</small>
+            ${config.immichAlbumId ? `<br><small>Album: ${config.immichAlbumId}</small>` : ''}
+          `;
+          statusEl.style.backgroundColor = '#e8f5e8';
+          statusEl.style.border = '1px solid #4caf50';
+        } else {
+          statusEl.innerHTML = `
+            <span style="color: red;">❌ Immich not configured</span>
+            <br><small>Missing: ${config.missingConfig.join(', ')}</small>
+            <br><small>Create a .env file with IMMICH_URL and IMMICH_API_KEYS</small>
+            <br><button onclick="downloadEnvTemplate()" style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.8rem;">📄 Get .env Template</button>
+          `;
+          statusEl.style.backgroundColor = '#ffe8e8';
+          statusEl.style.border = '1px solid #f44336';
+        }
+      }
+    } catch (error) {
+      statusEl.innerHTML = '<span style="color: orange;">⚠️ Cannot check Immich status</span>';
+      statusEl.style.backgroundColor = '#fff3cd';
+      statusEl.style.border = '1px solid #ffc107';
+    }
+  }
+
+  updateImmichStatus();
+
   const controls = document.createElement('div');
   controls.innerHTML = `
     <label>Date: <input type="date" id="trip-date" /></label>
     <button id="load-day">Load</button>
-    <button id="import-day">Import</button>
+    <button id="import-day" disabled>Import</button>
     <button id="publish-day" disabled>Publish selected</button>
     <button id="save-day" disabled>Save</button>
   `;
   panel.appendChild(controls);
+
+  // Update import button state based on Immich configuration
+  async function updateImportButtonState() {
+    try {
+      const res = await fetch(`${apiBase()}/api/admin/config`);
+      if (res.ok) {
+        const config = await res.json();
+        const importBtn = controls.querySelector('#import-day');
+        if (importBtn) {
+          importBtn.disabled = !config.immichConfigured;
+          if (!config.immichConfigured) {
+            importBtn.title = 'Immich not configured. Create a .env file first.';
+          } else {
+            importBtn.title = 'Import photos from Immich';
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to update import button state:', error);
+    }
+  }
+
+  updateImportButtonState();
+
+  // Add global function for downloading .env template
+  window.downloadEnvTemplate = async function() {
+    try {
+      const res = await fetch(`${apiBase()}/api/admin/env-template`);
+      if (res.ok) {
+        const template = await res.text();
+        const blob = new Blob([template], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '.env';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        alert('Downloaded .env template. Please edit it with your Immich settings and restart the server.');
+      }
+    } catch (error) {
+      console.error('Failed to download .env template:', error);
+      alert('Failed to download template. Please create a .env file manually.');
+    }
+  };
 
   const mapEl = document.createElement('div');
   mapEl.id = 'trip-map-admin';
@@ -338,8 +453,7 @@ function renderTripsTab(panel) {
     console.log('📅 Selected date:', dateVal);
     if (!dateVal) return alert('Choose date first');
 
-    // Load local settings and server config
-    const s = loadSettings();
+    // Load server config first (prioritize .env)
     let serverConfig = {};
     try {
       const res = await fetch(`${apiBase()}/api/admin/config`);
@@ -350,9 +464,17 @@ function renderTripsTab(panel) {
       console.warn('Failed to load server config:', error);
     }
     
-    // Use server config as fallback for album ID
-    const effectiveAlbumId = s.immichAlbumId || serverConfig.immichAlbumId || '';
-    console.log('⚙️ Using album ID:', effectiveAlbumId, '(local:', s.immichAlbumId, 'server:', serverConfig.immichAlbumId, ')');
+    // Check if Immich is properly configured
+    if (!serverConfig.immichConfigured) {
+      const missing = serverConfig.missingConfig || [];
+      const errorMsg = `Immich not configured. Missing: ${missing.join(', ')}.\n\nPlease create a .env file with:\nIMMICH_URL=https://your-immich-url.com\nIMMICH_API_KEYS=your_api_key_1,your_api_key_2\nIMMICH_ALBUM_ID=your_album_id (optional)`;
+      alert(errorMsg);
+      return;
+    }
+    
+    // Always use server config (from .env) as primary source
+    const effectiveAlbumId = serverConfig.immichAlbumId || '';
+    console.log('⚙️ Using album ID from .env:', effectiveAlbumId);
 
     // Reset dayData if switching to a different date so only photos for
     // the imported day are shown
@@ -378,7 +500,19 @@ function renderTripsTab(panel) {
     if (!resp.ok) {
       const err = await resp.json().catch(()=> ({}));
       console.warn('Immich import failed', err);
-      return alert('Immich import failed. Check the server logs.');
+      
+      let errorMessage = 'Immich import failed. ';
+      if (err.error) {
+        errorMessage += err.error;
+      } else if (resp.status === 500) {
+        errorMessage += 'Server error. Check if Immich URL and API keys are correct.';
+      } else if (resp.status === 404) {
+        errorMessage += 'Immich endpoint not found. Check your Immich URL.';
+      } else {
+        errorMessage += `HTTP ${resp.status}. Check the server logs.`;
+      }
+      
+      return alert(errorMessage);
     }
     const data = await resp.json();
     console.log('📦 API Response:', data);
@@ -459,9 +593,17 @@ function renderTripsTab(panel) {
         if (!confirm('Delete this photo from the day?')) return;
         try {
           const id = p.id || p.url; // backend uses id OR url
+          const adminToken = await getAdminToken();
+          const headers = {};
+          
+          // Only add admin token header if we have a real token (not 'server-configured')
+          if (adminToken !== 'server-configured') {
+            headers['x-admin-token'] = adminToken;
+          }
+          
           const res = await fetch(`${apiBase()}/api/day/${dayData.slug}/photo/${encodeURIComponent(id)}`, {
             method: 'DELETE',
-            headers: { 'x-admin-token': getAdminToken() }
+            headers
           });
           if (!res.ok) throw new Error('delete failed');
           wrap.remove();
@@ -567,12 +709,12 @@ function renderTripsTab(panel) {
               class="card-title"
               value="${htmlesc(title)}"
               placeholder="Stack title"
-              style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-weight:800;width:100%">
+              style="background:#f8f9fa;border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-weight:800;width:100%;color:#333;">
             <textarea
               data-role="stack-caption"
               rows="2"
               placeholder="Stack description"
-              style="width:100%;background:#fff;border:1px solid var(--border);border-radius:12px;padding:.6rem .75rem;">${htmlesc(desc)}</textarea>
+              style="width:100%;background:#f8f9fa;border:1px solid var(--border);border-radius:12px;padding:.6rem .75rem;color:#333;">${htmlesc(desc)}</textarea>
             <div style="display:flex; gap:8px; align-items:center;">
               <button class="stack-action-btn" data-role="save-stack">Save</button>
               <button class="stack-action-btn" data-role="open-editor">Open editor</button>
@@ -730,12 +872,19 @@ function renderTripsTab(panel) {
     }
 
     try {
+      const adminToken = await getAdminToken();
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      
+      // Only add admin token header if we have a real token (not 'server-configured')
+      if (adminToken !== 'server-configured') {
+        headers['x-admin-token'] = adminToken;
+      }
+
       const res = await fetch(`${apiBase()}/api/day/${dayData.slug}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-token': getAdminToken()
-        },
+        headers,
         body: JSON.stringify(dayData),
       });
       if (!res.ok) {
@@ -750,8 +899,10 @@ function renderTripsTab(panel) {
   }
 
   async function publishSelected() {
-    const adminToken = getAdminToken();
-    if (!adminToken) return alert('Set Admin API Token in Settings first');
+    const adminToken = await getAdminToken();
+    if (!adminToken) {
+      return alert('Admin token not configured. Please set ADMIN_TOKEN in your .env file or add a local API token in Settings.');
+    }
 
     const sel = (dayData.photos || []).filter(p => p._include !== false);
     if (!sel.length) return alert('Nothing selected');
@@ -771,12 +922,18 @@ function renderTripsTab(panel) {
       }))
     };
 
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    
+    // Only add admin token header if we have a real token (not 'server-configured')
+    if (adminToken !== 'server-configured') {
+      headers['x-admin-token'] = adminToken;
+    }
+
     const res = await fetch(`${apiBase()}/api/publish`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-admin-token': adminToken
-      },
+      headers,
       body: JSON.stringify(body)
     });
     const j = await res.json().catch(()=> ({}));
@@ -858,6 +1015,9 @@ async function renderSettingsTab(panel) {
     
     <label style="display:block; margin-top:0.5rem;">Admin API Token ${hasServerAdminToken ? '✅ Server has token' : '❌ Server missing token'}
       <input type="text" id="set-api-token" value="${s.apiToken || ''}" placeholder="${hasServerAdminToken ? 'Token configured on server (leave blank to use server token)' : 'Add your admin token here'}" style="width:100%;" />
+      <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+        ${hasServerAdminToken ? '✅ Server has ADMIN_TOKEN configured in .env file' : '❌ Set ADMIN_TOKEN=your_token in .env file or add token below'}
+      </div>
     </label>
     
     <h4>Legacy Settings</h4>

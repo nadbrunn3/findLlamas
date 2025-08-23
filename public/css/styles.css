@@ -376,7 +376,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .section-content.collapsed{max-height:0;opacity:0}
 .stack-comments{padding:16px;border-top:1px solid var(--border);background:#fafbfc}
 .comment-composer{display:flex;gap:8px;align-items:flex-end;margin-bottom:12px}
-.comment-input{flex:1;background:#fff;border:1px solid var(--border);color:#333;padding:8px 12px;border-radius:8px;font-size:14px;resize:vertical;min-height:40px;font-family:inherit}
+.comment-input{flex:1;background:#f8f9fa;border:1px solid #e5e7eb;color:#111827;padding:8px 12px;border-radius:8px;font-size:14px;resize:vertical;min-height:40px;font-family:inherit}
 .comment-input::placeholder{color:#999}
 .comment-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(139,184,255,.1)}
 .comment-submit{background:var(--accent);border:none;color:#fff;padding:8px 16px;border-radius:8px;cursor:pointer;transition:all .2s ease;font-size:14px;font-weight:500}
@@ -1804,7 +1804,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   }
   .comment-bubble{ background:#f9fafb; border-color:#e5e7eb; }
   .comment-text{ color:#1f2937; }
-  .comment-input{ background:#fff; border-color:#e5e7eb; color:#111827; }
+  .comment-input{ background:#f8f9fa; border-color:#e5e7eb; color:#111827; }
 }
 
 /* small screens */

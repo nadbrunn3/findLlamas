@@ -1,0 +1,32 @@
+{
+  "reactions": {},
+  "comments": [
+    {
+      "id": "1755945917788",
+      "text": "Suoer cool photo",
+      "author": "Anonymous",
+      "timestamp": "2025-08-23T10:45:17.788Z"
+    },
+    {
+      "id": "1755945921989",
+      "text": "hey so cool",
+      "author": "Anonymous",
+      "timestamp": "2025-08-23T10:45:21.989Z",
+      "parentId": "1755945917788"
+    },
+    {
+      "id": "1755945928695",
+      "text": "love it thx",
+      "author": "Anonymous",
+      "timestamp": "2025-08-23T10:45:28.695Z",
+      "parentId": "1755945921989"
+    },
+    {
+      "id": "1755945933447",
+      "text": "great",
+      "author": "Anonymous",
+      "timestamp": "2025-08-23T10:45:33.447Z",
+      "parentId": "1755945917788"
+    }
+  ]
+}
