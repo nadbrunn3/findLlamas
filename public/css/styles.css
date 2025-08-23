@@ -247,7 +247,6 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 /* ==== Persistent Thumbnail Rail (Legacy) ====*/
 .thumb-rail {
   position: absolute;
-  left: 16px;
   right: 16px;
   bottom: 16px;
   z-index: 3;
@@ -260,6 +259,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   background: rgba(0,0,0,.45);
   backdrop-filter: blur(6px);
   box-shadow: 0 8px 24px rgba(0,0,0,.25);
+  overflow: hidden;
 }
 
 .thumb-rail.expanded {
@@ -270,14 +270,14 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 }
 
 .rail-track {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: max-content;
+  display: flex;
   gap: 8px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
+  padding: 0 8px;
+  margin: 0 -8px;
 }
 .rail-track::-webkit-scrollbar { display: none; }
 
@@ -286,7 +286,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   height: 78px;
   border-radius: 12px;
   overflow: hidden;
-  border: 2px solid transparent;
+  border: 2px solid #fff;
   box-shadow: 0 6px 18px rgba(0,0,0,.25);
   scroll-snap-align: start;
   user-select: none;
@@ -297,10 +297,9 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 .rail-thumb img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 .rail-thumb:hover { transform: scale(1.03); opacity: 1; }
-.rail-thumb.active { border-color: var(--accent); outline:2px solid var(--accent); outline-offset:2px; opacity: 1; }
 
 .rail-track.dragging {
   cursor: grabbing;
@@ -324,10 +323,10 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 .rail-nav[disabled] { opacity: .4; cursor: not-allowed; }
 
-@media (max-width: 768px) {
-  .rail-thumb { width: 88px; height: 66px; border-radius: 10px; }
-  .thumb-rail { left: 12px; right: 12px; bottom: 12px; }
-}
+  @media (max-width: 768px) {
+    .rail-thumb { width: 88px; height: 66px; border-radius: 10px; }
+    .thumb-rail { right: 12px; bottom: 12px; }
+  }
 
 .photo-counter{position:absolute;right:14px;bottom:14px;color:#fff;background:rgba(0,0,0,.55);padding:6px 10px;border-radius:999px;font-weight:700;font-size:.82rem}
 
@@ -1900,7 +1899,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 .photo-main-media {
   width: 100%;
-  max-height: 400px;
+  max-height: 60vh;
   object-fit: cover;
   border-radius: 8px;
   cursor: pointer;
@@ -1925,39 +1924,13 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   font-weight: 400;
 }
 
-.photo-thumbnails {
-  position: absolute;
-  bottom: 16px;
-  right: 16px;
-  display: flex;
-  padding: 4px;
-  background: rgba(0,0,0,0.45);
-  backdrop-filter: blur(4px);
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-}
+/* thumbnail rail peek adjustments */
+.rail-thumb:focus-visible { outline: 2px solid #fff; }
 
-/* Legacy thumbnail styles - now handled by main thumbnail styles */
-
-.more-photos {
-  width: 60px;
-  height: 60px;
-  background: linear-gradient(135deg, rgba(0,0,0,0.6), rgba(0,0,0,0.3));
-  border: 2px solid #fff;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s ease;
-  margin-left: -16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-}
-
-.more-photos:hover {
-  background: linear-gradient(135deg, rgba(0,0,0,0.8), rgba(0,0,0,0.6));
+.rail-thumb.active {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px var(--accent);
+  transform: scale(1.03);
 }
 
 .photo-actions {
@@ -2086,13 +2059,13 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 /* Video and Image consistent styling */
 .photo-main img, .photo-main video,
-.photo-thumbnails img, .photo-thumbnails video,
 .media-tile {
   display:block;
   width:100%;
-  object-fit:contain;
+  object-fit:cover;
   border-radius:12px;
 }
+
 
 /* Videos in stacks are disabled from playing - no controls or interaction */
 .stack-main-photo video {
@@ -2101,7 +2074,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 }
 
 /* Thumbnail sizes handled by main thumbnail styles */
-.photo-main-media { max-height:45vh; }
+.photo-main-media { max-height:60vh; }
 
 /* ===== SOCIAL STACK CARDS ===== */
 

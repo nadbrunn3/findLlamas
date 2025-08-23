@@ -11,6 +11,8 @@ if (!daySlug) {
 
 let dayData = null;
 let map = null;
+let mainWrap = null;
+let thumbStrip = null;
 
 // ---------- media helpers ----------
 function isVideo(item) {
@@ -311,36 +313,95 @@ function renderPhotoPost() {
   `;
   container.innerHTML = headerHtml;
 
-  // Main media
-  const mainWrap = document.getElementById('photo-main');
-  const mainEl = renderMediaEl(main, { withControls: isVideo(main), className: 'photo-main-media' });
-  mainWrap.appendChild(mainEl);
+  // Main media container
+  mainWrap = document.getElementById('photo-main');
+  showMainPhoto(0);
 
-  // Thumbnails overlay
+  // Floating thumbnail rail for small previews
   if (items.length > 1) {
-    const thumbs = document.createElement('div');
-    thumbs.id = 'photo-thumbs';
-    thumbs.className = 'photo-thumbnails';
-    mainWrap.appendChild(thumbs);
-    const thumbItems = items.slice(1, 5);
-    thumbItems.forEach((it, idx) => {
-      const el = renderMediaEl(it, { withControls: false, className: 'thumbnail' });
-      el.addEventListener('click', () => openLightbox(idx + 1));
-      thumbs.appendChild(el);
-    });
-    if (items.length > 5) {
-      const more = document.createElement('div');
-      more.className = 'more-photos';
-      more.textContent = `+${items.length - 5}`;
-      more.addEventListener('click', () => openLightbox(5));
-      thumbs.appendChild(more);
-    }
-  }
+    const rail = document.createElement('div');
+    rail.className = 'thumb-rail';
 
-  // Click to open lightbox for images; videos keep controls/play
-  if (!isVideo(main)) {
-    mainEl.style.cursor = 'zoom-in';
-    mainEl.addEventListener('click', () => openLightbox(0));
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'rail-nav prev';
+    prevBtn.textContent = '‹';
+
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'rail-nav next';
+    nextBtn.textContent = '›';
+
+    const expandBtn = document.createElement('button');
+    expandBtn.className = 'rail-expand';
+    expandBtn.textContent = '⇵';
+
+    const track = document.createElement('div');
+    track.className = 'rail-track';
+
+    items.forEach((it, idx) => {
+      const el = renderMediaEl(it, { withControls: false, className: 'rail-thumb', useThumb: true });
+      el.tabIndex = 0;
+      el.addEventListener('click', () => { showMainPhoto(idx); openLightbox(idx); });
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          showMainPhoto(idx);
+          openLightbox(idx);
+        }
+      });
+      track.appendChild(el);
+    });
+
+    rail.appendChild(prevBtn);
+    rail.appendChild(track);
+    rail.appendChild(nextBtn);
+    rail.appendChild(expandBtn);
+    mainWrap.appendChild(rail);
+    thumbStrip = track;
+
+    const scrollBy = (dir) => {
+      track.scrollBy({ left: dir * track.clientWidth * 0.9, behavior: 'smooth' });
+    };
+    prevBtn.addEventListener('click', () => scrollBy(-1));
+    nextBtn.addEventListener('click', () => scrollBy(1));
+
+    const updateNav = () => {
+      prevBtn.disabled = track.scrollLeft <= 0;
+      nextBtn.disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 1;
+    };
+    track.addEventListener('scroll', updateNav);
+    updateNav();
+
+    expandBtn.addEventListener('click', () => {
+      rail.classList.toggle('expanded');
+    });
+
+    // Drag to scroll
+    let drag = false, startX = 0, startScroll = 0;
+    track.addEventListener('pointerdown', (e) => {
+      drag = true;
+      startX = e.clientX;
+      startScroll = track.scrollLeft;
+      track.classList.add('dragging');
+      track.setPointerCapture(e.pointerId);
+    });
+    track.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const dx = e.clientX - startX;
+      track.scrollLeft = startScroll - dx;
+    });
+    const stopDrag = () => {
+      drag = false;
+      track.classList.remove('dragging');
+    };
+    track.addEventListener('pointerup', stopDrag);
+    track.addEventListener('pointercancel', stopDrag);
+
+    track.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        track.scrollBy({ left: e.deltaY, behavior: 'smooth' });
+        e.preventDefault();
+      }
+    });
   }
 
   // Captions
@@ -356,6 +417,29 @@ function renderPhotoPost() {
     c.className = 'photo-caption';
     c.textContent = main.caption;
     captionWrap.appendChild(c);
+  }
+}
+
+function showMainPhoto(index) {
+  if (!dayData?.photos?.length || !mainWrap) return;
+  currentPhotoIndex = Math.max(0, Math.min(index, dayData.photos.length - 1));
+  const item = dayData.photos[currentPhotoIndex];
+  const newEl = renderMediaEl(item, { withControls: isVideo(item), className: 'photo-main-media' });
+  const old = mainWrap.querySelector('.photo-main-media');
+  if (old) {
+    mainWrap.replaceChild(newEl, old);
+  } else {
+    mainWrap.appendChild(newEl);
+  }
+  if (!isVideo(item)) {
+    newEl.style.cursor = 'zoom-in';
+    newEl.addEventListener('click', () => openLightbox(currentPhotoIndex));
+  }
+  if (thumbStrip) {
+    const thumbs = thumbStrip.querySelectorAll('.rail-thumb');
+    thumbs.forEach((t, i) => t.classList.toggle('active', i === currentPhotoIndex));
+    const active = thumbs[currentPhotoIndex];
+    if (active) active.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   }
 }
 
@@ -383,6 +467,7 @@ function openLightbox(index = 0) {
 
   currentPhotoIndex = Math.max(0, Math.min(index, dayData.photos.length - 1));
   const item = dayData.photos[currentPhotoIndex];
+  showMainPhoto(currentPhotoIndex);
 
   console.log('🔍 Opening lightbox for photo:', item);
 
