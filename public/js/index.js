@@ -523,13 +523,7 @@ function renderFeed(){
       mainEl.style.cursor = 'zoom-in';
       mainEl.addEventListener('click', () => openLightboxForStack(stack, current));
       
-      // Add caption if available
-      if (mainPhoto.caption) {
-        const c = document.createElement('p');
-        c.className = 'photo-caption';
-        c.textContent = mainPhoto.caption;
-        mainContainer.appendChild(c);
-      }
+      // Caption removed - no longer displaying picture names
       
       // Update thumbnail active states
       if (drawer) {
