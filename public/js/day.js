@@ -321,11 +321,16 @@ function initMap() {
 
   console.log(`📍 Found ${photosWithGPS.length} media with GPS coordinates`);
 
+  const isMobile = matchMedia('(max-width:768px)').matches;
+  
   map = L.map('map', {
     zoomControl: true,
     dragging: true,
-    scrollWheelZoom: true,
-    touchZoom: true
+    scrollWheelZoom: !isMobile, // Prevent scroll conflicts on mobile
+    touchZoom: true,            // Enable touch zoom on all devices
+    doubleClickZoom: true,      // Enable double-click zoom
+    boxZoom: !isMobile,         // Enable box zoom on desktop only
+    keyboard: !isMobile         // Enable keyboard navigation on desktop only
   });
 
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {

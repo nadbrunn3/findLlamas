@@ -2213,6 +2213,52 @@ input[placeholder*="comment" i]::placeholder,
 .thumb-scroll.right{ right: -8px; }
 .stack-thumbnail-drawer:not(.has-overflow) .thumb-scroll{ display:none; }
 
+/* ===== MOBILE MAP TOUCH IMPROVEMENTS ===== */
+@media (max-width: 768px) {
+  /* Improve touch handling for maps */
+  .leaflet-container {
+    touch-action: pan-x pan-y;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  
+  /* Prevent page scroll when interacting with map */
+  .leaflet-container.leaflet-touch-drag {
+    touch-action: none;
+  }
+  
+  /* Make zoom controls more touch-friendly */
+  .leaflet-control-zoom a {
+    width: 36px !important;
+    height: 36px !important;
+    line-height: 36px !important;
+    font-size: 20px !important;
+    border-radius: 8px !important;
+  }
+  
+  /* Improve attribution positioning on mobile */
+  .leaflet-control-attribution {
+    font-size: 10px !important;
+    background: rgba(255,255,255,0.8) !important;
+    padding: 2px 4px !important;
+  }
+  
+  /* Better touch targets for map markers */
+  .photo-marker {
+    cursor: pointer;
+  }
+  
+  .pm__wrap {
+    transition: transform 0.2s ease;
+  }
+  
+  .pm__wrap:active {
+    transform: scale(1.2);
+  }
+}
+
 /* ===== PRINT STYLES ===== */
 @media print{
   .plb-root{display:none}

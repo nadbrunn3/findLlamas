@@ -409,10 +409,13 @@ function initMaps(){
   if (!window.L) return;
 
   topMap = L.map('top-map', {
-    zoomControl: !isMobile,     // cleaner on phones
-    dragging: !isMobile,        // optional: display-only on phones; tap "expand" for full map view
-    scrollWheelZoom: !isMobile,
-    touchZoom: !isMobile
+    zoomControl: true,          // Enable zoom controls on all devices
+    dragging: true,             // Enable dragging on all devices
+    scrollWheelZoom: !isMobile, // Keep scroll wheel zoom disabled on mobile to prevent conflicts
+    touchZoom: true,            // Enable touch zoom on all devices
+    doubleClickZoom: true,      // Enable double-click zoom
+    boxZoom: !isMobile,         // Enable box zoom on desktop only
+    keyboard: !isMobile         // Enable keyboard navigation on desktop only
   });
 
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -2089,9 +2092,17 @@ function openMapOverlayAt(lat, lon, title=''){
   document.documentElement.style.overflow = 'hidden';
   document.body.style.overflow = 'hidden';
 
-  // create Leaflet map
+  // create Leaflet map with mobile-friendly settings
   const center = [lat, lon];
-  _mapOverlayMap = L.map('overlay-map', { zoomControl: true });
+  _mapOverlayMap = L.map('overlay-map', { 
+    zoomControl: true,
+    dragging: true,
+    scrollWheelZoom: !isMobile, // Prevent scroll conflicts on mobile
+    touchZoom: true,            // Enable touch zoom
+    doubleClickZoom: true,      // Enable double-click zoom
+    boxZoom: !isMobile,         // Enable box zoom on desktop only
+    keyboard: !isMobile         // Enable keyboard navigation on desktop only
+  });
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution:'&copy; OSM contributors', maxZoom: 19
   }).addTo(_mapOverlayMap);
