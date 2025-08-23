@@ -17,12 +17,12 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 /* ===== HERO / TITLE PAGE HEADER ===== */
 .hero {
   position: relative;
-  min-height: 18vh;
+  min-height: 14vh;
   display: grid;
   place-items: center;
   text-align: center;
   color: #fff;
-  padding: 2.5rem 1rem;
+  padding: 1.5rem 1rem;
   /* Replace the URL below with your map or hero image if needed */
   background: #0f172a url('your-map-image.jpg') center / cover no-repeat;
 }
@@ -82,7 +82,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 /* Quarter-screen map */
 .top-map{
-  height: 20vh;
+  height: 30vh;
   width: 100%;
   border-radius: 0;
 }
@@ -93,7 +93,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
   .leaflet-container { touch-action: pan-y; } /* let vertical page scroll pass */
   
   /* Slightly taller on mobile for better usability */
-  .top-map { height: 30vh; }
+  .top-map { height: 40vh; }
 }
 
 /* Optional: a tiny expand button on mobile to open the full map view */
