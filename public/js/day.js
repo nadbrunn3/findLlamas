@@ -343,14 +343,8 @@ function renderPhotoPost() {
     mainEl.addEventListener('click', () => openLightbox(0));
   }
 
-  // Captions
+  // Caption
   const captionWrap = document.getElementById('photo-caption-container');
-  if (main.title) {
-    const t = document.createElement('p');
-    t.className = 'photo-title';
-    t.textContent = main.title;
-    captionWrap.appendChild(t);
-  }
   if (main.caption) {
     const c = document.createElement('p');
     c.className = 'photo-caption';
