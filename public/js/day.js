@@ -1,10 +1,10 @@
 import { dataUrl, getApiBase, haversineKm, escapeHtml, formatTime, formatDateTime, groupIntoStacks, formatDate } from "./utils.js";
 
 const MAPBOX_STYLE = 'mapbox://styles/mapbox/satellite-streets-v12';
-// Use Mapbox's public demo token by default; replace with your own for production.
+// Use provided Mapbox token by default; replace with your own for production.
 mapboxgl.accessToken =
   mapboxgl.accessToken ||
-  'pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYzM3A0NHBmcWl3N3gifQ.-6l5pXn6VxDSHLyfXDBlnA';
+  'pk.eyJ1IjoianVkZ2UtbW9ja3VwLXdoYW0iLCJhIjoiY21lb3M4dHJiMGUxcjJqcXZ4YzZwZjhubSJ9.EptPsUdI5bt2hOIZfZL3Yg';
 
 // Get date from URL parameter
 const urlParams = new URLSearchParams(window.location.search);

@@ -1,10 +1,10 @@
 import { dataUrl, getApiBase, groupIntoStacks, debounce, urlParam, pushUrlParam, replaceUrlParam, fmtTime, escapeHtml, formatDate } from "./utils.js";
 
 const MAPBOX_STYLE = 'mapbox://styles/mapbox/satellite-streets-v12';
-// Use Mapbox's public demo token by default; replace with your own for production.
+// Use provided Mapbox token by default; replace with your own for production.
 mapboxgl.accessToken =
   mapboxgl.accessToken ||
-  'pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYzM3A0NHBmcWl3N3gifQ.-6l5pXn6VxDSHLyfXDBlnA';
+  'pk.eyJ1IjoianVkZ2UtbW9ja3VwLXdoYW0iLCJhIjoiY21lb3M4dHJiMGUxcjJqcXZ4YzZwZjhubSJ9.EptPsUdI5bt2hOIZfZL3Yg';
 
 const isMobile = matchMedia('(max-width:768px)').matches;
 let topMap;
@@ -2123,10 +2123,11 @@ const panTopMapTo = debounce((id)=>{
     targetZoom = Math.min(targetZoom, 8); // Limit zoom when starting from far out
   }
   
-  topMap.setView([s.location.lat, s.location.lng], targetZoom, { 
-    animate: true, 
-    duration: 0.5,
-    easeLinearity: 0.1
+  topMap.flyTo({
+    center: [s.location.lng, s.location.lat],
+    zoom: targetZoom,
+    duration: 500,
+    essential: true
   });
 }, 80);
 
