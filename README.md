@@ -152,6 +152,7 @@ Minimal `.env` example:
 IMMICH_URL=https://photos.example.com
 IMMICH_API_KEY=your_api_key
 IMMICH_ALBUM_ID=your_album_id
+ANON_COOKIE_SECRET=long_random_string
 ```
 
 Running the loader for `2025-08-14` with the above settings creates `public/data/days/2025-08-14.json` containing only photos from the specified album.
