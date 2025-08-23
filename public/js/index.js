@@ -475,6 +475,9 @@ function initMaps(){
 
   addMarkersAndPath(topMap);
 
+  // Add fullscreen toggle button
+  addFullscreenToggle(topMap, 'top-map');
+
   // Fit once everything is known
   const b = L.latLngBounds([[currentLocation.lat,currentLocation.lng]]);
   allPhotos.forEach(p=> {
@@ -2167,6 +2170,87 @@ function setupScrollSync(){
 }
 
 
+
+// ---------- fullscreen toggle for maps ----------
+function addFullscreenToggle(map, containerId) {
+  // Create fullscreen toggle button
+  const fullscreenControl = L.control({ position: 'topright' });
+  
+  fullscreenControl.onAdd = function() {
+    const button = L.DomUtil.create('button', 'leaflet-control-fullscreen');
+    button.innerHTML = `
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+      </svg>
+    `;
+    button.title = 'Toggle fullscreen';
+    button.setAttribute('aria-label', 'Toggle fullscreen map');
+    
+    // Prevent map interaction when clicking the button
+    L.DomEvent.disableClickPropagation(button);
+    L.DomEvent.on(button, 'click', function(e) {
+      L.DomEvent.stopPropagation(e);
+      openFullscreenMapFromRegularMap(map, containerId);
+    });
+    
+    return button;
+  };
+  
+  fullscreenControl.addTo(map);
+}
+
+function openFullscreenMapFromRegularMap(sourceMap, containerId) {
+  console.log('🗺️ Opening fullscreen map from regular map');
+  
+  // Get all photos with coordinates for this map
+  let photosForMap = [];
+  
+  if (containerId === 'top-map') {
+    // Main dashboard - use all photos from all stacks
+    photosForMap = allPhotos.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon))
+      .map(p => ({
+        id: p.id,
+        url: p.url,
+        thumb: p.thumb || p.url,
+        caption: p.caption || p.title || '',
+        title: p.title || '',
+        lat: p.lat,
+        lon: p.lon,
+        taken_at: p.taken_at,
+        mimeType: p.mimeType,
+        kind: p.kind
+      }));
+  } else {
+    // Day view - use photos from current day
+    if (window.dayData && window.dayData.photos) {
+      photosForMap = window.dayData.photos.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon))
+        .map(p => ({
+          id: p.id,
+          url: p.url,
+          thumb: p.thumb || p.url,
+          caption: p.caption || p.title || '',
+          title: p.title || '',
+          lat: p.lat,
+          lon: p.lon,
+          taken_at: p.taken_at,
+          mimeType: p.mimeType,
+          kind: p.kind
+        }));
+    }
+  }
+  
+  if (photosForMap.length === 0) {
+    console.log('⚠️ No photos with coordinates found for fullscreen map');
+    return;
+  }
+  
+  // Use the same fullscreen map function from photo-lightbox.js
+  if (window.openFullscreenMapWithPhotos) {
+    window.openFullscreenMapWithPhotos(photosForMap, 0);
+  } else {
+    console.error('❌ openFullscreenMapWithPhotos function not available');
+  }
+}
 
 // ---------- full-screen map overlay ----------
 let _mapOverlayEl = null;

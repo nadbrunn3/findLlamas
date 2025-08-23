@@ -759,6 +759,47 @@ video.drawer-thumbnail::after {
 .stack-comments .comment-submit { border:1px solid #8bb8ff; color:#2b6cb0; background: #547dc9; border-radius:8px; padding:.45rem .8rem; }
 
 /* lightbox shell */
+/* Fullscreen map toggle button */
+.leaflet-control-fullscreen {
+  background: white;
+  border: 2px solid rgba(0,0,0,0.2);
+  border-radius: 4px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #333;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.leaflet-control-fullscreen:hover {
+  background: #f4f4f4;
+  border-color: rgba(0,0,0,0.3);
+}
+
+.leaflet-control-fullscreen svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Photo bubble markers for fullscreen map */
+.photo-bubble-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.photo-bubble {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.photo-bubble:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
 .lb-portal { 
   position: fixed; 
   inset: 0; 

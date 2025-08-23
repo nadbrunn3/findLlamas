@@ -342,28 +342,8 @@ window.openPhotoLightbox = (photos, startIndex=0) => {
       }, 50);
     }
 
-    const latlng = [p.lat, p.lon];
-
-    // Prefer the rich overlay map when available
-    if (window.openMapOverlayAt) {
-      window.openMapOverlayAt(p.lat, p.lon, '');
-
-      // When overlay closes, pan page map (if present)
-      const onClose = ()=>{
-        if (window.topMap?.panTo) window.topMap.panTo(latlng);
-        document.removeEventListener('map:closed', onClose);
-      };
-      document.addEventListener('map:closed', onClose);
-      return;
-    }
-
-    // Fallback: pan existing page map or open Google Maps
-    if (window.topMap?.panTo) {
-      window.topMap.panTo(latlng);
-    } else {
-      const url = `https://maps.google.com/?q=${p.lat},${p.lon}`;
-      window.open(url, '_blank');
-    }
+    // Open fullscreen map with all photos and focus on current photo
+    openFullscreenMapWithPhotos(photos, i);
   });
   
   // Keyboard handler with escape
@@ -423,3 +403,196 @@ window.openPhotoLightbox = (photos, startIndex=0) => {
 
   show(i);
 };
+
+// --- FULLSCREEN MAP WITH PHOTO BUBBLES ---
+function openFullscreenMapWithPhotos(photos, focusIndex = 0) {
+  console.log('🗺️ Opening fullscreen map with', photos.length, 'photos');
+  
+  // Remove any existing fullscreen map
+  const existing = document.querySelector('.fullscreen-map-overlay');
+  if (existing) existing.remove();
+  
+  // Create fullscreen map overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'fullscreen-map-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.9);
+    z-index: 10001;
+    display: flex;
+    flex-direction: column;
+  `;
+  
+  // Create header bar
+  const headerBar = document.createElement('div');
+  headerBar.style.cssText = `
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px;
+    background: rgba(17, 24, 39, 0.95);
+    border-bottom: 1px solid rgba(75, 85, 99, 0.5);
+  `;
+  
+  const title = document.createElement('h3');
+  title.textContent = 'Photo Locations';
+  title.style.cssText = `
+    color: white;
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+  `;
+  
+  const closeBtn = document.createElement('button');
+  closeBtn.innerHTML = '×';
+  closeBtn.style.cssText = `
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    font-size: 24px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `;
+  
+  headerBar.appendChild(title);
+  headerBar.appendChild(closeBtn);
+  
+  // Create map container
+  const mapContainer = document.createElement('div');
+  mapContainer.id = 'fullscreen-photo-map';
+  mapContainer.style.cssText = `
+    flex: 1;
+    width: 100%;
+    height: 100%;
+  `;
+  
+  // Assemble overlay
+  overlay.appendChild(headerBar);
+  overlay.appendChild(mapContainer);
+  document.body.appendChild(overlay);
+  
+  // Lock scroll
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+  
+  // Close functionality
+  const closeFullscreenMap = () => {
+    console.log('🔒 Closing fullscreen map');
+    if (fullscreenMap) {
+      fullscreenMap.remove();
+      fullscreenMap = null;
+    }
+    overlay.remove();
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+  };
+  
+  closeBtn.onclick = closeFullscreenMap;
+  
+  // ESC key to close
+  const escHandler = (e) => {
+    if (e.key === 'Escape') {
+      closeFullscreenMap();
+      document.removeEventListener('keydown', escHandler);
+    }
+  };
+  document.addEventListener('keydown', escHandler);
+  
+  // Create Leaflet map
+  const fullscreenMap = L.map('fullscreen-photo-map', {
+    zoomControl: true,
+    dragging: true,
+    scrollWheelZoom: true,
+    touchZoom: true,
+    doubleClickZoom: true,
+    boxZoom: true,
+    keyboard: true
+  });
+  
+  // Add tile layer
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    attribution: "&copy; Esri",
+    maxZoom: 18
+  }).addTo(fullscreenMap);
+  
+         // Add photo markers with circular bubbles (same as regular maps)
+       const bounds = L.latLngBounds();
+       const photosWithCoords = photos.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon));
+
+       photosWithCoords.forEach((photo, index) => {
+         bounds.extend([photo.lat, photo.lon]);
+
+         // Create custom circular photo bubble marker (same as regular maps)
+         const bubbleIcon = L.divIcon({
+           className: 'photo-bubble-marker',
+           html: `
+             <div class="photo-bubble" style="
+               width: 40px;
+               height: 40px;
+               border-radius: 50%;
+               border: 3px solid white;
+               box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+               overflow: hidden;
+               cursor: pointer;
+               background: white;
+             ">
+               <img src="${photo.thumb || photo.url}" style="
+                 width: 100%;
+                 height: 100%;
+                 object-fit: cover;
+               " alt="Photo">
+             </div>
+           `,
+           iconSize: [40, 40],
+           iconAnchor: [20, 20]
+         });
+
+         const marker = L.marker([photo.lat, photo.lon], { icon: bubbleIcon }).addTo(fullscreenMap);
+
+         // Click handler to open lightbox
+         marker.on('click', () => {
+           // Close fullscreen map
+           closeFullscreenMap();
+
+           // Small delay then open lightbox
+           setTimeout(() => {
+             const originalIndex = photos.findIndex(p => p.id === photo.id || p.url === photo.url);
+             if (window.openPhotoLightbox) {
+               window.openPhotoLightbox(photos, originalIndex >= 0 ? originalIndex : index);
+             }
+           }, 100);
+         });
+       });
+  
+  // Fit map to show all markers
+  if (bounds.isValid()) {
+    fullscreenMap.fitBounds(bounds, { padding: [50, 50] });
+    
+    // If focusing on specific photo, zoom to it after a delay
+    if (focusIndex >= 0 && focusIndex < photosWithCoords.length) {
+      const focusPhoto = photosWithCoords[focusIndex] || photos[focusIndex];
+      if (focusPhoto && Number.isFinite(focusPhoto.lat) && Number.isFinite(focusPhoto.lon)) {
+        setTimeout(() => {
+          fullscreenMap.setView([focusPhoto.lat, focusPhoto.lon], Math.max(fullscreenMap.getZoom(), 12));
+        }, 1000);
+      }
+    }
+  }
+  
+  // Invalidate size after a short delay
+  setTimeout(() => fullscreenMap.invalidateSize(), 100);
+  
+  console.log('✅ Fullscreen map created with', photosWithCoords.length, 'photo markers');
+}
+
+// Make the function globally available
+window.openFullscreenMapWithPhotos = openFullscreenMapWithPhotos;
