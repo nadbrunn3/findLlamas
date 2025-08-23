@@ -3,6 +3,8 @@
 import fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import cors from '@fastify/cors';
+import fastifyCookie from '@fastify/cookie';
+import { anonPlugin } from './anon.js';
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
@@ -38,6 +40,8 @@ const AUTOLOAD_INTERVAL = 60 * 60 * 1000; // 1 hour
 // helpers
 const app = fastify({ logger: true });
 app.register(cors, { origin: true });
+app.register(fastifyCookie, { secret: process.env.ANON_COOKIE_SECRET });
+app.register(anonPlugin);
 
 // serve /public so /day.html, /js/day.js, /css etc. work
 // Use REPO_DIR to ensure correct static root even when the working directory differs
