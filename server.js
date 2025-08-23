@@ -679,6 +679,7 @@ app.post('/api/photo/:photoId/comment', async (req, reply) => {
       id: Date.now().toString(),
       text: String(text).trim(),
       author: author || 'Anonymous',
+      authorId: req.anonId,
       timestamp: new Date().toISOString()
     };
     data.comments.push(comment);
@@ -752,6 +753,7 @@ app.post('/api/stack/:stackId/comment', async (req, reply) => {
       id: Date.now().toString(),
       text: String(text).trim(),
       author: author || 'Anonymous',
+      authorId: req.anonId,
       timestamp: new Date().toISOString()
     };
     data.comments.push(comment);
