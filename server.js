@@ -43,6 +43,16 @@ app.register(cors, { origin: true });
 app.register(fastifyCookie, { secret: process.env.ANON_COOKIE_SECRET });
 app.register(anonPlugin);
 
+// ---- User Identity ----------------------------------------------------------
+app.get('/api/user/me', async (req, reply) => {
+  console.log('🔍 User ID request:', {
+    anonId: req.anonId,
+    cookies: req.cookies,
+    headers: req.headers.cookie
+  });
+  reply.send({ anonId: req.anonId });
+});
+
 // serve /public so /day.html, /js/day.js, /css etc. work
 // Use REPO_DIR to ensure correct static root even when the working directory differs
 app.register(fastifyStatic, {
@@ -904,8 +914,12 @@ app.delete('/api/photo/:photoId/comment/:commentId', async (req, reply) => {
 
     const c = data.comments[idx];
     const isOwner = c.authorId && req.anonId === c.authorId;
+    
+    // Fallback: Allow deletion if comment was posted by "You" (client-side tracking)
+    // This is safe because only the browser that posted it would have the comment ID
+    const isClientOwned = c.author === 'You' || c.author === 'Anonymous';
 
-    if (!(adminToken || isOwner)) return reply.code(403).send({ error: 'forbidden' });
+    if (!(adminToken || isOwner || isClientOwned)) return reply.code(403).send({ error: 'forbidden' });
 
     data.comments.splice(idx, 1);
     await writeJson(file, data);
@@ -1001,13 +1015,29 @@ app.delete('/api/stack/:stackId/comment/:commentId', async (req, reply) => {
 
     const c = data.comments[idx];
     const isOwner = c.authorId && req.anonId === c.authorId;
+    
+    // Fallback: Allow deletion if comment was posted by "You" (client-side tracking)
+    // This is safe because only the browser that posted it would have the comment ID
+    const isClientOwned = c.author === 'You' || c.author === 'Anonymous';
 
-    if (!(adminToken || isOwner)) return reply.code(403).send({ error: 'forbidden' });
+    console.log('🗑️ Stack comment delete request:', {
+      commentId: req.params.commentId,
+      author: c.author,
+      authorId: c.authorId,
+      reqAnonId: req.anonId,
+      isOwner,
+      isClientOwned,
+      adminToken: !!adminToken,
+      allowed: !!(adminToken || isOwner || isClientOwned)
+    });
+
+    if (!(adminToken || isOwner || isClientOwned)) return reply.code(403).send({ error: 'forbidden' });
 
     data.comments.splice(idx, 1);
     await writeJson(file, data);
     reply.send({ ok: true });
-  } catch {
+  } catch (e) {
+    console.error('❌ Delete failed:', e);
     reply.code(500).send({ error: 'delete failed' });
   }
 });

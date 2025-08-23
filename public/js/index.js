@@ -233,6 +233,22 @@ async function init(){
 }
 
 // ---------- data ----------
+// Track comments posted by this browser session
+let myCommentIds = new Set(JSON.parse(localStorage.getItem('myCommentIds') || '[]'));
+
+function addMyComment(commentId) {
+  myCommentIds.add(commentId);
+  localStorage.setItem('myCommentIds', JSON.stringify([...myCommentIds]));
+}
+
+function isMyComment(commentId) {
+  return myCommentIds.has(commentId);
+}
+
+// Make functions available globally for lightbox
+window.addMyComment = addMyComment;
+window.isMyComment = isMyComment;
+
 // Drag-to-scroll helper function
 function makeDragScrollable(el) {
   let isDown = false, startX = 0, startScroll = 0;
@@ -893,6 +909,82 @@ function bindDiscussionThread(stackId, block) {
   // Main comment composer
   bindCommentComposer(stackId, block);
   
+  // Delete comment handler (event delegation)
+  block.addEventListener('click', async (e) => {
+    if (e.target.classList.contains('delete-comment')) {
+      const commentId = e.target.closest('.comment').dataset.commentId;
+      if (!commentId || !confirm('Delete this comment?')) return;
+
+      const commentElement = e.target.closest('.comment');
+      if (!commentElement) return;
+      
+      // Debug: Log what we're trying to delete
+      console.log('🗑️ Attempting to delete comment:', {
+        commentId,
+        stackId,
+        url: `${getApiBase()}/api/stack/${stackId}/comment/${commentId}`
+      });
+
+      // Optimistically remove from UI
+      const originalParent = commentElement.parentNode;
+      const originalNextSibling = commentElement.nextSibling;
+      commentElement.remove();
+
+      try {
+        const res = await fetch(`${getApiBase()}/api/stack/${stackId}/comment/${commentId}`, {
+          method: 'DELETE'
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+
+        // Update comment count - handle nested replies
+        const state = discussionState.get(stackId);
+        
+        // Recursive function to remove comment from nested structure
+        function removeCommentById(comments, targetId) {
+          return comments.filter(comment => {
+            if (comment.id === targetId) {
+              return false; // Remove this comment
+            }
+            if (comment.replies && comment.replies.length > 0) {
+              comment.replies = removeCommentById(comment.replies, targetId);
+            }
+            return true;
+          });
+        }
+        
+        state.comments = removeCommentById(state.comments, commentId);
+        updateThreadCount(stackId, block);
+        
+        console.log('✅ Comment deleted successfully');
+      } catch (error) {
+        console.error('❌ Failed to delete comment:', error);
+        console.error('❌ Error details:', {
+          message: error.message,
+          stack: error.stack,
+          response: error.response
+        });
+        
+        // Restore comment on error
+        if (originalNextSibling) {
+          originalParent.insertBefore(commentElement, originalNextSibling);
+        } else {
+          originalParent.appendChild(commentElement);
+        }
+        
+        if (error.message.includes('403')) {
+          alert('Failed to delete comment: You can only delete your own comments.');
+        } else if (error.message.includes('404')) {
+          alert('Failed to delete comment: Comment not found.');
+        } else {
+          alert(`Failed to delete comment: ${error.message || 'Unknown error'}`);
+        }
+      }
+    }
+  });
+  
   // Comments start collapsed by default
 }
 
@@ -959,11 +1051,14 @@ function bindCommentComposer(stackId, block) {
       const res = await fetch(`${getApiBase()}/api/stack/${stackId}/comment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
+        body: JSON.stringify({ text, author: 'You' })
       });
       
       if (res.ok) {
         const result = await res.json();
+        // Track this as my comment
+        addMyComment(result.comment.id);
+        
         // Replace temp comment with real one
         const index = state.comments.findIndex(c => c.id === tempComment.id);
         if (index !== -1) {
@@ -1068,6 +1163,7 @@ function renderCommentThread(comment, container, stackId, depth = 0) {
       <div class="body">${escapeHtml(comment.text || '').replace(/\n/g, '<br>')}</div>
       <div class="actions">
         <button class="reply" type="button">Reply</button>
+        <button class="delete-comment" type="button" title="Delete comment" style="display: none;">🗑️</button>
       </div>
       <form class="reply-composer" hidden>
         <div class="reply-chip">
@@ -1084,6 +1180,15 @@ function renderCommentThread(comment, container, stackId, depth = 0) {
   `;
   
   container.appendChild(li);
+  
+  // Check ownership and show delete button if owned by current user
+  if (isMyComment(comment.id)) {
+    const deleteBtn = li.querySelector('.delete-comment');
+    if (deleteBtn) {
+      deleteBtn.style.display = 'inline-block';
+      console.log('✅ Delete button shown for my comment:', comment.id);
+    }
+  }
   
   // Add has-replies class if this comment has replies
   if (comment.replies && comment.replies.length > 0) {
@@ -1326,11 +1431,14 @@ function bindReplyComposer(stackId, composer, parentCommentId) {
       const res = await fetch(`${getApiBase()}/api/stack/${stackId}/comment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, parentId: parentCommentId })
+        body: JSON.stringify({ text, author: 'You', parentId: parentCommentId })
       });
       
       if (res.ok) {
         const result = await res.json();
+        
+        // Track this as my comment
+        addMyComment(result.comment.id);
         
         // Close composer first
         closeReplyComposer(composer);

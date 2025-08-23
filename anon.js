@@ -21,12 +21,14 @@ export function anonPlugin(app, opts, done) {
   app.addHook('onRequest', (req, reply, doneHook) => {
     const raw = req.cookies?.[COOKIE]; // make sure you registered @fastify/cookie
     let id = unpack(raw);
+    console.log('🍪 Cookie check:', { raw, unpacked: id, cookies: req.cookies });
     if (!id) {
       id = newId();
+      console.log('🆕 Setting new cookie:', id);
       reply.setCookie(COOKIE, pack(id), {
         httpOnly: true,
         sameSite: 'lax',
-        secure: true,          // set to true in production (https)
+        secure: false,         // set to true in production (https), false for localhost
         path: '/',
         maxAge: 60 * 60 * 24 * 365 * 5, // 5 years
       });

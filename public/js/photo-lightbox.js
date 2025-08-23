@@ -23,10 +23,20 @@ function renderLbComment(c){
           <span class="lb-author">${escapeHtml(c.author || 'Anonymous')}</span>
           <span class="lb-time">${new Date(c.timestamp || c.edited || Date.now()).toLocaleString([], {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short'})}</span>
         </div>
-        ${c.id && !c.id.startsWith('temp-') ? `<button class="lb-comment-delete" data-comment-id="${c.id}" title="Delete comment">🗑️</button>` : ''}
+        <button class="lb-comment-delete" data-comment-id="${c.id}" title="Delete comment" style="display: none;">🗑️</button>
       </div>
       <div class="lb-text">${escapeHtml(c.text || '')}</div>
     </div>`;
+  
+  // Check ownership and show delete button if owned by current user
+  if (isMyComment(c.id)) {
+    const deleteBtn = li.querySelector('.lb-comment-delete');
+    if (deleteBtn) {
+      deleteBtn.style.display = 'inline-block';
+      console.log('✅ Lightbox delete button shown for my comment:', c.id);
+    }
+  }
+  
   return li;
 }
 
@@ -105,9 +115,17 @@ function bindLbPanel(photoId){
     try{
       const res = await fetch(`${api}/api/photo/${photoId}/comment`, {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ text })
+        body: JSON.stringify({ text, author: 'You' })
       });
       const out = await res.json();
+      
+      // Track this as my comment
+      if (out.comment && out.comment.id) {
+        addMyComment(out.comment.id);
+        // Re-render the comment list to show delete buttons
+        loadPhotoInteractions(photoId, panel);
+      }
+      
       // bump count
       const cBtn = panel.querySelector('.lb-comments-btn .count');
       cBtn.textContent = (+cBtn.textContent || 0) + 1;
@@ -142,38 +160,31 @@ function bindLbPanel(photoId){
         commentItem.remove();
 
         try {
-          // Get admin token the same way as the admin panel
-          const getAdminToken = () => {
-            try {
-              const settings = JSON.parse(localStorage.getItem('tripAdminSettings') || '{}');
-              return settings.apiToken || localStorage.getItem('tripAdminPass') || '';
-            } catch {
-              return localStorage.getItem('tripAdminPass') || '';
-            }
-          };
-          
-          const adminToken = getAdminToken();
-          console.log('🔑 Using admin token for photo comment delete:', adminToken ? '***set***' : 'NOT SET');
+          console.log('🗑️ Attempting to delete lightbox comment:', {
+            commentId,
+            photoId,
+            url: `${api}/api/photo/${photoId}/comment/${commentId}`
+          });
           
           const res = await fetch(`${api}/api/photo/${photoId}/comment/${commentId}`, {
-            method: 'DELETE',
-            headers: {
-              'x-admin-token': adminToken
-            }
+            method: 'DELETE'
           });
 
           if (!res.ok) {
-            const errorText = await res.text().catch(() => 'Unknown error');
-            throw new Error(`Delete failed: ${res.status} - ${errorText}`);
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
           }
 
           // Update comment count
           const cBtn = panel.querySelector('.lb-comments-btn .count');
           cBtn.textContent = Math.max(0, (+cBtn.textContent || 0) - 1);
           
-          console.log('✅ Photo comment deleted successfully');
+          console.log('✅ Lightbox comment deleted successfully');
         } catch (error) {
-          console.error('❌ Failed to delete photo comment:', error);
+          console.error('❌ Failed to delete lightbox comment:', error);
+          console.error('❌ Error details:', {
+            message: error.message,
+            stack: error.stack
+          });
           
           // Restore comment on error
           if (originalNextSibling) {
@@ -182,10 +193,12 @@ function bindLbPanel(photoId){
             originalParent.appendChild(commentItem);
           }
           
-          if (error.message.includes('401')) {
-            alert('Failed to delete comment: Unauthorized. Please go to the admin panel (/admin/) and set your admin token in Settings.');
+          if (error.message.includes('403')) {
+            alert('Failed to delete comment: You can only delete your own comments.');
+          } else if (error.message.includes('404')) {
+            alert('Failed to delete comment: Comment not found.');
           } else {
-            alert(`Failed to delete comment: ${error.message}`);
+            alert(`Failed to delete comment: ${error.message || 'Unknown error'}`);
           }
         }
       }
