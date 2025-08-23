@@ -1,5 +1,8 @@
 import { dataUrl, getApiBase, haversineKm, escapeHtml, formatTime, formatDateTime, groupIntoStacks, formatDate } from "./utils.js";
 
+const MAPBOX_STYLE = 'mapbox://styles/<user>/<vibrant-satellite-style>';
+mapboxgl.accessToken = mapboxgl.accessToken || 'YOUR_MAPBOX_ACCESS_TOKEN';
+
 // Get date from URL parameter
 const urlParams = new URLSearchParams(window.location.search);
 const daySlug = urlParams.get('date');
@@ -323,69 +326,86 @@ function initMap() {
 
   const isMobile = matchMedia('(max-width:768px)').matches;
   
-  map = L.map('map', {
-    zoomControl: true,
-    dragging: true,
-    scrollWheelZoom: !isMobile, // Prevent scroll conflicts on mobile
-    touchZoom: true,            // Enable touch zoom on all devices
-    doubleClickZoom: true,      // Enable double-click zoom
-    boxZoom: !isMobile,         // Enable box zoom on desktop only
-    keyboard: !isMobile         // Enable keyboard navigation on desktop only
+  map = new mapboxgl.Map({
+    container: 'map',
+    style: MAPBOX_STYLE,
+    center: [photosWithGPS[0]?.lon || 0, photosWithGPS[0]?.lat || 0],
+    zoom: 12,
+    pitch: 45,
+    bearing: 0,
+    antialias: true
   });
-
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-    attribution: "&copy; Esri",
-    maxZoom: 18
-  }).addTo(map);
-
-  // Add markers for media with GPS coordinates
-  const bounds = L.latLngBounds();
-
-  photosWithGPS.forEach((photo) => {
-    const marker = L.marker([photo.lat, photo.lon]).addTo(map);
-    marker.bindPopup(`
-      <img src="${photo.thumb || photo.url}" style="width:100px;height:75px;object-fit:cover;border-radius:4px;" alt="">
-      <br><strong>${escapeHtml(photo.title || (isVideo(photo) ? 'Video' : 'Photo'))}</strong>
-      <br><small>${formatTime(photo.taken_at)}</small>
-    `);
-    
-    const originalIndex = dayData.photos.findIndex(p => p.id === photo.id);
-    marker.on('click', () => openLightbox(originalIndex));
-    bounds.extend([photo.lat, photo.lon]);
-  });
-
-  // Add fullscreen toggle button
+  map.addControl(new mapboxgl.NavigationControl());
+  map.addControl(new mapboxgl.FullscreenControl());
   addFullscreenToggle(map, 'map');
 
-  map.fitBounds(bounds, { padding: [20, 20] });
+  map.on('load', () => {
+    applyBloom(map);
+    const bounds = new mapboxgl.LngLatBounds();
+    photosWithGPS.forEach(photo => {
+      const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+        <img src="${photo.thumb || photo.url}" style="width:100px;height:75px;object-fit:cover;border-radius:4px;" alt="">
+        <br><strong>${escapeHtml(photo.title || (isVideo(photo) ? 'Video' : 'Photo'))}</strong>
+        <br><small>${formatTime(photo.taken_at)}</small>
+      `);
+      const marker = new mapboxgl.Marker().setLngLat([photo.lon, photo.lat]).setPopup(popup).addTo(map);
+      marker.getElement().addEventListener('click', () => {
+        const originalIndex = dayData.photos.findIndex(p => p.id === photo.id);
+        openLightbox(originalIndex);
+      });
+      bounds.extend([photo.lon, photo.lat]);
+    });
+    map.fitBounds(bounds, { padding: 20 });
+  });
 }
 
 // ---------- fullscreen toggle for maps ----------
 function addFullscreenToggle(map, containerId) {
-  // Create fullscreen toggle button
-  const fullscreenControl = L.control({ position: 'topright' });
-  
-  fullscreenControl.onAdd = function() {
-    const button = L.DomUtil.create('button', 'leaflet-control-fullscreen');
-    button.innerHTML = `
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
-      </svg>
-    `;
-    button.title = 'Toggle fullscreen';
-    button.setAttribute('aria-label', 'Toggle fullscreen map');
-    
-    // Prevent map interaction when clicking the button
-    L.DomEvent.disableClickPropagation(button);
-    L.DomEvent.on(button, 'click', function(e) {
-      L.DomEvent.stopPropagation(e);
-      openFullscreenMapFromRegularMap(map, containerId);
-    });
-    
-    return button;
-  };
-  
-  fullscreenControl.addTo(map);
+  class FullscreenToggle {
+    onAdd(mapInstance) {
+      const btn = document.createElement('button');
+      btn.className = 'mapboxgl-ctrl-fullscreen';
+      btn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+        </svg>
+      `;
+      btn.type = 'button';
+      btn.title = 'Toggle fullscreen';
+      btn.setAttribute('aria-label', 'Toggle fullscreen map');
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        openFullscreenMapFromRegularMap(mapInstance, containerId);
+      });
+      const container = document.createElement('div');
+      container.className = 'mapboxgl-ctrl mapboxgl-ctrl-group';
+      container.appendChild(btn);
+      this._container = container;
+      return container;
+    }
+    onRemove() {
+      this._container.parentNode.removeChild(this._container);
+    }
+  }
+  map.addControl(new FullscreenToggle(), 'top-right');
+}
+
+function applyBloom(map) {
+  map.setPaintProperty('water', 'fill-color', '#5fa4ff');
+  map.setPaintProperty('water', 'fill-opacity', 0.85);
+  map.setPaintProperty('water', 'fill-outline-color', '#a6d2ff');
+
+  map.setPaintProperty('road-primary', 'line-color', '#ffffff');
+  map.setPaintProperty('road-primary', 'line-width', [
+    'interpolate', ['linear'], ['zoom'], 5, 0.5, 15, 3
+  ]);
+  map.setPaintProperty('road-primary', 'line-blur', [
+    'interpolate', ['linear'], ['zoom'], 5, 1, 15, 6
+  ]);
+
+  map.setPaintProperty('poi-label', 'text-color', '#ffd166');
+  map.setPaintProperty('poi-label', 'text-halo-color', '#ffa600');
+  map.setPaintProperty('poi-label', 'text-halo-width', 2);
 }
 
 function openFullscreenMapFromRegularMap(sourceMap, containerId) {

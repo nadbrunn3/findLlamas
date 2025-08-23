@@ -1,7 +1,9 @@
-/* global L */
 // admin/admin.js
 
 import { groupIntoStacks } from "/js/utils.js";
+
+const MAPBOX_STYLE = 'mapbox://styles/<user>/<vibrant-satellite-style>';
+mapboxgl.accessToken = mapboxgl.accessToken || 'YOUR_MAPBOX_ACCESS_TOKEN';
 
 const PASS_KEY = 'tripAdminPass';
 const SETTINGS_KEY = 'tripAdminSettings';
@@ -108,45 +110,30 @@ function saveSettings(obj) {
   }
 
   // ----- Admin map state -----
-  let adminMap, adminMapLayer, adminMarkers = [];
+  let adminMap, adminMarkers = [];
 
 // Call this once when your admin panel mounts (or right before Preview shows)
 function ensureAdminMap() {
   const mapEl = document.getElementById('trip-map-admin');
   if (!mapEl) return;
 
-  // Give the container your styled class so it picks up the theme heights/border radius
   mapEl.classList.add('top-map');
 
   if (!adminMap) {
-    adminMap = L.map(mapEl, {
-      zoomControl: true,
-      dragging: true,
-      scrollWheelZoom: true,
-      touchZoom: true
+    adminMap = new mapboxgl.Map({
+      container: mapEl,
+      style: MAPBOX_STYLE,
+      center: [0, 0],
+      zoom: 2,
+      pitch: 45,
+      bearing: 0,
+      antialias: true
     });
-    // Show a world view until specific photo coordinates are available
-    adminMap.setView([0, 0], 2);
-
-    // Primary: Esri imagery; Fallback: OSM tiles if Esri errors/rate-limits
-    const esri = L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      { attribution: '&copy; Esri', maxZoom: 18 }
-    );
-    const osm = L.tileLayer(
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      { attribution: '&copy; OpenStreetMap', maxZoom: 19 }
-    );
-
-    adminMapLayer = esri.addTo(adminMap);
-    esri.on('tileerror', () => {
-      if (adminMapLayer) adminMap.removeLayer(adminMapLayer);
-      adminMapLayer = osm.addTo(adminMap);
-    });
-
-    // When the panel becomes visible, Leaflet needs a size recompute
-    queueMicrotask(() => adminMap.invalidateSize(true));
-    window.addEventListener('resize', () => adminMap.invalidateSize());
+    adminMap.addControl(new mapboxgl.NavigationControl());
+    adminMap.addControl(new mapboxgl.FullscreenControl());
+    adminMap.on('load', () => applyBloom(adminMap));
+    queueMicrotask(() => adminMap.resize());
+    window.addEventListener('resize', () => adminMap.resize());
   }
 }
 
@@ -177,29 +164,41 @@ function renderAdminMapMarkers(photos) {
   // Ensure map is initialized before adding markers
   ensureAdminMap();
 
-  // Custom thumb markers styled by your CSS (.photo-marker etc.)
-  const bounds = L.latLngBounds();
+  const bounds = new mapboxgl.LngLatBounds();
   withGPS.forEach((p, i) => {
-    const icon = L.divIcon({
-      className: 'photo-marker',
-      html: `<div class="pm__wrap"><img src="${p.thumb || p.url}" alt=""></div>`,
-      iconSize: [32, 32],
-      iconAnchor: [16, 16]
-    });
-
-    const m = L.marker([p.lat, p.lon], { icon }).addTo(adminMap);
-    m.on('click', () => {
-      // If you have a lightbox in admin, hook it here:
+    const el = document.createElement('div');
+    el.className = 'photo-marker';
+    el.innerHTML = `<div class="pm__wrap"><img src="${p.thumb || p.url}" alt=""></div>`;
+    const m = new mapboxgl.Marker(el).setLngLat([p.lon, p.lat]).addTo(adminMap);
+    el.addEventListener('click', () => {
       if (typeof openLightbox === 'function') openLightbox(i);
     });
-
     adminMarkers.push(m);
-    bounds.extend([p.lat, p.lon]);
+    bounds.extend([p.lon, p.lat]);
   });
 
-  adminMap.fitBounds(bounds, { padding: [20, 20] });
-  // If the panel has just transitioned from hidden to visible:
-  setTimeout(() => adminMap.invalidateSize(true), 0);
+  if (!bounds.isEmpty()) {
+    adminMap.fitBounds(bounds, { padding: 20 });
+  }
+  setTimeout(() => adminMap.resize(), 0);
+}
+
+function applyBloom(map) {
+  map.setPaintProperty('water', 'fill-color', '#5fa4ff');
+  map.setPaintProperty('water', 'fill-opacity', 0.85);
+  map.setPaintProperty('water', 'fill-outline-color', '#a6d2ff');
+
+  map.setPaintProperty('road-primary', 'line-color', '#ffffff');
+  map.setPaintProperty('road-primary', 'line-width', [
+    'interpolate', ['linear'], ['zoom'], 5, 0.5, 15, 3
+  ]);
+  map.setPaintProperty('road-primary', 'line-blur', [
+    'interpolate', ['linear'], ['zoom'], 5, 1, 15, 6
+  ]);
+
+  map.setPaintProperty('poi-label', 'text-color', '#ffd166');
+  map.setPaintProperty('poi-label', 'text-halo-color', '#ffa600');
+  map.setPaintProperty('poi-label', 'text-halo-width', 2);
 }
 
 // --- helpers for stack grouping ---
