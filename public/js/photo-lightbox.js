@@ -216,7 +216,10 @@ function bindLbPanel(photoId){
   loadPhotoInteractions(photoId, panel);
 }
 
-// --- Lightweight lightbox with per-photo interactions ---
+// Cache lightbox DOM for better performance
+let cachedLightboxEl = null;
+
+// --- Optimized lightweight lightbox with per-photo interactions ---
 window.openPhotoLightbox = (photos, startIndex=0) => {
   let i = startIndex;
 
@@ -225,8 +228,8 @@ window.openPhotoLightbox = (photos, startIndex=0) => {
     window.lbRoot = null;
   }
 
-  // build once
-  let el = document.querySelector(".lb-portal");
+  // Use cached element or create once
+  let el = cachedLightboxEl;
   if (!el) {
     el = document.createElement("div");
     el.className = "lb-portal lightbox-root";
@@ -271,7 +274,14 @@ window.openPhotoLightbox = (photos, startIndex=0) => {
         </div>
       </div>
     `;
-    document.body.appendChild(el);
+    
+    // Cache the element
+    cachedLightboxEl = el;
+    
+    // Only append to body once
+    if (!document.querySelector('.lb-portal')) {
+      document.body.appendChild(el);
+    }
     
     // Store reference for close function
     window.lbRoot = el;

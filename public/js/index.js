@@ -151,14 +151,11 @@ function isVideo(item) {
     /\.(mp4|webm|mov|m4v)$/i.test(title)
   );
   
-  // Debug logging for video detection
-  if (result) {
+  // Debug logging for video detection (only in development)
+  if (result && window.location.hostname === 'localhost') {
     console.log('🎬 Video detected:', {
       url: item.url,
       caption: item.caption,
-      title: item.title,
-      mimeType: item.mimeType,
-      kind: item.kind,
       detectedBy: k === 'video' ? 'kind' : 
                   mt.startsWith('video/') ? 'mimeType' : 
                   /\.(mp4|webm|mov|m4v)$/i.test(url) ? 'url' :
@@ -169,22 +166,70 @@ function isVideo(item) {
   return result;
 }
 
+// Cache for created media elements to avoid recreation
+const mediaElementCache = new Map();
+
+// Intersection Observer for lazy loading
+const lazyLoadObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const element = entry.target;
+      
+      // Load full resolution image if available
+      if (element.dataset.fullSrc && element.tagName === 'IMG') {
+        element.src = element.dataset.fullSrc;
+        delete element.dataset.fullSrc;
+      }
+      
+      // Load video source if available
+      if (element.dataset.src && element.tagName === 'VIDEO') {
+        element.src = element.dataset.src;
+        delete element.dataset.src;
+      }
+      
+      lazyLoadObserver.unobserve(element);
+    }
+  });
+}, {
+  rootMargin: '50px' // Start loading 50px before element comes into view
+});
+
 function renderMediaEl(item, { withControls = false, className = '', useThumb = false } = {}) {
+  // Create cache key
+  const cacheKey = `${item.id || item.url}-${className}-${useThumb}-${withControls}`;
+  
+  // Return cached element if available
+  if (mediaElementCache.has(cacheKey)) {
+    return mediaElementCache.get(cacheKey).cloneNode(true);
+  }
+  
+  let element;
+  
   if (isVideo(item)) {
-    // If we have a thumb, show it as poster; otherwise the video will still render
     const v = document.createElement('video');
-    v.src = item.url;
-    if (item.thumb) v.poster = item.thumb;
+    // Always use thumbnail for video poster to improve performance
+    v.poster = item.thumb || '';
     v.muted = true;
     v.playsInline = true;
     v.loop = true;
     v.controls = !!withControls;
-    v.setAttribute('preload', 'metadata');
+    v.setAttribute('preload', 'none'); // Changed from 'metadata' to 'none' for better performance
     if (className) v.className = className;
+    
+    // Only set src when needed (lazy loading)
+    if (withControls || className.includes('lightbox')) {
+      v.src = item.url;
+    } else {
+      v.dataset.src = item.url; // Store for lazy loading
+      // Add to lazy loading observer for videos
+      lazyLoadObserver.observe(v);
+    }
     
     // Add simple play button overlay for stack videos
     if (className.includes('stack-main-photo')) {
-      // Add play button overlay
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = 'position:relative;display:inline-block;width:100%';
+      
       const playOverlay = document.createElement('div');
       playOverlay.className = 'video-play-overlay';
       playOverlay.innerHTML = '▶';
@@ -208,43 +253,41 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
         border: 2px solid rgba(255,255,255,0.9);
       `;
       
-      // Create wrapper for video + overlay
-      const wrapper = document.createElement('div');
-      wrapper.style.position = 'relative';
-      wrapper.style.display = 'inline-block';
-      wrapper.style.width = '100%';
       wrapper.appendChild(v);
       wrapper.appendChild(playOverlay);
-      
-      // Debug logging
-      console.log('🎥 Creating video with play overlay:', {
-        url: item.url,
-        thumb: item.thumb,
-        className: className,
-        withControls: withControls
-      });
-      
-      return wrapper;
+      element = wrapper;
+    } else {
+      element = v;
+    }
+  } else {
+    // Photo - optimize image loading
+    const img = document.createElement('img');
+    
+    // Always use thumbnails for better performance, except in lightbox
+    const shouldUseThumbnail = useThumb || 
+      className.includes('drawer-thumbnail') || 
+      className.includes('stack-main-photo');
+    
+    img.src = shouldUseThumbnail ? (item.thumb || item.url) : item.url;
+    img.alt = item.title || item.caption || '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    
+    // Store full URL for later if using thumbnail
+    if (shouldUseThumbnail && item.url !== item.thumb) {
+      img.dataset.fullSrc = item.url;
+      // Add to lazy loading observer
+      lazyLoadObserver.observe(img);
     }
     
-    // Debug logging for non-stack videos
-    console.log('🎥 Creating video element:', {
-      url: item.url,
-      thumb: item.thumb,
-      className: className,
-      withControls: withControls
-    });
-    
-    return v;
+    if (className) img.className = className;
+    element = img;
   }
-  // Photo - use full resolution by default, thumbnail only when explicitly requested
-  const img = document.createElement('img');
-  img.src = useThumb ? (item.thumb || item.url) : (item.url || item.thumb);
-  img.alt = item.title || item.caption || '';
-  img.loading = 'lazy';
-  img.decoding = 'async';
-  if (className) img.className = className;
-  return img;
+  
+  // Cache the element (clone it to avoid reference issues)
+  mediaElementCache.set(cacheKey, element.cloneNode(true));
+  
+  return element;
 }
 
 // ---- interactions helpers ----
@@ -297,6 +340,8 @@ async function commentPhoto(photoId, text, author="You") {
 init();
 
 async function init(){
+  const startTime = performance.now();
+  
   await loadStacks();
   await resolveStackLocations();
   initMaps();
@@ -306,6 +351,13 @@ async function init(){
 
   const initial = urlParam("stack") || (photoStacks[0]?.id);
   if (initial){ setActive(initial); requestAnimationFrame(()=>scrollToStack(initial, {instant:true})); }
+  
+  // Performance monitoring (only in development)
+  if (window.location.hostname === 'localhost') {
+    const loadTime = performance.now() - startTime;
+    console.log(`🚀 App initialized in ${loadTime.toFixed(2)}ms`);
+    console.log(`📊 Loaded ${photoStacks.length} stacks with ${allPhotos.length} photos`);
+  }
 }
 
 // ---------- data ----------
@@ -515,7 +567,6 @@ function onMarkerClick(id){
 // ---------- feed ----------
 function renderFeed(){
   const host = document.getElementById("stack-feed");
-  host.innerHTML = "";
   const seenCounts = JSON.parse(localStorage.getItem("stackPhotoCounts") || "{}");
   const newCounts = {};
   
@@ -525,6 +576,9 @@ function renderFeed(){
     const bNewest = Math.max(...b.photos.map(p => p.ts || 0));
     return bNewest - aNewest;
   });
+  
+  // Use document fragment for better performance
+  const fragment = document.createDocumentFragment();
   
   sortedStacks.forEach((stack,i)=>{
     newCounts[stack.id] = stack.photos.length;
@@ -640,7 +694,7 @@ function renderFeed(){
       }
     }
 
-    // Populate thumbnails with proper media elements
+    // Optimize thumbnail rendering with lazy loading
     function populateThumbnails() {
       if (!drawer) return;
       const thumbsContainer = drawer.querySelector('.drawer-thumbnails');
@@ -648,6 +702,9 @@ function renderFeed(){
       
       // Clear existing thumbnails
       thumbsContainer.innerHTML = '';
+      
+      // Create document fragment for better performance
+      const fragment = document.createDocumentFragment();
       
       // Create thumbnail elements using renderMediaEl
       stack.photos.forEach((p, idx) => {
@@ -659,12 +716,25 @@ function renderFeed(){
         el.setAttribute('data-index', idx);
         el.setAttribute('draggable', 'false');
         
-        el.addEventListener('click', () => {
-          current = idx;
-          updateMain();
-        });
+        // Use event delegation instead of individual listeners
+        el.dataset.photoIndex = idx;
         
-        thumbsContainer.appendChild(el);
+        fragment.appendChild(el);
+      });
+      
+      // Single DOM operation
+      thumbsContainer.appendChild(fragment);
+      
+      // Add single event listener for all thumbnails (event delegation)
+      thumbsContainer.addEventListener('click', (e) => {
+        const thumbnail = e.target.closest('[data-photo-index]');
+        if (thumbnail) {
+          const idx = parseInt(thumbnail.dataset.photoIndex);
+          if (!isNaN(idx)) {
+            current = idx;
+            updateMain();
+          }
+        }
       });
     }
 
@@ -714,7 +784,7 @@ function renderFeed(){
       setActive(stack.id); replaceUrlParam("stack", stack.id); panMiniMapTo(stack.id);
     });
 
-    host.appendChild(card);
+    fragment.appendChild(card);
 
     // Initialize the main media display
     updateMain();
@@ -741,6 +811,11 @@ function renderFeed(){
     bindDiscussionThread(stack.id, interactionsBlock);
     loadThreadedDiscussion(stack.id, interactionsBlock, mediaActionsBlock);
   });
+  
+  // Single DOM operation to append all cards
+  host.innerHTML = "";
+  host.appendChild(fragment);
+  
   localStorage.setItem("stackPhotoCounts", JSON.stringify(newCounts));
 }
 
@@ -2024,32 +2099,46 @@ const panTopMapTo = debounce((id)=>{
 const panMiniMapTo = panTopMapTo;
 
 function setupScrollSync(){
+  // Debounce the scroll sync for better performance
+  let scrollSyncTimeout;
+  
   const io = new IntersectionObserver((entries)=>{
     if (scrollLocked) return;
-    let best=null, mid=window.innerHeight/2, score=Infinity;
-    entries.forEach(e=>{
-      if (!e.isIntersecting) return;
-      const r=e.target.getBoundingClientRect();
-      const d=Math.abs((r.top+r.bottom)/2 - mid);
-      if (d<score){ score=d; best=e; }
-    });
-    if (best){
-      const id = best.target.id;
-      if (id && id!==activeStackId){ 
-        activeStackId=id; 
-        replaceUrlParam("stack", id); 
-        setActive(id);
-        
-        // Add visual feedback for the active stack
-        document.querySelectorAll(".stack-card").forEach(c=> {
-          c.classList.toggle("map-active", c.id === id);
-        });
-      }
+    
+    // Clear previous timeout
+    if (scrollSyncTimeout) {
+      clearTimeout(scrollSyncTimeout);
     }
+    
+    // Debounce the processing
+    scrollSyncTimeout = setTimeout(() => {
+      let best=null, mid=window.innerHeight/2, score=Infinity;
+      entries.forEach(e=>{
+        if (!e.isIntersecting) return;
+        const r=e.target.getBoundingClientRect();
+        const d=Math.abs((r.top+r.bottom)/2 - mid);
+        if (d<score){ score=d; best=e; }
+      });
+      if (best){
+        const id = best.target.id;
+        if (id && id!==activeStackId){ 
+          activeStackId=id; 
+          replaceUrlParam("stack", id); 
+          setActive(id);
+          
+          // Optimize visual feedback update
+          requestAnimationFrame(() => {
+            document.querySelectorAll(".stack-card").forEach(c=> {
+              c.classList.toggle("map-active", c.id === id);
+            });
+          });
+        }
+      }
+    }, 16); // ~60fps
   }, { 
     root: null, 
     rootMargin: "-15% 0px -35% 0px", // More responsive trigger area
-    threshold: [0.1, 0.25, 0.5, 0.75, 0.9] // More precise detection
+    threshold: [0.25, 0.5, 0.75] // Reduced thresholds for better performance
   });
 
   photoStacks.forEach(s=>{ const el=document.getElementById(s.id); if (el) io.observe(el); });
