@@ -1,0 +1,18 @@
+{
+  "reactions": {},
+  "comments": [
+    {
+      "id": "1755947869294",
+      "text": "hi",
+      "author": "Anonymous",
+      "timestamp": "2025-08-23T11:17:49.294Z"
+    },
+    {
+      "id": "1755947875350",
+      "text": "thank you",
+      "author": "Anonymous",
+      "timestamp": "2025-08-23T11:17:55.350Z",
+      "parentId": "1755947869294"
+    }
+  ]
+}
