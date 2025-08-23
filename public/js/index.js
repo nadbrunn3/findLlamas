@@ -475,6 +475,9 @@ function initMaps(){
 
   addMarkersAndPath(topMap);
 
+  // Add fullscreen toggle button
+  addFullscreenToggle(topMap, 'top-map');
+
   // Fit once everything is known
   const b = L.latLngBounds([[currentLocation.lat,currentLocation.lng]]);
   allPhotos.forEach(p=> {
@@ -1987,21 +1990,28 @@ function bindCommentsBlock(stackId, block){
 }
 
 
-// ---------- lightbox (new photo-focused viewer) ----------
+// ---------- unified lightbox management ----------
 function closeLightbox(){
-  // Handle global lbRoot reference
+  console.log('🔒 Closing lightbox - unified system');
+  
+  // Force close all lightbox types immediately
+  const allLightboxes = document.querySelectorAll('.lb-portal, .lightbox, [class*="lightbox"], [id*="lightbox"]');
+  allLightboxes.forEach(lb => {
+    lb.classList.remove('on', 'open');
+    lb.style.display = 'none';
+  });
+  
+  // Clear all lightbox references
   if (window.lbRoot) {
-    window.lbRoot.remove();
-    window.lbRoot = null;
+    window.lbRoot.classList.remove('on');
+    window.lbRoot.style.display = 'none';
   }
-  
-  // Handle local lbRoot reference
   if (lbRoot) {
-    lbRoot.remove();
-    lbRoot = null;
+    lbRoot.classList.remove('on');
+    lbRoot.style.display = 'none';
   }
   
-  // Clean up event handlers
+  // Clean up ALL event handlers
   if (window.lbEscHandler) {
     document.removeEventListener('keydown', window.lbEscHandler);
     window.lbEscHandler = null;
@@ -2011,29 +2021,44 @@ function closeLightbox(){
     lbEscHandler = null;
   }
   
-  // unlock page scroll
+  // Remove lightbox-open class from body
+  document.body.classList.remove('lightbox-open');
+  
+  // Force unlock page scroll immediately
   document.documentElement.style.overflow = '';
   document.body.style.overflow = '';
+  document.documentElement.style.position = '';
+  document.body.style.position = '';
+  
+  console.log('✅ All lightboxes closed and scroll unlocked');
 }
 
 function openLightboxForStack(stack, startIndex=0){
-  // Convert stack photos to the format expected by the new lightbox
-  const photos = stack.photos.map(photo => ({
-    id: photo.id,
-    url: photo.url,
-    thumb: photo.thumb || photo.url,
-    caption: photo.caption || '',
-    taken_at: photo.taken_at,
-    lat: photo.lat,
-    lon: photo.lon,
-    mimeType: photo.mimeType,
-    kind: photo.kind
-  }));
+  console.log('🔍 Opening lightbox for stack:', stack.id, 'startIndex:', startIndex);
   
-  // Use the new lightbox API
-  if (window.openPhotoLightbox) {
-    window.openPhotoLightbox(photos, startIndex);
-  }
+  // First, ensure any existing lightbox is properly closed
+  closeLightbox();
+  
+  // Small delay to ensure cleanup is complete
+  setTimeout(() => {
+    // Convert stack photos to the format expected by the new lightbox
+    const photos = stack.photos.map(photo => ({
+      id: photo.id,
+      url: photo.url,
+      thumb: photo.thumb || photo.url,
+      caption: photo.caption || '',
+      taken_at: photo.taken_at,
+      lat: photo.lat,
+      lon: photo.lon,
+      mimeType: photo.mimeType,
+      kind: photo.kind
+    }));
+    
+    // Use the new lightbox API
+    if (window.openPhotoLightbox) {
+      window.openPhotoLightbox(photos, startIndex);
+    }
+  }, 100);
 }
 
 // ---------- sync ----------
@@ -2146,6 +2171,87 @@ function setupScrollSync(){
 
 
 
+// ---------- fullscreen toggle for maps ----------
+function addFullscreenToggle(map, containerId) {
+  // Create fullscreen toggle button
+  const fullscreenControl = L.control({ position: 'topright' });
+  
+  fullscreenControl.onAdd = function() {
+    const button = L.DomUtil.create('button', 'leaflet-control-fullscreen');
+    button.innerHTML = `
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+      </svg>
+    `;
+    button.title = 'Toggle fullscreen';
+    button.setAttribute('aria-label', 'Toggle fullscreen map');
+    
+    // Prevent map interaction when clicking the button
+    L.DomEvent.disableClickPropagation(button);
+    L.DomEvent.on(button, 'click', function(e) {
+      L.DomEvent.stopPropagation(e);
+      openFullscreenMapFromRegularMap(map, containerId);
+    });
+    
+    return button;
+  };
+  
+  fullscreenControl.addTo(map);
+}
+
+function openFullscreenMapFromRegularMap(sourceMap, containerId) {
+  console.log('🗺️ Opening fullscreen map from regular map');
+  
+  // Get all photos with coordinates for this map
+  let photosForMap = [];
+  
+  if (containerId === 'top-map') {
+    // Main dashboard - use all photos from all stacks
+    photosForMap = allPhotos.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon))
+      .map(p => ({
+        id: p.id,
+        url: p.url,
+        thumb: p.thumb || p.url,
+        caption: p.caption || p.title || '',
+        title: p.title || '',
+        lat: p.lat,
+        lon: p.lon,
+        taken_at: p.taken_at,
+        mimeType: p.mimeType,
+        kind: p.kind
+      }));
+  } else {
+    // Day view - use photos from current day
+    if (window.dayData && window.dayData.photos) {
+      photosForMap = window.dayData.photos.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon))
+        .map(p => ({
+          id: p.id,
+          url: p.url,
+          thumb: p.thumb || p.url,
+          caption: p.caption || p.title || '',
+          title: p.title || '',
+          lat: p.lat,
+          lon: p.lon,
+          taken_at: p.taken_at,
+          mimeType: p.mimeType,
+          kind: p.kind
+        }));
+    }
+  }
+  
+  if (photosForMap.length === 0) {
+    console.log('⚠️ No photos with coordinates found for fullscreen map');
+    return;
+  }
+  
+  // Use the same fullscreen map function from photo-lightbox.js
+  if (window.openFullscreenMapWithPhotos) {
+    window.openFullscreenMapWithPhotos(photosForMap, 0);
+  } else {
+    console.error('❌ openFullscreenMapWithPhotos function not available');
+  }
+}
+
 // ---------- full-screen map overlay ----------
 let _mapOverlayEl = null;
 let _mapOverlayMap = null;
@@ -2202,6 +2308,9 @@ function openMapOverlayAt(lat, lon, title=''){
 
 // expose if you call from other modules
 window.openMapOverlayAt = openMapOverlayAt;
+
+// Make closeLightbox globally available
+window.closeLightbox = closeLightbox;
 window.closeMapOverlay   = closeMapOverlay;
 
 // Patch close function to dispatch event for page map panning

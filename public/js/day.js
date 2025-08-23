@@ -354,7 +354,73 @@ function initMap() {
     bounds.extend([photo.lat, photo.lon]);
   });
 
+  // Add fullscreen toggle button
+  addFullscreenToggle(map, 'map');
+
   map.fitBounds(bounds, { padding: [20, 20] });
+}
+
+// ---------- fullscreen toggle for maps ----------
+function addFullscreenToggle(map, containerId) {
+  // Create fullscreen toggle button
+  const fullscreenControl = L.control({ position: 'topright' });
+  
+  fullscreenControl.onAdd = function() {
+    const button = L.DomUtil.create('button', 'leaflet-control-fullscreen');
+    button.innerHTML = `
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+      </svg>
+    `;
+    button.title = 'Toggle fullscreen';
+    button.setAttribute('aria-label', 'Toggle fullscreen map');
+    
+    // Prevent map interaction when clicking the button
+    L.DomEvent.disableClickPropagation(button);
+    L.DomEvent.on(button, 'click', function(e) {
+      L.DomEvent.stopPropagation(e);
+      openFullscreenMapFromRegularMap(map, containerId);
+    });
+    
+    return button;
+  };
+  
+  fullscreenControl.addTo(map);
+}
+
+function openFullscreenMapFromRegularMap(sourceMap, containerId) {
+  console.log('🗺️ Opening fullscreen map from day view');
+  
+  // Get photos from current day
+  let photosForMap = [];
+  
+  if (window.dayData && window.dayData.photos) {
+    photosForMap = window.dayData.photos.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon))
+      .map(p => ({
+        id: p.id,
+        url: p.url,
+        thumb: p.thumb || p.url,
+        caption: p.caption || p.title || '',
+        title: p.title || '',
+        lat: p.lat,
+        lon: p.lon,
+        taken_at: p.taken_at,
+        mimeType: p.mimeType,
+        kind: p.kind
+      }));
+  }
+  
+  if (photosForMap.length === 0) {
+    console.log('⚠️ No photos with coordinates found for fullscreen map');
+    return;
+  }
+  
+  // Use the same fullscreen map function from photo-lightbox.js
+  if (window.openFullscreenMapWithPhotos) {
+    window.openFullscreenMapWithPhotos(photosForMap, 0);
+  } else {
+    console.error('❌ openFullscreenMapWithPhotos function not available');
+  }
 }
 
 // Render the photo post section (now "media post")
@@ -463,21 +529,27 @@ function openLightbox(index = 0) {
 
   console.log('🔍 Opening lightbox for photo:', item);
 
-  // Use the newer photo lightbox system for consistency
-  if (window.openPhotoLightbox) {
-    const photos = dayData.photos.map(photo => ({
-      id: photo.id,
-      url: photo.url,
-      thumb: photo.thumb,
-      caption: photo.caption || photo.description || '',
-      title: photo.title || '',
-      type: isVideo(photo) ? 'video' : 'image'
-    }));
-    
-    console.log('✅ Using modern lightbox with photos:', photos);
-    window.openPhotoLightbox(photos, currentPhotoIndex);
-    return;
-  }
+  // First, ensure any existing lightbox is properly closed
+  closeLightbox();
+
+  // Small delay to ensure cleanup is complete
+  setTimeout(() => {
+    // Use the newer photo lightbox system for consistency
+    if (window.openPhotoLightbox) {
+      const photos = dayData.photos.map(photo => ({
+        id: photo.id,
+        url: photo.url,
+        thumb: photo.thumb,
+        caption: photo.caption || photo.description || '',
+        title: photo.title || '',
+        type: isVideo(photo) ? 'video' : 'image'
+      }));
+      
+      console.log('✅ Using modern lightbox with photos:', photos);
+      window.openPhotoLightbox(photos, currentPhotoIndex);
+      return;
+    }
+  }, 100);
 
   // Fallback to basic lightbox if modern one isn't available
   const lb = document.getElementById('lightbox');
@@ -539,35 +611,50 @@ function openLightbox(index = 0) {
 }
 
 function closeLightbox() {
-  console.log('🔒 Closing lightbox');
+  console.log('🔒 Closing lightbox - unified system from day.js');
   
-  // Handle modern lightbox close
-  if (window.lbRoot) {
-    window.lbRoot.remove();
-    window.lbRoot = null;
-    console.log('✅ Closed modern lightbox');
+  // Use the unified close function from index.js if available
+  if (window.closeLightbox && window.closeLightbox !== closeLightbox) {
+    window.closeLightbox();
+    return;
   }
   
-  // Handle legacy lightbox close
-  const lb = document.getElementById('lightbox');
-  const vid = document.getElementById('lightbox-video');
+  // Force close all lightbox types immediately
+  const allLightboxes = document.querySelectorAll('.lb-portal, .lightbox, [class*="lightbox"], [id*="lightbox"]');
+  allLightboxes.forEach(lb => {
+    lb.classList.remove('on', 'open');
+    lb.style.display = 'none';
+  });
   
+  // Handle specific video cleanup
+  const vid = document.getElementById('lightbox-video');
   if (vid) {
     vid.pause?.();
     vid.src = ''; // Clear video source
   }
   
-  if (lb) {
-    lb.classList.remove('open');
+  // Clear all lightbox references
+  if (window.lbRoot) {
+    window.lbRoot.classList.remove('on');
+    window.lbRoot.style.display = 'none';
   }
   
+  // Clean up ALL event handlers
+  if (window.lbEscHandler) {
+    document.removeEventListener('keydown', window.lbEscHandler);
+    window.lbEscHandler = null;
+  }
+  
+  // Remove lightbox-open class from body
   document.body.classList.remove('lightbox-open');
   
-  // Unlock scroll
+  // Force unlock page scroll immediately
   document.documentElement.style.overflow = '';
   document.body.style.overflow = '';
+  document.documentElement.style.position = '';
+  document.body.style.position = '';
   
-  console.log('✅ Lightbox closed successfully');
+  console.log('✅ All lightboxes closed and scroll unlocked from day.js');
 }
 
 function previousPhoto() {

@@ -219,145 +219,151 @@ function bindLbPanel(photoId){
 // Cache lightbox DOM for better performance
 let cachedLightboxEl = null;
 
-// --- Optimized lightweight lightbox with per-photo interactions ---
+// --- ORIGINAL STYLE LIGHTBOX WITH FIXES ---
 window.openPhotoLightbox = (photos, startIndex=0) => {
   let i = startIndex;
 
-  // Store reference for close function
-  if (window.lbRoot) {
-    window.lbRoot = null;
-  }
+  // Remove any existing lightbox properly
+  const existing = document.querySelector('.lb-portal');
+  if (existing) existing.remove();
 
-  // Use cached element or create once
-  let el = cachedLightboxEl;
-  if (!el) {
-    el = document.createElement("div");
-    el.className = "lb-portal lightbox-root";
-    el.innerHTML = `
-      <div class="lb-backdrop lightbox-backdrop" data-lb-backdrop></div>
-      <div class="lb-frame lightbox-shell" role="dialog" aria-modal="true">
-        <button class="lb-close" data-lb-close aria-label="Close (Esc)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M6 6l12 12M18 6l-12 12"/>
-          </svg>
-        </button>
-        <img class="lb-img" alt="">
-        <video class="lb-video" controls style="display:none"></video>
-        <button class="lb-nav lb-prev lightbox-prev" aria-label="Prev">‹</button>
-        <button class="lb-nav lb-next lightbox-next" aria-label="Next">›</button>
+  // Create lightbox with original structure
+  const el = document.createElement("div");
+  el.className = "lb-portal lightbox-root";
+  el.innerHTML = `
+    <div class="lb-backdrop lightbox-backdrop" data-lb-backdrop></div>
+    <div class="lb-frame lightbox-shell" role="dialog" aria-modal="true">
+      <button class="lb-close" data-lb-close aria-label="Close (Esc)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M6 6l12 12M18 6l-12 12"/>
+        </svg>
+      </button>
+      <img class="lb-img" alt="">
+      <video class="lb-video" controls style="display:none"></video>
+      <button class="lb-nav lb-prev lightbox-prev" aria-label="Prev">‹</button>
+      <button class="lb-nav lb-next lightbox-next" aria-label="Next">›</button>
 
-        <div class="lb-panel lightbox-side" id="lbPanel">
-          <div class="lb-toolbar">
-            <button class="lb-chip lb-like" aria-pressed="false">
-              <span class="icon">♥</span>
-              <span class="count">0</span>
-            </button>
-            <button class="lb-chip lb-comments-btn">
-              <span class="icon">💬</span>
-              <span class="count">0</span>
-            </button>
-            <button class="lb-chip lb-show-map" type="button">
-              <span class="icon">🗺️</span>
-              <span class="text">Map</span>
-            </button>
-          </div>
+      <div class="lb-panel lightbox-side" id="lbPanel">
+        <div class="lb-toolbar">
+          <button class="lb-chip lb-like" aria-pressed="false">
+            <span class="icon">♥</span>
+            <span class="count">0</span>
+          </button>
+          <button class="lb-chip lb-comments-btn">
+            <span class="icon">💬</span>
+            <span class="count">0</span>
+          </button>
+          <button class="lb-chip lb-show-map" type="button">
+            <span class="icon">🗺️</span>
+            <span class="text">Map</span>
+          </button>
+        </div>
 
-          <!-- Comments section with padding from toolbar -->
-          <div class="lb-comments-section">
-            <div class="lb-comments" id="lbComments"></div>
+        <!-- Comments section with padding from toolbar -->
+        <div class="lb-comments-section">
+          <div class="lb-comments" id="lbComments"></div>
 
-            <form class="lb-composer" id="lbComposer" autocomplete="off">
-              <input class="lb-input" name="text" placeholder="Add a comment…" maxlength="500" />
-              <button class="lb-send" type="submit">Post</button>
-            </form>
-          </div>
+          <form class="lb-composer" id="lbComposer" autocomplete="off">
+            <input class="lb-input" name="text" placeholder="Add a comment…" maxlength="500" />
+            <button class="lb-send" type="submit">Post</button>
+          </form>
         </div>
       </div>
-    `;
-    
-    // Cache the element
-    cachedLightboxEl = el;
-    
-    // Only append to body once
-    if (!document.querySelector('.lb-portal')) {
-      document.body.appendChild(el);
+    </div>
+  `;
+  
+  // Add to DOM immediately
+  document.body.appendChild(el);
+  
+  // Store reference for close function
+  window.lbRoot = el;
+
+  // Make visible with original CSS classes
+  el.classList.add('on');
+
+  // lock page scroll while lightbox is open
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+
+  // close handlers
+  el.querySelector('[data-lb-close]').addEventListener('click', () => {
+    if (window.closeLightbox) {
+      window.closeLightbox();
+    } else {
+      el.classList.remove("on");
+      setTimeout(() => {
+        document.documentElement.style.overflow = '';
+        document.body.style.overflow = '';
+      }, 50);
     }
-    
-    // Store reference for close function
-    window.lbRoot = el;
-
-    // lock page scroll while lightbox is open
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-
-    // close handlers
-    el.querySelector('[data-lb-close]').addEventListener('click', window.closeLightbox || (() => el.classList.remove("on")));
-    el.querySelector('[data-lb-backdrop]').addEventListener('click', (e)=>{
-      // click on the dark backdrop (not inside the shell) closes
-      if (e.target === e.currentTarget) {
-        if (window.closeLightbox) window.closeLightbox();
-        else el.classList.remove("on");
-      }
-    });
-    
-    // Navigation handlers
-    el.querySelector(".lb-prev").onclick = () => show(i-1);
-    el.querySelector(".lb-next").onclick = () => show(i+1);
-    
-    // Map action button
-    const showOnMapBtn = el.querySelector('.lb-show-map');
-    
-    function syncActionsForCurrentPhoto(){
-      const p = photos[i] || {};
-      const hasCoords = Number.isFinite(p.lat) && Number.isFinite(p.lon);
-      showOnMapBtn.disabled = !hasCoords;
-      showOnMapBtn.title = hasCoords ? 'Open map at this photo' : 'No GPS for this photo';
-    }
-    
-    showOnMapBtn.addEventListener('click', ()=>{
-      const p = photos[i];
-      if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
-
-      // Close the lightbox first (clean UI)
-      if (window.closeLightbox) window.closeLightbox();
-      else el.classList.remove("on");
-
-      const latlng = [p.lat, p.lon];
-
-      // Prefer the rich overlay map when available
-      if (window.openMapOverlayAt) {
-        window.openMapOverlayAt(p.lat, p.lon, '');
-
-        // When overlay closes, pan page map (if present)
-        const onClose = ()=>{
-          if (window.topMap?.panTo) window.topMap.panTo(latlng);
-          document.removeEventListener('map:closed', onClose);
-        };
-        document.addEventListener('map:closed', onClose);
-        return;
-      }
-
-      // Fallback: pan existing page map or open Google Maps
-      if (window.topMap?.panTo) {
-        window.topMap.panTo(latlng);
+  });
+  
+  el.querySelector('[data-lb-backdrop]').addEventListener('click', (e)=>{
+    // click on the dark backdrop (not inside the shell) closes
+    if (e.target === e.currentTarget) {
+      if (window.closeLightbox) {
+        window.closeLightbox();
       } else {
-        const url = `https://maps.google.com/?q=${p.lat},${p.lon}`;
-        window.open(url, '_blank');
+        el.classList.remove("on");
+        setTimeout(() => {
+          document.documentElement.style.overflow = '';
+          document.body.style.overflow = '';
+        }, 50);
       }
-    });
-    
-    // Keyboard handler with escape
-    window.lbEscHandler = (e)=>{
-      if (!el.classList.contains("on")) return;
-      if (e.key==="Escape") {
-        if (window.closeLightbox) window.closeLightbox();
-        else el.classList.remove("on");
-      }
-      if (e.key==="ArrowLeft") show(i-1);
-      if (e.key==="ArrowRight") show(i+1);
-    };
-    document.addEventListener("keydown", window.lbEscHandler);
+    }
+  });
+  
+  // Navigation handlers
+  el.querySelector(".lb-prev").onclick = () => show(i-1);
+  el.querySelector(".lb-next").onclick = () => show(i+1);
+  
+  // Map action button
+  const showOnMapBtn = el.querySelector('.lb-show-map');
+  
+  function syncActionsForCurrentPhoto(){
+    const p = photos[i] || {};
+    const hasCoords = Number.isFinite(p.lat) && Number.isFinite(p.lon);
+    showOnMapBtn.disabled = !hasCoords;
+    showOnMapBtn.title = hasCoords ? 'Open map at this photo' : 'No GPS for this photo';
   }
+  
+  showOnMapBtn.addEventListener('click', ()=>{
+    const p = photos[i];
+    if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
+
+    // Close the lightbox first (clean UI)
+    if (window.closeLightbox) {
+      window.closeLightbox();
+    } else {
+      el.classList.remove("on");
+      setTimeout(() => {
+        document.documentElement.style.overflow = '';
+        document.body.style.overflow = '';
+      }, 50);
+    }
+
+    // Open fullscreen map with all photos and focus on current photo
+    openFullscreenMapWithPhotos(photos, i);
+  });
+  
+  // Keyboard handler with escape
+  window.lbEscHandler = (e)=>{
+    if (!el.classList.contains("on")) return;
+    if (e.key==="Escape") {
+      if (window.closeLightbox) {
+        window.closeLightbox();
+      } else {
+        el.classList.remove("on");
+        setTimeout(() => {
+          document.documentElement.style.overflow = '';
+          document.body.style.overflow = '';
+        }, 50);
+      }
+    }
+    if (e.key==="ArrowLeft") show(i-1);
+    if (e.key==="ArrowRight") show(i+1);
+  };
+  document.addEventListener("keydown", window.lbEscHandler);
 
   const img = el.querySelector(".lb-img");
   const vid = el.querySelector(".lb-video");
@@ -396,12 +402,199 @@ window.openPhotoLightbox = (photos, startIndex=0) => {
   }
 
   show(i);
-  el.classList.add("on");
+};
+
+// --- FULLSCREEN MAP WITH PHOTO BUBBLES ---
+function openFullscreenMapWithPhotos(photos, focusIndex = 0) {
+  console.log('🗺️ Opening fullscreen map with', photos.length, 'photos');
   
-  // Store reference for close function when opened
-  window.lbRoot = el;
+  // Remove any existing fullscreen map
+  const existing = document.querySelector('.fullscreen-map-overlay');
+  if (existing) existing.remove();
   
-  // lock page scroll while lightbox is open
+  // Create fullscreen map overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'fullscreen-map-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.9);
+    z-index: 10001;
+    display: flex;
+    flex-direction: column;
+  `;
+  
+  // Create header bar
+  const headerBar = document.createElement('div');
+  headerBar.style.cssText = `
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px;
+    background: rgba(17, 24, 39, 0.95);
+    border-bottom: 1px solid rgba(75, 85, 99, 0.5);
+  `;
+  
+  const title = document.createElement('h3');
+  title.textContent = 'Photo Locations';
+  title.style.cssText = `
+    color: white;
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+  `;
+  
+  const closeBtn = document.createElement('button');
+  closeBtn.innerHTML = '×';
+  closeBtn.style.cssText = `
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    font-size: 24px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `;
+  
+  headerBar.appendChild(title);
+  headerBar.appendChild(closeBtn);
+  
+  // Create map container
+  const mapContainer = document.createElement('div');
+  mapContainer.id = 'fullscreen-photo-map';
+  mapContainer.style.cssText = `
+    flex: 1;
+    width: 100%;
+    height: 100%;
+  `;
+  
+  // Assemble overlay
+  overlay.appendChild(headerBar);
+  overlay.appendChild(mapContainer);
+  document.body.appendChild(overlay);
+  
+  // Lock scroll
   document.documentElement.style.overflow = 'hidden';
   document.body.style.overflow = 'hidden';
-};
+  
+  // Close functionality
+  const closeFullscreenMap = () => {
+    console.log('🔒 Closing fullscreen map');
+    if (fullscreenMap) {
+      fullscreenMap.remove();
+      fullscreenMap = null;
+    }
+    overlay.remove();
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+  };
+  
+  closeBtn.onclick = closeFullscreenMap;
+  
+  // ESC key to close
+  const escHandler = (e) => {
+    if (e.key === 'Escape') {
+      closeFullscreenMap();
+      document.removeEventListener('keydown', escHandler);
+    }
+  };
+  document.addEventListener('keydown', escHandler);
+  
+  // Create Leaflet map
+  let fullscreenMap = L.map('fullscreen-photo-map', {
+    zoomControl: true,
+    dragging: true,
+    scrollWheelZoom: true,
+    touchZoom: true,
+    doubleClickZoom: true,
+    boxZoom: true,
+    keyboard: true
+  });
+  
+  // Add tile layer
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    attribution: "&copy; Esri",
+    maxZoom: 18
+  }).addTo(fullscreenMap);
+  
+         // Add photo markers with circular bubbles (same as regular maps)
+       const bounds = L.latLngBounds();
+       const photosWithCoords = photos.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon));
+
+       photosWithCoords.forEach((photo, index) => {
+         bounds.extend([photo.lat, photo.lon]);
+
+         // Create custom circular photo bubble marker (same as regular maps)
+         const bubbleIcon = L.divIcon({
+           className: 'photo-bubble-marker',
+           html: `
+             <div class="photo-bubble" style="
+               width: 40px;
+               height: 40px;
+               border-radius: 50%;
+               border: 3px solid white;
+               box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+               overflow: hidden;
+               cursor: pointer;
+               background: white;
+             ">
+               <img src="${photo.thumb || photo.url}" style="
+                 width: 100%;
+                 height: 100%;
+                 object-fit: cover;
+               " alt="Photo">
+             </div>
+           `,
+           iconSize: [40, 40],
+           iconAnchor: [20, 20]
+         });
+
+         const marker = L.marker([photo.lat, photo.lon], { icon: bubbleIcon }).addTo(fullscreenMap);
+
+         // Click handler to open lightbox
+         marker.on('click', () => {
+           // Close fullscreen map overlay first so the lightbox isn't hidden
+           closeFullscreenMap();
+
+           // Open the lightbox on the corresponding photo after a brief delay
+           setTimeout(() => {
+             const originalIndex = photos.findIndex(p => p.id === photo.id || p.url === photo.url);
+             if (typeof window.openPhotoLightbox === 'function') {
+               window.openPhotoLightbox(photos, originalIndex >= 0 ? originalIndex : index);
+             } else {
+               console.error('openPhotoLightbox function not available');
+             }
+           }, 100);
+         });
+       });
+  
+  // Fit map to show all markers
+  if (bounds.isValid()) {
+    fullscreenMap.fitBounds(bounds, { padding: [50, 50] });
+    
+    // If focusing on specific photo, zoom to it after a delay
+    if (focusIndex >= 0 && focusIndex < photosWithCoords.length) {
+      const focusPhoto = photosWithCoords[focusIndex] || photos[focusIndex];
+      if (focusPhoto && Number.isFinite(focusPhoto.lat) && Number.isFinite(focusPhoto.lon)) {
+        setTimeout(() => {
+          fullscreenMap.setView([focusPhoto.lat, focusPhoto.lon], Math.max(fullscreenMap.getZoom(), 12));
+        }, 1000);
+      }
+    }
+  }
+  
+  // Invalidate size after a short delay
+  setTimeout(() => fullscreenMap.invalidateSize(), 100);
+  
+  console.log('✅ Fullscreen map created with', photosWithCoords.length, 'photo markers');
+}
+
+// Make the function globally available
+window.openFullscreenMapWithPhotos = openFullscreenMapWithPhotos;
