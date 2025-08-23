@@ -60,8 +60,10 @@ app.register(fastifyStatic, {
   prefix: '/', // so /day.html, /admin/index.html, /js/*
 });
 
-// optional: root to index.html
-app.get('/', (req, reply) => reply.sendFile('index.html'));
+// Serve welcome.html as the main page
+app.get('/', async (req, reply) => {
+  return reply.sendFile('welcome.html');
+});
 
 async function ensureDir(d) { await fs.mkdir(d, { recursive: true }); }
 async function readJson(file, def=null) {
