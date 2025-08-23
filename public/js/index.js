@@ -2106,12 +2106,21 @@ function setupTabs(){
       btn.classList.add('active');
 
       if (btn.dataset.tab === 'photos') {
+        // Hide the stack feed and show the photo grid
         footprintsView.hidden = true;
+        footprintsView.style.display = 'none';
         photosView.hidden = false;
+        photosView.style.display = '';
         renderPhotoGrid();
+        // Jump to the top so the grid appears in place of the feed
+        window.scrollTo({ top: 0, behavior: 'auto' });
       } else {
+        // Restore the stack feed view
         footprintsView.hidden = false;
+        footprintsView.style.display = '';
         photosView.hidden = true;
+        photosView.style.display = 'none';
+        window.scrollTo({ top: 0, behavior: 'auto' });
       }
     });
   });
