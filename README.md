@@ -149,6 +149,7 @@ Since the admin calls your Immich/Dawarich directly, enable CORS on both:
 - `IMMICH_ALBUM_ID` (optional): limit imports to a single Immich album. Leave unset to scan all assets visible to your API keys.
 - The auto-loader groups assets by the day they were taken and writes JSON files like `public/data/days/2025-08-14.json`.
 - Scheduling: there is no built-in scheduler. Run the loader manually or via an external cron job; each run processes one day and will overwrite that day's file on subsequent runs.
+- `ADMIN_TOKEN` (optional): protects admin endpoints. If set, the import button and other admin actions send this token in an `x-admin-token` header.
 
 Minimal `.env` example:
 
@@ -157,6 +158,7 @@ Minimal `.env` example:
 IMMICH_URLS=https://photos.example.com
 IMMICH_API_KEYS=user_one_key,user_two_key # comments after # are allowed
 IMMICH_ALBUM_ID=your_album_id
+ADMIN_TOKEN=changeme # required for admin actions like importing
 ANON_COOKIE_SECRET=long_random_string
 
 # Or multiple servers:

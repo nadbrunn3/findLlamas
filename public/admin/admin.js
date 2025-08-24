@@ -66,12 +66,14 @@ function saveSettings(obj) {
   function apiBase() { return window.location.origin; }
 
   async function patchPhotoMeta(slug, photoId, meta) {
+    const adminToken = await getAdminToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (adminToken !== 'server-configured') {
+      headers['x-admin-token'] = adminToken;
+    }
     const res = await fetch(`${apiBase()}/api/day/${encodeURIComponent(slug)}/photo/${encodeURIComponent(photoId)}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-admin-token': getAdminToken()
-      },
+      headers,
       body: JSON.stringify(meta) // { title, caption }
     });
     if (!res.ok) throw new Error(await res.text());
@@ -497,7 +499,15 @@ function renderTripsTab(panel) {
     // Ask backend to import any new photos for that calendar day from Immich
     const url = `${apiBase()}/api/immich/day?date=${dateVal}${effectiveAlbumId ? `&albumId=${encodeURIComponent(effectiveAlbumId)}` : ''}`;
     console.log('🔗 Immich URL:', url);
-    const resp = await fetch(url);
+
+    // Include admin token header if needed
+    const adminToken = await getAdminToken();
+    const headers = {};
+    if (adminToken !== 'server-configured') {
+      headers['x-admin-token'] = adminToken;
+    }
+
+    const resp = await fetch(url, { headers });
     if (!resp.ok) {
       const err = await resp.json().catch(()=> ({}));
       console.warn('Immich import failed', err);

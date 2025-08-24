@@ -572,6 +572,10 @@ app.get('/api/local/day', async (req, reply) => {
 // Fetch day's photos from Immich (server-side), optional albumId to scope
 app.get('/api/immich/day', async (req, reply) => {
   try {
+    if (!requireAdmin(req)) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+
     const { date, albumId } = req.query;
     if (!date) return reply.code(400).send({ error: 'date required (YYYY-MM-DD)' });
 
