@@ -1,0 +1,28 @@
+{"level":30,"time":1756026271963,"pid":52397,"hostname":"nadinb-mac.local","msg":"autoLoadAlbum: fetching album b2cfc674-8776-465c-b8ab-3971e5fc7e76 from http://100.85.125.8:30041"}
+{"level":30,"time":1756026271984,"pid":52397,"hostname":"nadinb-mac.local","msg":"Server listening at http://0.0.0.0:4000"}
+{"level":30,"time":1756026271984,"pid":52397,"hostname":"nadinb-mac.local","msg":"Backend running at http://0.0.0.0:4000"}
+{"level":50,"time":1756026282478,"pid":52397,"hostname":"nadinb-mac.local","msg":"autoLoadAlbum fetch album failed","err":"TypeError: fetch failed"}
+{"level":30,"time":1756026282478,"pid":52397,"hostname":"nadinb-mac.local","msg":"autoLoadAlbum: fetching album b2cfc674-8776-465c-b8ab-3971e5fc7e76 from http://100.85.125.8:30041"}
+{"level":30,"time":1756026287023,"pid":52397,"hostname":"nadinb-mac.local","reqId":"req-1","req":{"method":"GET","url":"/api/immich/day?date=2025-08-21","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":60311},"msg":"incoming request"}
+{"level":30,"time":1756026287024,"pid":52397,"hostname":"nadinb-mac.local","msg":"🚀 Starting import for 2025-08-21 with 2 servers"}
+{"level":30,"time":1756026287024,"pid":52397,"hostname":"nadinb-mac.local","msg":"📡 Server 0: http://100.85.125.8:30041 (key: UPfNqe5h...)"}
+{"level":30,"time":1756026287024,"pid":52397,"hostname":"nadinb-mac.local","msg":"📡 Server 1: http://100.85.125.8:30041 (key: cKuNxqRh...)"}
+{"level":30,"time":1756026287024,"pid":52397,"hostname":"nadinb-mac.local","msg":"🔄 Processing server 0/2"}
+{"level":30,"time":1756026287024,"pid":52397,"hostname":"nadinb-mac.local","msg":"🔍 Server 0: Fetching assets for 2025-08-21 from http://100.85.125.8:30041 with key UPfNqe5h..."}
+{"level":30,"time":1756026287024,"pid":52397,"hostname":"nadinb-mac.local","msg":"📁 Server 0: Fetching all assets from album b2cfc674-8776-465c-b8ab-3971e5fc7e76, then filtering by date 2025-08-21"}
+{"level":30,"time":1756026287024,"pid":52397,"hostname":"nadinb-mac.local","msg":"🔗 Server 0: Trying GET /api/albums/b2cfc674-8776-465c-b8ab-3971e5fc7e76"}
+{"level":50,"time":1756026292979,"pid":52397,"hostname":"nadinb-mac.local","msg":"autoLoadAlbum fetch album failed","err":"TypeError: fetch failed"}
+{"level":40,"time":1756026297479,"pid":52397,"hostname":"nadinb-mac.local","msg":"❌ Server 0: Failed to get album with assets: fetch failed"}
+{"level":40,"time":1756026307979,"pid":52397,"hostname":"nadinb-mac.local","msg":"Failed to get album assets: fetch failed"}
+{"level":30,"time":1756026307979,"pid":52397,"hostname":"nadinb-mac.local","msg":"No assets found in album b2cfc674-8776-465c-b8ab-3971e5fc7e76"}
+{"level":30,"time":1756026307979,"pid":52397,"hostname":"nadinb-mac.local","msg":"📸 Server 0: Found 0 photos"}
+{"level":30,"time":1756026307979,"pid":52397,"hostname":"nadinb-mac.local","msg":"🔄 Processing server 1/2"}
+{"level":30,"time":1756026307979,"pid":52397,"hostname":"nadinb-mac.local","msg":"🔍 Server 1: Fetching assets for 2025-08-21 from http://100.85.125.8:30041 with key cKuNxqRh..."}
+{"level":30,"time":1756026307979,"pid":52397,"hostname":"nadinb-mac.local","msg":"📁 Server 1: Fetching all assets from album b2cfc674-8776-465c-b8ab-3971e5fc7e76, then filtering by date 2025-08-21"}
+{"level":30,"time":1756026307979,"pid":52397,"hostname":"nadinb-mac.local","msg":"🔗 Server 1: Trying GET /api/albums/b2cfc674-8776-465c-b8ab-3971e5fc7e76"}
+{"level":40,"time":1756026318479,"pid":52397,"hostname":"nadinb-mac.local","msg":"❌ Server 1: Failed to get album with assets: fetch failed"}
+{"level":40,"time":1756026328980,"pid":52397,"hostname":"nadinb-mac.local","msg":"Failed to get album assets: fetch failed"}
+{"level":30,"time":1756026328980,"pid":52397,"hostname":"nadinb-mac.local","msg":"No assets found in album b2cfc674-8776-465c-b8ab-3971e5fc7e76"}
+{"level":30,"time":1756026328980,"pid":52397,"hostname":"nadinb-mac.local","msg":"📸 Server 1: Found 0 photos"}
+{"level":30,"time":1756026328980,"pid":52397,"hostname":"nadinb-mac.local","msg":"📊 Total photos found: 0"}
+{"level":30,"time":1756026328984,"pid":52397,"hostname":"nadinb-mac.local","reqId":"req-1","res":{"statusCode":200},"responseTime":41961.30341696739,"msg":"request completed"}

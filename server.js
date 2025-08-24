@@ -388,16 +388,42 @@ async function getAssetsForDayForServer(server, serverIndex, { date, albumId }) 
 
 // Combine results from all configured Immich servers
 async function getAssetsForDay({ date, albumId }) {
+  app.log.info(`🚀 Starting import for ${date} with ${IMMICH_SERVERS.length} servers`);
+  IMMICH_SERVERS.forEach((server, i) => {
+    app.log.info(`📡 Server ${i}: ${server.url} (key: ${server.key ? server.key.substring(0, 8) + '...' : 'NO_KEY'})`);
+  });
+
   const allPhotos = [];
+  const seenAssets = new Set(); // Track unique assets by their original ID
+  
   for (let i = 0; i < IMMICH_SERVERS.length; i++) {
     const server = IMMICH_SERVERS[i];
     try {
+      app.log.info(`🔄 Processing server ${i}/${IMMICH_SERVERS.length}`);
       const photos = await getAssetsForDayForServer(server, i, { date, albumId });
-      allPhotos.push(...photos);
+      app.log.info(`📸 Server ${i}: Found ${photos.length} photos`);
+      
+      // Deduplicate by original asset ID (remove server prefix)
+      const uniquePhotos = photos.filter(photo => {
+        const originalId = photo.id.split('_').slice(1).join('_'); // Remove server index prefix
+        if (seenAssets.has(originalId)) {
+          return false; // Skip duplicate
+        }
+        seenAssets.add(originalId);
+        return true;
+      });
+      
+      if (photos.length !== uniquePhotos.length) {
+        app.log.info(`Server ${i}: Added ${uniquePhotos.length} unique photos (${photos.length - uniquePhotos.length} duplicates skipped)`);
+      }
+      allPhotos.push(...uniquePhotos);
     } catch (e) {
-      app.log.warn(`Failed to fetch assets from Immich server ${server.url}: ${e.message}`);
+      app.log.error(`❌ Server ${i} failed: ${e.message}`);
     }
   }
+  
+  app.log.info(`📊 Total unique photos found: ${allPhotos.length}`);
+  
   // Sort combined photos by timestamp so they appear as a single source
   allPhotos.sort((a, b) => (a.taken_at || '').localeCompare(b.taken_at || ''));
   return allPhotos;
@@ -1098,16 +1124,17 @@ app.delete('/api/stack/:stackId/comment/:commentId', async (req, reply) => {
   }
 });
 
-if (IMMICH_ALBUM_ID) {
-  autoLoadAlbum().catch(err =>
-    app.log.error({ msg: 'autoLoadAlbum initial run failed', err: String(err) })
-  );
-  setInterval(() => {
-    autoLoadAlbum().catch(err =>
-      app.log.error({ msg: 'autoLoadAlbum interval failed', err: String(err) })
-    );
-  }, AUTOLOAD_INTERVAL);
-}
+// Disable auto-loader to prevent conflicts with manual import
+// if (IMMICH_ALBUM_ID) {
+//   autoLoadAlbum().catch(err =>
+//     app.log.error({ msg: 'autoLoadAlbum initial run failed', err: String(err) })
+//   );
+//   setInterval(() => {
+//     autoLoadAlbum().catch(err =>
+//       app.log.error({ msg: 'autoLoadAlbum interval failed', err: String(err) })
+//     );
+//   }, AUTOLOAD_INTERVAL);
+// }
 
 // ---- Boot -------------------------------------------------------------------
 app.listen({ port: PORT, host: '0.0.0.0' }, (err, address) => {

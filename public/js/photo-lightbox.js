@@ -198,8 +198,24 @@ function bindLbPanel(photoId){
             url: `${api}/api/photo/${photoId}/comment/${commentId}`
           });
           
+          // Get admin token the same way as the stack comments
+          const getAdminToken = () => {
+            try {
+              const settings = JSON.parse(localStorage.getItem('tripAdminSettings') || '{}');
+              return settings.apiToken || localStorage.getItem('tripAdminPass') || '';
+            } catch {
+              return localStorage.getItem('tripAdminPass') || '';
+            }
+          };
+          
+          const adminToken = getAdminToken();
+          console.log('🔑 Using admin token for photo comment delete:', adminToken ? '***set***' : 'NOT SET');
+          
           const res = await fetch(`${api}/api/photo/${photoId}/comment/${commentId}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+              'x-admin-token': adminToken
+            }
           });
 
           if (!res.ok) {
