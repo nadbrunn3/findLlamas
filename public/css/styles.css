@@ -769,8 +769,8 @@ video.drawer-thumbnail::after {
 .stack-comments .comment-submit { border:1px solid #8bb8ff; color:#2b6cb0; background: #547dc9; border-radius:8px; padding:.45rem .8rem; }
 
 /* lightbox shell */
-/* Fullscreen map toggle button */
-.mapboxgl-ctrl-fullscreen {
+/* Custom fullscreen map toggle button */
+.custom-fullscreen-btn {
   background: white;
   border: 2px solid rgba(0,0,0,0.2);
   border-radius: 4px;
@@ -785,12 +785,12 @@ video.drawer-thumbnail::after {
   transition: all 0.2s ease;
 }
 
-.mapboxgl-ctrl-fullscreen:hover {
+.custom-fullscreen-btn:hover {
   background: #f4f4f4;
   border-color: rgba(0,0,0,0.3);
 }
 
-.mapboxgl-ctrl-fullscreen svg {
+.custom-fullscreen-btn svg {
   width: 16px;
   height: 16px;
 }

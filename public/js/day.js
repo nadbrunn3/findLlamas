@@ -339,7 +339,8 @@ function initMap() {
     antialias: true
   });
   map.addControl(new mapboxgl.NavigationControl());
-  map.addControl(new mapboxgl.FullscreenControl());
+  // Remove native fullscreen control to avoid conflicts with custom one
+  // map.addControl(new mapboxgl.FullscreenControl());
   addFullscreenToggle(map, 'map');
 
   map.on('load', () => {
@@ -367,7 +368,7 @@ function addFullscreenToggle(map, containerId) {
   class FullscreenToggle {
     onAdd(mapInstance) {
       const btn = document.createElement('button');
-      btn.className = 'mapboxgl-ctrl-fullscreen';
+      btn.className = 'custom-fullscreen-btn';
       btn.innerHTML = `
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
@@ -378,6 +379,7 @@ function addFullscreenToggle(map, containerId) {
       btn.setAttribute('aria-label', 'Toggle fullscreen map');
       btn.addEventListener('click', e => {
         e.stopPropagation();
+        console.log('🔘 Fullscreen button clicked!', containerId);
         openFullscreenMapFromRegularMap(mapInstance, containerId);
       });
       const container = document.createElement('div');

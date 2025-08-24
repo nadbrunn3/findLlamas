@@ -478,7 +478,8 @@ function initMaps(){
     antialias: true
   });
   topMap.addControl(new mapboxgl.NavigationControl());
-  topMap.addControl(new mapboxgl.FullscreenControl());
+  // Remove native fullscreen control to avoid conflicts with custom one
+  // topMap.addControl(new mapboxgl.FullscreenControl());
   addFullscreenToggle(topMap, 'top-map');
 
   topMap.on('load', () => {
@@ -2253,7 +2254,7 @@ function addFullscreenToggle(map, containerId) {
     onAdd(mapInstance) {
       this._map = mapInstance;
       const btn = document.createElement('button');
-      btn.className = 'mapboxgl-ctrl-fullscreen';
+      btn.className = 'custom-fullscreen-btn';
       btn.innerHTML = `
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
@@ -2264,6 +2265,7 @@ function addFullscreenToggle(map, containerId) {
       btn.setAttribute('aria-label', 'Toggle fullscreen map');
       btn.addEventListener('click', e => {
         e.stopPropagation();
+        console.log('🔘 Fullscreen button clicked!', containerId);
         openFullscreenMapFromRegularMap(mapInstance, containerId);
       });
       const container = document.createElement('div');
@@ -2282,6 +2284,12 @@ function addFullscreenToggle(map, containerId) {
 
 function openFullscreenMapFromRegularMap(sourceMap, containerId) {
   console.log('🗺️ Opening fullscreen map from regular map');
+  console.log('📊 Debug info:', {
+    containerId,
+    allPhotosCount: allPhotos.length,
+    allPhotosWithGPS: allPhotos.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon)).length,
+    samplePhoto: allPhotos[0]
+  });
   
   // Get all photos with coordinates for this map
   let photosForMap = [];
@@ -2320,9 +2328,11 @@ function openFullscreenMapFromRegularMap(sourceMap, containerId) {
     }
   }
   
+  console.log('📍 Photos for fullscreen map:', photosForMap.length);
   if (photosForMap.length === 0) {
     console.log('⚠️ No photos with coordinates found for fullscreen map');
-    return;
+    console.log('🔍 First few allPhotos for debugging:', allPhotos.slice(0, 3));
+    console.log('🗺️ Opening fullscreen map anyway (without photo markers)');
   }
   
   // Use the same fullscreen map function from photo-lightbox.js
