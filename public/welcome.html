@@ -3,7 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Finding Llamas — Welcome</title>
+  <title>Find Llamas — Welcome</title>
+  <!-- Mapbox GL JS for the globe -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
   <style>
     :root{
       --bg:#0f172a; --panel:#0b1220; --card:#111827; --text:#e5e7eb; --muted:#9aa3af;
@@ -15,60 +18,776 @@
     .wrap{max-width:1100px;margin-inline:auto;padding:20px}
 
     /* HERO */
-    .hero{position:relative;height:360px;border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
+    .hero{position:relative;border-radius:16px;overflow:hidden;box-shadow:var(--shadow);background:#0a0a0f}
+    
+    /* Unified starry background across entire hero */
+    .hero::after{
+      content:'';
+      position:absolute;
+      top:0;left:0;right:0;bottom:0;
+      background:
+        radial-gradient(2px 2px at 20px 30px, rgba(255,255,255,0.8), transparent),
+        radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.6), transparent),
+        radial-gradient(1px 1px at 90px 40px, rgba(255,255,255,0.9), transparent),
+        radial-gradient(1px 1px at 130px 80px, rgba(255,255,255,0.7), transparent),
+        radial-gradient(2px 2px at 160px 30px, rgba(255,255,255,0.5), transparent),
+        radial-gradient(1px 1px at 200px 60px, rgba(255,255,255,0.8), transparent),
+        radial-gradient(2px 2px at 240px 20px, rgba(255,255,255,0.6), transparent),
+        radial-gradient(1px 1px at 280px 50px, rgba(255,255,255,0.9), transparent),
+        radial-gradient(1px 1px at 320px 90px, rgba(255,255,255,0.7), transparent),
+        radial-gradient(2px 2px at 360px 40px, rgba(255,255,255,0.5), transparent);
+      background-repeat:repeat;
+      background-size:400px 200px;
+      animation:twinkle 4s ease-in-out infinite alternate;
+      pointer-events:none;
+      z-index:1;
+    }
+    
+    @keyframes twinkle{
+      0%{opacity:0.3;}
+      100%{opacity:0.8;}
+    }
 
+    .hero-header{padding:20px 24px;text-align:center;background:transparent;width:100%;box-sizing:border-box;position:relative}
+    .hero-header::before{content:'';position:absolute;inset:0;background:linear-gradient(to bottom,rgba(15,23,42,0.9) 0%,rgba(15,23,42,0.6) 50%,transparent 100%);pointer-events:none;z-index:2}
+    .title{margin:0;font-size:clamp(28px,5vw,42px);font-weight:900;letter-spacing:.2px;position:relative;z-index:3;text-shadow:0 2px 4px rgba(0,0,0,0.3)}
+    .note{margin:0 auto;margin-top:6px;color:var(--muted);max-width:500px;font-size:0.9rem;position:relative;z-index:3;text-shadow:0 1px 2px rgba(0,0,0,0.2)}
 
-    .hero-content{position:relative;z-index:2;padding:24px}
-    .title{margin:0;font-size:clamp(32px,6vw,48px);font-weight:900;letter-spacing:.2px}
-    .note{margin-top:8px;color:var(--muted);max-width:500px}
+    /* GLOBE */
+    .hero-globe{position:relative;height:450px;width:100%;border-radius:0 0 16px 16px;overflow:hidden;background:transparent}
+    #welcome-globe{width:100%;height:100%;position:relative;z-index:2}
+    
+    /* Globe markers */
+    .globe-marker{
+      width:10px;
+      height:10px;
+      border-radius:50%;
+      border:2px solid rgba(96,165,250,0.9);
+      background:rgba(96,165,250,0.8);
+      box-shadow:0 0 8px rgba(96,165,250,0.6), 0 0 16px rgba(96,165,250,0.3);
+      transition:all 0.3s ease;
+      animation:globePulse 3s ease-in-out infinite;
+      cursor:pointer;
+    }
+    
+    .globe-marker.photo-bubble{
+      background:rgba(34,211,238,0.9);
+      border-color:rgba(34,211,238,0.9);
+      box-shadow:0 0 10px rgba(34,211,238,0.7), 0 0 20px rgba(34,211,238,0.4);
+    }
+    
+    .globe-marker:hover{
+      transform:scale(1.3);
+      border-color:rgba(34,211,238,0.9);
+      background:rgba(34,211,238,0.9);
+      box-shadow:0 0 12px rgba(34,211,238,0.8), 0 0 24px rgba(34,211,238,0.5);
+    }
+    
+    @keyframes globePulse{
+      0%,100%{
+        box-shadow:0 0 12px rgba(96,165,250,0.6), 0 0 24px rgba(96,165,250,0.3);
+        opacity:1;
+      }
+      50%{
+        box-shadow:0 0 16px rgba(96,165,250,0.8), 0 0 32px rgba(96,165,250,0.5);
+        opacity:0.9;
+      }
+    }
+    
+    /* Mapbox attribution styling - subtle by default, visible on hover */
+    .mapboxgl-ctrl-attrib {
+      background: transparent !important;
+      color: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 2px 4px !important;
+      font-size: 10px !important;
+      opacity: 0.3 !important;
+      transition: all 0.3s ease !important;
+    }
+    
+    .mapboxgl-ctrl-attrib:hover {
+      background: rgba(0,0,0,0.8) !important;
+      color: rgba(255,255,255,0.9) !important;
+      opacity: 0.9 !important;
+      border-radius: 4px !important;
+      backdrop-filter: blur(4px) !important;
+    }
+    
+    .mapboxgl-ctrl-attrib-button {
+      background: transparent !important;
+      color: rgba(255,255,255,0.4) !important;
+      border: none !important;
+      font-size: 12px !important;
+      font-weight: bold !important;
+      margin: 0 !important;
+      padding: 2px 4px !important;
+      transition: all 0.3s ease !important;
+      cursor: pointer !important;
+    }
+    
+    .mapboxgl-ctrl-attrib-button:hover {
+      color: rgba(255,255,255,0.9) !important;
+      background: rgba(255,255,255,0.1) !important;
+      border-radius: 2px !important;
+    }
+    
+    /* Style the attribution text when expanded */
+    .mapboxgl-ctrl-attrib.mapboxgl-compact-show {
+      background: rgba(0,0,0,0.85) !important;
+      color: rgba(255,255,255,0.9) !important;
+      border-radius: 4px !important;
+      padding: 4px 8px !important;
+      backdrop-filter: blur(8px) !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+    }
+    
+    .mapboxgl-ctrl-attrib a {
+      color: rgba(255,255,255,0.8) !important;
+      text-decoration: none !important;
+    }
+    
+    .mapboxgl-ctrl-attrib a:hover {
+      color: rgba(255,255,255,1) !important;
+      text-decoration: underline !important;
+    }
 
-    /* TRIPS */
-    .section{margin-top:40px}
-    .section h2{margin:0 0 20px;font-size:24px;letter-spacing:.2px}
-    .trip-grid{display:grid;grid-template-columns:1fr;gap:24px;max-width:400px;margin:0 auto}
-    .trip{position:relative;border-radius:16px;overflow:hidden;isolation:isolate;background:#0b1220;min-height:400px;display:flex;align-items:flex-end;box-shadow:var(--shadow);cursor:pointer;outline:0;border:1px solid var(--border);transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1)}
-    .trip.placeholder{cursor:default}
-    .trip:focus-visible{box-shadow:0 0 0 3px rgba(96,165,250,.5), var(--shadow)}
-    .trip:hover:not(.placeholder){transform:translateY(-2px);box-shadow:0 25px 50px rgba(2,6,23,.6)}
-    .trip .media{position:absolute;inset:0;background:#000 center/cover no-repeat;filter:saturate(1.05) contrast(1.02);transform:scale(1.02);transition:transform .35s ease}
-    .trip:hover .media{transform:scale(1.06)}
-    .trip::after{content:"";position:absolute;inset:auto 0 0 0;height:60%;background:linear-gradient(to top,rgba(2,6,23,.75),transparent)}
-    .trip-body{position:relative;z-index:2;padding:16px}
-    .trip-title{margin:0 0 6px;font-weight:900;font-size:1.3rem;text-shadow:0 2px 6px rgba(0,0,0,.5)}
-    .trip-meta{color:#cbd5e1;font-weight:700;font-size:.9rem}
-
-    .foot{margin-top:40px;color:#94a3b8;font-size:.85rem;text-align:center;padding:20px 0}
-    @media (max-width:560px){.hero{height:300px}.wrap{padding:16px}.cta-row{text-align:center}}
+    /* ADVENTURE SECTION */
+    .adventure-section{margin-top:60px;padding:40px 0}
+    .adventure-header{text-align:center;margin-bottom:40px}
+    .adventure-badge{
+      display:inline-block;
+      background:linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+      color:white;
+      padding:8px 16px;
+      border-radius:20px;
+      font-size:0.8rem;
+      font-weight:700;
+      letter-spacing:0.5px;
+      margin-bottom:16px;
+      animation:pulse-badge 2s ease-in-out infinite;
+      box-shadow:0 4px 12px rgba(255,107,53,0.3);
+    }
+    
+    @keyframes pulse-badge{
+      0%, 100%{transform:scale(1);box-shadow:0 4px 12px rgba(255,107,53,0.3);}
+      50%{transform:scale(1.05);box-shadow:0 6px 20px rgba(255,107,53,0.5);}
+    }
+    
+    .adventure-title{
+      font-size:clamp(28px, 5vw, 42px);
+      font-weight:900;
+      margin:0 0 16px;
+      background:linear-gradient(135deg, var(--text) 0%, #60a5fa 100%);
+      -webkit-background-clip:text;
+      background-clip:text;
+      -webkit-text-fill-color:transparent;
+      letter-spacing:-0.5px;
+    }
+    
+    .adventure-subtitle{
+      font-size:1.1rem;
+      color:var(--muted);
+      max-width:600px;
+      margin:0 auto;
+      line-height:1.6;
+    }
+    
+    .adventure-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(350px, 1fr));
+      gap:32px;
+      max-width:900px;
+      margin:0 auto;
+    }
+    
+    .adventure-card{
+      background:var(--panel);
+      border-radius:20px;
+      overflow:hidden;
+      cursor:pointer;
+      transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      border:2px solid transparent;
+      position:relative;
+    }
+    
+    .adventure-card:hover{
+      transform:translateY(-8px) scale(1.02);
+      box-shadow:0 20px 60px rgba(0,0,0,0.4);
+      border-color:var(--accent);
+    }
+    
+    .adventure-card.current{
+      background:linear-gradient(135deg, var(--panel) 0%, rgba(96,165,250,0.1) 100%);
+      border-color:rgba(96,165,250,0.3);
+    }
+    
+    .adventure-status{
+      position:absolute;
+      top:16px;
+      right:16px;
+      z-index:10;
+    }
+    
+    .status-badge{
+      background:rgba(0,0,0,0.8);
+      color:white;
+      padding:6px 12px;
+      border-radius:20px;
+      font-size:0.75rem;
+      font-weight:700;
+      backdrop-filter:blur(8px);
+      border:1px solid rgba(255,255,255,0.1);
+    }
+    
+    .status-badge.live{
+      background:linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      animation:live-pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes live-pulse{
+      0%, 100%{box-shadow:0 0 0 0 rgba(239,68,68,0.4);}
+      50%{box-shadow:0 0 0 8px rgba(239,68,68,0);}
+    }
+    
+    .status-badge.upcoming{
+      background:linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    }
+    
+    .adventure-media{
+      height:200px;
+      background-size:cover;
+      background-position:center;
+      position:relative;
+      overflow:hidden;
+    }
+    
+    .adventure-media.mystery{
+      background:linear-gradient(135deg, #1e293b 0%, #334155 50%, #475569 100%);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    
+    .mystery-content{
+      text-align:center;
+      color:white;
+    }
+    
+    .mystery-icon{
+      font-size:3rem;
+      margin-bottom:12px;
+      animation:mystery-float 3s ease-in-out infinite;
+    }
+    
+    @keyframes mystery-float{
+      0%, 100%{transform:translateY(0) rotate(0deg);}
+      25%{transform:translateY(-8px) rotate(2deg);}
+      75%{transform:translateY(8px) rotate(-2deg);}
+    }
+    
+    .mystery-text{
+      font-size:1.2rem;
+      font-weight:700;
+      margin-bottom:4px;
+    }
+    
+    .mystery-hint{
+      font-size:0.9rem;
+      opacity:0.8;
+    }
+    
+    .adventure-overlay{
+      position:absolute;
+      inset:0;
+      background:linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.4) 70%, rgba(0,0,0,0.8) 100%);
+      display:flex;
+      align-items:flex-end;
+      padding:20px;
+      opacity:0;
+      transition:opacity 0.3s ease;
+    }
+    
+    .adventure-card:hover .adventure-overlay{
+      opacity:1;
+    }
+    
+    .adventure-stats{
+      display:flex;
+      gap:20px;
+      color:white;
+    }
+    
+    .stat{
+      text-align:center;
+    }
+    
+    .stat-number{
+      display:block;
+      font-size:1.5rem;
+      font-weight:900;
+      line-height:1;
+    }
+    
+    .stat-label{
+      font-size:0.8rem;
+      opacity:0.9;
+      text-transform:uppercase;
+      letter-spacing:0.5px;
+    }
+    
+    .adventure-content{
+      padding:24px;
+    }
+    
+    .adventure-name{
+      font-size:1.4rem;
+      font-weight:900;
+      margin:0 0 12px;
+      color:var(--text);
+    }
+    
+    .adventure-description{
+      color:var(--muted);
+      line-height:1.6;
+      margin:0 0 16px;
+    }
+    
+    .adventure-meta{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-bottom:20px;
+      flex-wrap:wrap;
+      gap:12px;
+    }
+    
+    .adventure-date{
+      color:var(--accent);
+      font-weight:700;
+      font-size:0.9rem;
+    }
+    
+    .adventure-progress{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-size:0.85rem;
+      color:var(--muted);
+    }
+    
+    .progress-bar{
+      width:80px;
+      height:4px;
+      background:rgba(96,165,250,0.2);
+      border-radius:2px;
+      overflow:hidden;
+    }
+    
+    .progress-fill{
+      height:100%;
+      background:linear-gradient(90deg, var(--accent) 0%, #60a5fa 100%);
+      transition:width 0.3s ease;
+    }
+    
+    .cta-button{
+      background:linear-gradient(135deg, var(--accent) 0%, #60a5fa 100%);
+      color:white;
+      border:none;
+      padding:12px 20px;
+      border-radius:12px;
+      font-weight:700;
+      font-size:0.9rem;
+      cursor:pointer;
+      transition:all 0.3s ease;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      width:100%;
+      justify-content:center;
+      position:relative;
+      overflow:hidden;
+    }
+    
+    .cta-button:hover{
+      transform:translateY(-2px);
+      box-shadow:0 8px 25px rgba(96,165,250,0.4);
+    }
+    
+    .cta-button.secondary{
+      background:linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    }
+    
+    .cta-button.secondary:hover{
+      box-shadow:0 8px 25px rgba(139,92,246,0.4);
+    }
+    
+    .cta-arrow{
+      transition:transform 0.3s ease;
+    }
+    
+    .cta-button:hover .cta-arrow{
+      transform:translateX(4px);
+    }
+    
+    /* FOLLOW SECTION */
+    .follow-section{
+      margin:60px 0;
+      padding:40px 0;
+      background:linear-gradient(135deg, rgba(96,165,250,0.05) 0%, rgba(139,92,246,0.05) 100%);
+      border-radius:20px;
+      border:1px solid rgba(96,165,250,0.1);
+    }
+    
+    .follow-content{
+      text-align:center;
+      max-width:800px;
+      margin:0 auto;
+      padding:0 20px;
+    }
+    
+    .follow-title{
+      font-size:clamp(24px, 4vw, 32px);
+      font-weight:900;
+      margin:0 0 12px;
+      color:var(--text);
+    }
+    
+    .follow-subtitle{
+      color:var(--muted);
+      font-size:1.1rem;
+      margin:0 0 32px;
+      line-height:1.6;
+    }
+    
+    .follow-buttons{
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
+      gap:20px;
+      max-width:600px;
+      margin:0 auto;
+    }
+    
+    .follow-btn{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      padding:20px;
+      background:var(--panel);
+      border-radius:16px;
+      text-decoration:none;
+      color:var(--text);
+      transition:all 0.3s ease;
+      border:2px solid transparent;
+      position:relative;
+      overflow:hidden;
+    }
+    
+    .follow-btn:hover{
+      transform:translateY(-4px);
+      box-shadow:0 12px 30px rgba(0,0,0,0.3);
+    }
+    
+    .follow-btn.instagram{
+      border-color:rgba(225,48,108,0.3);
+    }
+    
+    .follow-btn.instagram:hover{
+      border-color:#e1306c;
+      box-shadow:0 12px 30px rgba(225,48,108,0.3);
+    }
+    
+    .follow-btn.youtube{
+      border-color:rgba(255,0,0,0.3);
+    }
+    
+    .follow-btn.youtube:hover{
+      border-color:#ff0000;
+      box-shadow:0 12px 30px rgba(255,0,0,0.3);
+    }
+    
+    .follow-btn.newsletter{
+      border-color:rgba(34,197,94,0.3);
+    }
+    
+    .follow-btn.newsletter:hover{
+      border-color:#22c55e;
+      box-shadow:0 12px 30px rgba(34,197,94,0.3);
+    }
+    
+    .follow-icon{
+      font-size:2rem;
+      margin-bottom:8px;
+    }
+    
+    .follow-text{
+      font-weight:700;
+      font-size:1rem;
+      margin-bottom:4px;
+    }
+    
+    .follow-count{
+      font-size:0.85rem;
+      color:var(--muted);
+    }
+    
+    /* ENHANCED FOOTER */
+    .enhanced-footer{
+      background:linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color:#cbd5e1;
+      padding:40px 0 20px;
+      margin-top:40px;
+      position:relative;
+      overflow:hidden;
+    }
+    
+    .footer-content{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      flex-wrap:wrap;
+      gap:20px;
+      position:relative;
+      z-index:2;
+    }
+    
+    .footer-brand{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      margin-bottom:12px;
+    }
+    
+    .footer-logo{
+      font-size:1.5rem;
+    }
+    
+    .footer-name{
+      font-size:1.2rem;
+      font-weight:900;
+      color:white;
+    }
+    
+    .footer-tagline{
+      color:#94a3b8;
+      font-size:0.9rem;
+      margin:0;
+      max-width:300px;
+    }
+    
+    .footer-links{
+      display:flex;
+      gap:24px;
+      margin-bottom:12px;
+      flex-wrap:wrap;
+    }
+    
+    .footer-link{
+      color:#cbd5e1;
+      text-decoration:none;
+      font-weight:500;
+      transition:color 0.3s ease;
+    }
+    
+    .footer-link:hover{
+      color:white;
+    }
+    
+    .footer-copyright{
+      color:#64748b;
+      font-size:0.85rem;
+      margin:0;
+    }
+    
+    .footer-decoration{
+      position:absolute;
+      inset:0;
+      overflow:hidden;
+      z-index:1;
+    }
+    
+    .footer-stars{
+      position:absolute;
+      width:200%;
+      height:200%;
+      background:
+        radial-gradient(1px 1px at 20px 30px, rgba(255,255,255,0.3), transparent),
+        radial-gradient(1px 1px at 40px 70px, rgba(255,255,255,0.2), transparent),
+        radial-gradient(1px 1px at 90px 40px, rgba(255,255,255,0.4), transparent),
+        radial-gradient(1px 1px at 130px 80px, rgba(255,255,255,0.3), transparent),
+        radial-gradient(1px 1px at 160px 30px, rgba(255,255,255,0.2), transparent);
+      background-repeat:repeat;
+      background-size:200px 150px;
+      animation:footer-drift 60s linear infinite;
+    }
+    
+    @keyframes footer-drift{
+      from{transform:translateX(0) translateY(0);}
+      to{transform:translateX(-50px) translateY(-50px);}
+    }
+    
+    /* Mobile responsive */
+    @media (max-width:768px){
+      .hero-header{padding:16px 20px}
+      .hero-globe{height:350px}
+      .title{font-size:clamp(26px,4.5vw,36px)}
+      .adventure-grid{grid-template-columns:1fr;max-width:500px}
+      .adventure-card{margin:0 auto}
+      .follow-buttons{grid-template-columns:1fr;max-width:400px}
+      .footer-content{flex-direction:column;text-align:center}
+      .footer-links{justify-content:center}
+    }
+    @media (max-width:560px){
+      .wrap{padding:16px}
+      .hero-header{padding:14px 16px}
+      .hero-globe{height:280px}
+      .title{font-size:clamp(22px,4vw,28px)}
+      .note{font-size:0.85rem}
+      .adventure-section{padding:20px 0}
+      .adventure-header{margin-bottom:30px}
+      .follow-section{margin:40px 0;padding:30px 0}
+    }
   </style>
 </head>
 <body>
   <main class="wrap">
     <!-- HERO -->
     <section class="hero">
-
-
-      <div class="hero-content">
-        <h1 class="title">Finding 🦙 Llamas</h1>
+      <div class="hero-header">
+        <h1 class="title">Find 🦙 Llamas</h1>
         <p class="note">No login required. Leave your name in comments so you are not called "anonymous".</p>
+      </div>
+      <div class="hero-globe">
+        <div id="welcome-globe"></div>
       </div>
     </section>
 
-    <!-- TRIPS -->
-    <section class="section" id="trips" aria-labelledby="tripsh">
-      <h2 id="tripsh">Follow us on our trip</h2>
-      <div class="trip-grid">
-        <article class="trip" tabindex="0" aria-label="Open trip: Japan & South Korea" onclick="openTrip('japan-korea')" onkeydown="if(event.key==='Enter'||event.key===' '){openTrip('japan-korea');event.preventDefault();}">
-          <div class="media" style="background-image:url('https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?q=80&w=1400&auto=format&fit=crop');"></div>
-          <div class="trip-body">
-            <h3 class="trip-title">Japan &amp; South Korea</h3>
-            <div class="trip-meta">Aug–Oct 2025 • 8 cities</div>
+    <!-- ADVENTURE SECTION -->
+    <section class="adventure-section" id="adventures">
+      <div class="adventure-header">
+        <div class="adventure-badge">🌟 LIVE ADVENTURE</div>
+        <h2 class="adventure-title">Join Our Epic Journey!</h2>
+        <p class="adventure-subtitle">Follow along as we explore incredible destinations, discover hidden gems, and share unforgettable moments from around the globe</p>
+      </div>
+      
+      <div class="adventure-grid">
+        <article class="adventure-card current" onclick="openTrip('japan-korea')" tabindex="0">
+          <div class="adventure-status">
+            <span class="status-badge live">🔴 LIVE NOW</span>
+          </div>
+          <div class="adventure-media" style="background-image:url('https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?q=80&w=1400&auto=format&fit=crop');">
+            <div class="adventure-overlay">
+              <div class="adventure-stats">
+                <div class="stat">
+                  <span class="stat-number">8</span>
+                  <span class="stat-label">Cities</span>
+                </div>
+                <div class="stat">
+                  <span class="stat-number">47</span>
+                  <span class="stat-label">Photos</span>
+                </div>
+                <div class="stat">
+                  <span class="stat-number">12</span>
+                  <span class="stat-label">Days</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="adventure-content">
+            <h3 class="adventure-name">Japan & South Korea 🇯🇵🇰🇷</h3>
+            <p class="adventure-description">From Tokyo's neon streets to Seoul's vibrant markets - experiencing the perfect blend of tradition and modernity</p>
+            <div class="adventure-meta">
+              <span class="adventure-date">Aug–Oct 2025</span>
+              <span class="adventure-progress">
+                <div class="progress-bar">
+                  <div class="progress-fill" style="width: 65%"></div>
+                </div>
+                65% Complete
+              </span>
+            </div>
+            <div class="adventure-cta">
+              <button class="cta-button">
+                <span class="cta-icon">🗺️</span>
+                Follow Journey
+                <span class="cta-arrow">→</span>
+              </button>
+            </div>
+          </div>
+        </article>
+        
+        <article class="adventure-card upcoming">
+          <div class="adventure-status">
+            <span class="status-badge upcoming">📅 COMING SOON</span>
+          </div>
+          <div class="adventure-media mystery">
+            <div class="mystery-content">
+              <div class="mystery-icon">🎒</div>
+              <div class="mystery-text">Next Adventure</div>
+              <div class="mystery-hint">Stay tuned for our next incredible journey...</div>
+            </div>
+          </div>
+          <div class="adventure-content">
+            <h3 class="adventure-name">Mystery Destination ❓</h3>
+            <p class="adventure-description">Our next adventure is being planned! Subscribe to be the first to know where we're heading next</p>
+            <div class="adventure-cta">
+              <button class="cta-button secondary">
+                <span class="cta-icon">🔔</span>
+                Get Notified
+                <span class="cta-arrow">→</span>
+              </button>
+            </div>
           </div>
         </article>
       </div>
     </section>
 
-    <footer class="foot">
-      <p>© 2025 Finding Llamas — Privacy-first travel for humans 🦙</p>
+    <!-- FOLLOW SECTION -->
+    <section class="follow-section">
+      <div class="follow-content">
+        <h3 class="follow-title">Don't Miss a Moment! 📸</h3>
+        <p class="follow-subtitle">Get real-time updates, behind-the-scenes moments, and exclusive travel tips</p>
+        <div class="follow-buttons">
+          <a href="#" class="follow-btn instagram" data-platform="instagram">
+            <span class="follow-icon">📷</span>
+            <span class="follow-text">Follow on Instagram</span>
+            <span class="follow-count">2.1k followers</span>
+          </a>
+          <a href="#" class="follow-btn youtube" data-platform="youtube">
+            <span class="follow-icon">🎥</span>
+            <span class="follow-text">Subscribe on YouTube</span>
+            <span class="follow-count">890 subscribers</span>
+          </a>
+          <a href="#" class="follow-btn newsletter" data-platform="newsletter">
+            <span class="follow-icon">📧</span>
+            <span class="follow-text">Join Newsletter</span>
+            <span class="follow-count">Weekly updates</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ENHANCED FOOTER -->
+    <footer class="enhanced-footer">
+      <div class="footer-content">
+        <div class="footer-left">
+          <div class="footer-brand">
+            <span class="footer-logo">🦙</span>
+            <span class="footer-name">Find Llamas</span>
+          </div>
+          <p class="footer-tagline">Privacy-first travel adventures for curious humans</p>
+        </div>
+        <div class="footer-right">
+          <div class="footer-links">
+            <a href="#" class="footer-link">About</a>
+            <a href="#" class="footer-link">Privacy</a>
+            <a href="#" class="footer-link">Contact</a>
+          </div>
+          <p class="footer-copyright">© 2025 Find Llamas</p>
+        </div>
+      </div>
+      <div class="footer-decoration">
+        <div class="footer-stars"></div>
+      </div>
     </footer>
   </main>
   <script>
@@ -77,6 +796,286 @@
         window.location.href='/index.html?trip=japan-korea';
       }
     }
+    
+    // Add interactive effects to follow buttons
+    document.addEventListener('DOMContentLoaded', () => {
+      const followButtons = document.querySelectorAll('.follow-btn');
+      
+      followButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const platform = btn.dataset.platform;
+          
+          // Add click animation
+          btn.style.transform = 'scale(0.95)';
+          setTimeout(() => {
+            btn.style.transform = '';
+          }, 150);
+          
+          // Show a fun message based on platform
+          const messages = {
+            instagram: 'Thanks for the interest! 📷 Instagram coming soon!',
+            youtube: 'YouTube channel launching soon! 🎥',
+            newsletter: 'Newsletter signup coming soon! 📧'
+          };
+          
+          if (messages[platform]) {
+            // Create temporary notification
+            const notification = document.createElement('div');
+            notification.textContent = messages[platform];
+            notification.style.cssText = `
+              position: fixed;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              background: linear-gradient(135deg, var(--accent) 0%, #60a5fa 100%);
+              color: white;
+              padding: 16px 24px;
+              border-radius: 12px;
+              font-weight: 700;
+              z-index: 1000;
+              box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+              animation: notification-pop 0.3s ease-out;
+            `;
+            
+            // Add animation keyframes if not already added
+            if (!document.querySelector('#notification-styles')) {
+              const style = document.createElement('style');
+              style.id = 'notification-styles';
+              style.textContent = `
+                @keyframes notification-pop {
+                  0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+                  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+                }
+              `;
+              document.head.appendChild(style);
+            }
+            
+            document.body.appendChild(notification);
+            
+            // Remove notification after 3 seconds
+            setTimeout(() => {
+              notification.style.opacity = '0';
+              setTimeout(() => notification.remove(), 300);
+            }, 3000);
+          }
+        });
+      });
+      
+      // Add hover effects to adventure cards
+      const adventureCards = document.querySelectorAll('.adventure-card');
+      adventureCards.forEach(card => {
+        card.addEventListener('mouseenter', () => {
+          card.style.transform = 'translateY(-8px) scale(1.02)';
+        });
+        
+        card.addEventListener('mouseleave', () => {
+          card.style.transform = '';
+        });
+      });
+    });
+    
+    // Load actual photo data and create bubbles
+    async function loadPhotoData() {
+      try {
+        const response = await fetch('/data/days/index.json');
+        const days = await response.json();
+        
+        let allPhotos = [];
+        let totalPhotoCount = 0;
+        
+        // Load photos from each day
+        for (const day of days) {
+          try {
+            const dayResponse = await fetch(`/data/days/${day.slug}.json`);
+            const dayData = await dayResponse.json();
+            
+            if (dayData.photos && dayData.photos.length > 0) {
+              allPhotos.push({
+                date: dayData.date,
+                title: dayData.title,
+                photoCount: dayData.photos.length,
+                photos: dayData.photos
+              });
+              totalPhotoCount += dayData.photos.length;
+            }
+          } catch (e) {
+            console.log(`Could not load day: ${day.slug}`);
+          }
+        }
+        
+        console.log(`Loaded ${totalPhotoCount} photos from ${allPhotos.length} travel days`);
+        return { allPhotos, totalPhotoCount };
+      } catch (e) {
+        console.log('Using fallback photo data');
+        // Fallback data if loading fails
+        return {
+          allPhotos: [
+            { date: '2025-08-03', photoCount: 4, title: 'Travel Day 1' },
+            { date: '2025-08-22', photoCount: 5, title: 'Travel Day 2' }
+          ],
+          totalPhotoCount: 9
+        };
+      }
+    }
+
+    // Initialize the satellite globe
+    async function initGlobe() {
+      // Set up Mapbox token (using the same one from main app)
+      mapboxgl.accessToken = 'pk.eyJ1IjoianVkZ2UtbW9ja3VwLXdoYW0iLCJhIjoiY21lb3M4dHJiMGUxcjJqcXZ4YzZwZjhubSJ9.EptPsUdI5bt2hOIZfZL3Yg';
+      
+      const map = new mapboxgl.Map({
+        container: 'welcome-globe',
+        style: 'mapbox://styles/mapbox/satellite-v9',
+        zoom: 2.5, // More zoomed in to better show the travel region
+        center: [135, 35], // Centered on Japan/Korea region
+        projection: 'globe', // This creates the 3D globe effect
+        antialias: true,
+        interactive: true,
+        attributionControl: false // Disable default attribution control
+      });
+      
+      // Add custom attribution control with subtle styling
+      map.addControl(new mapboxgl.AttributionControl({
+        compact: true,
+        customAttribution: ''
+      }), 'bottom-left');
+      
+      // Load actual photo data
+      const { allPhotos, totalPhotoCount } = await loadPhotoData();
+      
+      // Create photo bubbles based on actual data
+      // Since GPS data isn't available, distribute across realistic travel locations
+      const baseLocations = [
+        { coords: [139.6917, 35.6895], region: 'Tokyo Area' },
+        { coords: [126.9780, 37.5665], region: 'Seoul Area' },
+        { coords: [135.7681, 35.0116], region: 'Kyoto Area' },
+        { coords: [129.0756, 35.1796], region: 'Busan Area' },
+        { coords: [135.5022, 34.6937], region: 'Osaka Area' },
+        { coords: [127.7669, 35.9078], region: 'Central Korea' },
+        { coords: [128.5918, 35.8389], region: 'Gyeongju Area' }
+      ];
+      
+      // Create photo bubbles distributed across regions
+      const photoBubbles = [];
+      allPhotos.forEach((dayData, dayIndex) => {
+        // Create multiple bubbles per day if there are many photos
+        const bubblesForDay = Math.max(1, Math.floor(dayData.photoCount / 2));
+        
+        for (let i = 0; i < bubblesForDay; i++) {
+          const baseLocation = baseLocations[(dayIndex * 2 + i) % baseLocations.length];
+          // Add small random offset for natural distribution
+          const offsetLat = (Math.random() - 0.5) * 0.5;
+          const offsetLng = (Math.random() - 0.5) * 0.5;
+          
+          photoBubbles.push({
+            coords: [baseLocation.coords[0] + offsetLng, baseLocation.coords[1] + offsetLat],
+            photoCount: Math.ceil(dayData.photoCount / bubblesForDay),
+            date: dayData.date,
+            title: dayData.title
+          });
+        }
+      });
+      
+      map.on('style.load', () => {
+        // Apply some visual enhancements
+        map.setFog({
+          color: 'rgb(186, 210, 235)', // Lower atmosphere
+          'high-color': 'rgb(36, 92, 223)', // Upper atmosphere
+          'horizon-blend': 0.02, // Atmosphere thickness (default 0.2 at low zooms)
+          'space-color': 'rgb(5, 5, 15)', // Darker space background
+          'star-intensity': 1.0 // Maximum star brightness for beautiful starry effect
+        });
+        
+        // Add photo bubbles based on actual travel data
+        photoBubbles.forEach((bubble, index) => {
+          // Create custom marker element for photo bubble
+          const el = document.createElement('div');
+          el.className = 'globe-marker photo-bubble';
+          el.style.animationDelay = `${index * 0.3}s`;
+          
+          // Vary bubble size based on photo count
+          const size = Math.min(14, Math.max(8, 6 + bubble.photoCount));
+          el.style.width = size + 'px';
+          el.style.height = size + 'px';
+          
+          // Create popup with photo information
+          const popup = new mapboxgl.Popup({ 
+            offset: 15,
+            closeButton: false,
+            closeOnClick: true
+          }).setHTML(`
+            <div style="color:#0f172a;font-weight:600;font-size:0.9rem;padding:4px 8px;">
+              <div style="font-weight:700;margin-bottom:4px;">${bubble.title || 'Travel Photos'}</div>
+              <div style="color:#6b7280;font-size:0.8rem;">${bubble.photoCount} photo${bubble.photoCount > 1 ? 's' : ''}</div>
+              <div style="color:#6b7280;font-size:0.75rem;">${bubble.date}</div>
+            </div>
+          `);
+          
+          // Create marker with interactivity
+          const marker = new mapboxgl.Marker(el)
+            .setLngLat(bubble.coords)
+            .setPopup(popup)
+            .addTo(map);
+          
+          // Add hover effects
+          el.addEventListener('mouseenter', () => {
+            popup.addTo(map);
+          });
+          
+          el.addEventListener('mouseleave', () => {
+            popup.remove();
+          });
+          
+          // Add click to explore photos
+          el.addEventListener('click', () => {
+            // Navigate to the main trip view
+            window.location.href = `/index.html?trip=japan-korea`;
+          });
+        });
+        
+        console.log(`Added ${photoBubbles.length} photo bubbles representing ${totalPhotoCount} photos`);
+      });
+      
+      // Auto-rotate the globe slowly to showcase the travel regions
+      let userInteracted = false;
+      const spinGlobe = () => {
+        const zoom = map.getZoom();
+        if (!userInteracted && zoom < 4) { // Higher zoom threshold for better rotation
+          const center = map.getCenter();
+          center.lng -= 0.1; // Even slower rotation for the zoomed-in view
+          map.easeTo({ center, duration: 2000 }); // Longer duration for smoother rotation
+        }
+      };
+      
+      // Start rotation after a brief delay
+      setTimeout(() => {
+        const spinInterval = setInterval(spinGlobe, 3000); // Longer interval for zoomed-in view
+      }, 1500); // Longer initial delay to let user see the initial view
+      
+      // Stop rotation on user interaction
+      map.on('mousedown', () => {
+        userInteracted = true;
+        setTimeout(() => { userInteracted = false; }, 20000); // Resume after 20s of inactivity
+      });
+      
+      map.on('wheel', () => {
+        userInteracted = true;
+        setTimeout(() => { userInteracted = false; }, 20000);
+      });
+      
+      // Handle resize
+      window.addEventListener('resize', () => {
+        map.resize();
+      });
+    }
+    
+    // Initialize globe when page loads
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.mapboxgl) {
+        initGlobe();
+      }
+    });
   </script>
 </body>
 </html>

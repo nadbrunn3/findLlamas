@@ -3,6 +3,7 @@
 import { groupIntoStacks } from "/js/utils.js";
 
 const MAPBOX_STYLE = 'mapbox://styles/mapbox/satellite-v9';
+
 // Use provided Mapbox token by default; replace with your own for production.
 mapboxgl.accessToken =
   mapboxgl.accessToken ||
@@ -18,25 +19,33 @@ function requirePassword() {
     initApp();
     return;
   }
+
   const form = document.createElement('form');
   form.innerHTML = `
     <p>Enter admin password:</p>
     <input type="password" id="pwd" style="padding:0.4rem;" />
     <button type="submit">Login</button>
   `;
+
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    const val = /** @type {HTMLInputElement} */ (document.getElementById('pwd')).value;
+    const val = /** @type {HTMLInputElement} */ (
+      document.getElementById('pwd')
+    ).value;
     if (val.trim().length < 3) return alert('Password too short');
     localStorage.setItem(PASS_KEY, val);
     initApp();
   });
+
   app.appendChild(form);
 }
 
 function loadSettings() {
-  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); }
-  catch { return {}; }
+  try {
+    return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+  } catch {
+    return {};
+  }
 }
 
 function saveSettings(obj) {
