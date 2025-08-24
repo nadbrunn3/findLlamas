@@ -353,6 +353,7 @@ async function init(){
   await resolveStackLocations();
   initMaps();
   renderFeed();
+  setupTabs();
 
   setupScrollSync();
 
@@ -2071,6 +2072,70 @@ function openLightboxForStack(stack, startIndex=0){
       window.openPhotoLightbox(photos, startIndex);
     }
   }, 100);
+}
+
+// Render grid of all photos for Photos tab
+function renderPhotoGrid(){
+  const grid = document.getElementById('photo-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  const photos = allPhotos.map(p => ({
+    id: p.id,
+    url: p.url,
+    thumb: p.thumb || p.url,
+    caption: p.caption || '',
+    taken_at: p.taken_at,
+    lat: p.lat,
+    lon: p.lon,
+    mimeType: p.mimeType,
+    kind: p.kind
+  }));
+
+  photos.forEach((p, idx) => {
+    const img = document.createElement('img');
+    img.src = p.thumb || p.url;
+    img.alt = p.caption || '';
+    img.loading = 'lazy';
+    img.addEventListener('click', () => {
+      if (window.openPhotoLightbox) {
+        window.openPhotoLightbox(photos, idx);
+      }
+    });
+    grid.appendChild(img);
+  });
+}
+
+// Setup tab interactions
+function setupTabs(){
+  const tabs = document.querySelectorAll('.tab-button');
+  const footprintsView = document.getElementById('footprints-view');
+  const photosView = document.getElementById('photos-view');
+
+  tabs.forEach(btn => {
+    btn.addEventListener('click', () => {
+      tabs.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      if (btn.dataset.tab === 'photos') {
+        // Hide the stack feed and show the photo grid
+        footprintsView.hidden = true;
+        footprintsView.style.display = 'none';
+        photosView.hidden = false;
+        photosView.style.display = '';
+        renderPhotoGrid();
+        // Jump to the top so the grid appears in place of the feed
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      } else {
+        // Restore the stack feed view
+        footprintsView.hidden = false;
+        footprintsView.style.display = '';
+        photosView.hidden = true;
+        photosView.style.display = 'none';
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      }
+    });
+  });
 }
 
 // ---------- sync ----------
