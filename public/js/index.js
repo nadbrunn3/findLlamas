@@ -11,6 +11,8 @@ let topMap;
 let mapMarkers = [];
 let photoStacks = [];
 let allPhotos = [];
+let photosShown = 0;
+const PHOTOS_PER_LOAD = 40;
 let stackMetaByDay = {};
 let activeStackId = null;
 let scrollLocked = false;
@@ -2076,10 +2078,14 @@ function openLightboxForStack(stack, startIndex=0){
 }
 
 // Render grid of all photos for Photos tab
-function renderPhotoGrid(){
+function renderPhotoGrid(reset = false){
   const grid = document.getElementById('photo-grid');
-  if (!grid) return;
-  grid.innerHTML = '';
+  const btn = document.getElementById('load-more');
+  if (!grid || !btn) return;
+  if (reset){
+    grid.innerHTML = '';
+    photosShown = 0;
+  }
 
   const photos = allPhotos.map(p => ({
     id: p.id,
@@ -2093,18 +2099,29 @@ function renderPhotoGrid(){
     kind: p.kind
   }));
 
-  photos.forEach((p, idx) => {
+  const start = photosShown;
+  const end = Math.min(start + PHOTOS_PER_LOAD, photos.length);
+
+  photos.slice(start, end).forEach((p, idx) => {
     const img = document.createElement('img');
     img.src = p.thumb || p.url;
     img.alt = p.caption || '';
     img.loading = 'lazy';
     img.addEventListener('click', () => {
       if (window.openPhotoLightbox) {
-        window.openPhotoLightbox(photos, idx);
+        window.openPhotoLightbox(photos, start + idx);
       }
     });
     grid.appendChild(img);
   });
+
+  photosShown = end;
+  btn.style.display = photosShown < photos.length ? 'block' : 'none';
+}
+
+const loadMoreBtn = document.getElementById('load-more');
+if (loadMoreBtn) {
+  loadMoreBtn.addEventListener('click', () => renderPhotoGrid());
 }
 
 // Setup tab interactions
@@ -2124,7 +2141,7 @@ function setupTabs(){
         footprintsView.style.display = 'none';
         photosView.hidden = false;
         photosView.style.display = '';
-        renderPhotoGrid();
+        renderPhotoGrid(true);
         // Jump to the top so the grid appears in place of the feed
         window.scrollTo({ top: 0, behavior: 'auto' });
       } else {
