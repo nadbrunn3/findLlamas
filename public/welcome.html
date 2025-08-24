@@ -1,236 +1,102 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Finding Llamas — Welcome</title>
-<style>
-  :root{
-    --bg:#0f172a; --panel:#0b1220; --card:#111827; --text:#e5e7eb; --muted:#9aa3af;
-    --accent:#60a5fa; --accent-2:#22d3ee; --ring:#ffffff; --border:#1f2937;
-    --shadow:0 18px 40px rgba(2,6,23,.45);
-  }
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:16px/1.55 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial}
-  a{color:inherit;text-decoration:none}
-  .wrap{max-width:1100px;margin-inline:auto;padding:20px}
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Finding Llamas — Welcome</title>
+  <style>
+    :root{
+      --bg:#0f172a; --panel:#0b1220; --card:#111827; --text:#e5e7eb; --muted:#9aa3af;
+      --accent:#60a5fa; --accent-2:#22d3ee; --ring:#ffffff; --border:#1f2937;
+      --shadow:0 18px 40px rgba(2,6,23,.45);
+    }
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:16px/1.55 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial}
+    a{color:inherit;text-decoration:none}
+    .wrap{max-width:1100px;margin-inline:auto;padding:20px}
 
-  /* HERO */
-  .hero{
-    position:relative; overflow:hidden; border-radius:16px; padding:48px 28px;
-    background:
-      radial-gradient(80% 120% at 110% -10%, rgba(34,211,238,.25) 0%, transparent 70%),
-      radial-gradient(100% 120% at -10% 0%, rgba(96,165,250,.25) 0%, transparent 65%),
-      linear-gradient(180deg, #0b1220, #0b1220);
-    box-shadow: var(--shadow);
-  }
-  .brand{display:flex;align-items:center;gap:12px}
-  .logo{font-size:28px;line-height:1;display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#60a5fa,#22d3ee);color:#0b1220;font-weight:900}
-  .title{margin:8px 0 6px;font-size:clamp(28px,5vw,40px);font-weight:900;letter-spacing:.2px}
-  .subtitle{margin:0;color:var(--muted);font-size:clamp(14px,2.2vw,16px)}
-  .cta-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}
-  .btn{display:inline-flex;align-items:center;gap:.55rem;padding:.75rem 1rem;border-radius:12px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,.08);background:#0f172a;transition:all 0.2s ease}
-  .btn.primary{background:linear-gradient(135deg,#60a5fa,#22d3ee);color:#0b1220;border-color:transparent}
-  .btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.3)}
-  .hero-points{margin-top:16px;display:grid;gap:8px}
-  .point{display:flex;gap:.6rem;align-items:flex-start;color:#cbd5e1}
-  .point b{color:#fff}
+    /* HERO */
+    .hero{position:relative;height:360px;border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
+    .world{position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?q=80&w=1400&auto=format&fit=crop') center/cover no-repeat;filter:brightness(.55)}
+    .bubble{position:absolute;width:64px;height:64px;border-radius:50%;overflow:hidden;border:3px solid var(--accent);box-shadow:0 6px 16px rgba(0,0,0,.45)}
+    .bubble img{width:100%;height:100%;object-fit:cover}
+    .bubble.one{top:45%;left:30%}
+    .bubble.two{top:20%;right:25%}
+    .bubble.three{bottom:15%;right:40%}
+    .hero-content{position:relative;z-index:2;padding:24px}
+    .logo{font-size:36px;line-height:1;display:grid;place-items:center;width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#60a5fa,#22d3ee);color:#0b1220;font-weight:900}
+    .title{margin:12px 0 0;font-size:clamp(32px,6vw,48px);font-weight:900;letter-spacing:.2px}
+    .note{margin-top:8px;color:var(--muted);max-width:500px}
+    .cta-row{margin-top:20px}
+    .btn{display:inline-flex;align-items:center;gap:.55rem;padding:.75rem 1rem;border-radius:12px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,.08);background:#0f172a;transition:all 0.2s ease}
+    .btn.primary{background:linear-gradient(135deg,#60a5fa,#22d3ee);color:#0b1220;border-color:transparent}
+    .btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.3)}
 
-  /* TRIPS */
-  .section{margin-top:30px}
-  .section h2{margin:0 0 12px;font-size:20px;letter-spacing:.2px}
-  .trip-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
-  .trip{
-    position:relative; border-radius:16px; overflow:hidden; isolation:isolate;
-    background:#0b1220; min-height:210px; display:flex; align-items:flex-end;
-    box-shadow: var(--shadow); cursor:pointer; outline:0; border:1px solid var(--border);
-    transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  .trip:focus-visible{box-shadow:0 0 0 3px rgba(96,165,250,.5), var(--shadow)}
-  .trip:hover{transform:translateY(-2px);box-shadow:0 25px 50px rgba(2,6,23,.6)}
-  .trip .media{
-    position:absolute; inset:0; background:#000 center/cover no-repeat;
-    filter:saturate(1.05) contrast(1.02);
-    transform:scale(1.02); transition:transform .35s ease;
-  }
-  .trip:hover .media{ transform:scale(1.06); }
-  .trip::after{content:""; position:absolute; inset:auto 0 0 0; height:60%; background:linear-gradient(to top, rgba(2,6,23,.75), transparent)}
-  .trip-badge{
-    position:absolute; top:10px; left:10px; z-index:2; display:flex; gap:6px;
-  }
-  .pill{display:inline-flex;align-items:center;gap:6px;padding:.35rem .6rem;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);backdrop-filter:blur(6px);font-weight:700;font-size:0.8rem}
-  .pill .dot{width:8px;height:8px;border-radius:50%;background:#34d399}
-  .pill.archive .dot{background:#f59e0b}
-  .trip-body{position:relative; z-index:2; padding:14px}
-  .trip-title{margin:0 0 6px;font-weight:900;font-size:1.15rem;text-shadow:0 2px 6px rgba(0,0,0,.5)}
-  .trip-meta{display:flex;gap:12px;flex-wrap:wrap;color:#cbd5e1;font-weight:700;font-size:.85rem}
-  .meta-box{display:inline-flex;align-items:center;gap:6px;padding:.25rem .5rem;border-radius:8px;background:rgba(2,6,23,.55);border:1px solid rgba(255,255,255,.14)}
-  .flags{filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
-  
-  /* HOW IT WORKS */
-  .how-grid{display:grid;gap:12px;margin-top:12px}
-  .how-step{
-    background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;
-    box-shadow:var(--shadow);display:flex;align-items:flex-start;gap:12px;
-    transition:all 0.2s ease;
-  }
-  .how-step:hover{transform:translateY(-1px);box-shadow:0 8px 25px rgba(2,6,23,.6)}
-  .step-number{
-    display:grid;place-items:center;width:32px;height:32px;border-radius:50%;
-    background:linear-gradient(135deg,#60a5fa,#22d3ee);color:#0b1220;font-weight:900;
-    flex-shrink:0;
-  }
-  .step-content{flex:1}
-  .step-title{margin:0 0 4px;font-weight:700;color:#fff}
-  .step-desc{margin:0;color:var(--muted);font-size:0.9rem}
-  
-  .foot{margin-top:40px;color:#94a3b8;font-size:.85rem;text-align:center;padding:20px 0}
-  
-  @media (max-width: 560px){ 
-    .hero{padding:36px 18px} 
-    .trip{min-height:200px} 
-    .wrap{padding:16px}
-    .cta-row{flex-direction:column}
-    .btn{justify-content:center}
-  }
-</style>
+    /* TRIPS */
+    .section{margin-top:40px}
+    .section h2{margin:0 0 20px;font-size:24px;letter-spacing:.2px}
+    .trip-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px}
+    .trip{position:relative;border-radius:16px;overflow:hidden;isolation:isolate;background:#0b1220;min-height:280px;display:flex;align-items:flex-end;box-shadow:var(--shadow);cursor:pointer;outline:0;border:1px solid var(--border);transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1)}
+    .trip.placeholder{cursor:default}
+    .trip:focus-visible{box-shadow:0 0 0 3px rgba(96,165,250,.5), var(--shadow)}
+    .trip:hover:not(.placeholder){transform:translateY(-2px);box-shadow:0 25px 50px rgba(2,6,23,.6)}
+    .trip .media{position:absolute;inset:0;background:#000 center/cover no-repeat;filter:saturate(1.05) contrast(1.02);transform:scale(1.02);transition:transform .35s ease}
+    .trip:hover .media{transform:scale(1.06)}
+    .trip::after{content:"";position:absolute;inset:auto 0 0 0;height:60%;background:linear-gradient(to top,rgba(2,6,23,.75),transparent)}
+    .trip-body{position:relative;z-index:2;padding:16px}
+    .trip-title{margin:0 0 6px;font-weight:900;font-size:1.3rem;text-shadow:0 2px 6px rgba(0,0,0,.5)}
+    .trip-meta{color:#cbd5e1;font-weight:700;font-size:.9rem}
+
+    .foot{margin-top:40px;color:#94a3b8;font-size:.85rem;text-align:center;padding:20px 0}
+    @media (max-width:560px){.hero{height:300px}.wrap{padding:16px}.cta-row{text-align:center}}
+  </style>
 </head>
 <body>
   <main class="wrap">
     <!-- HERO -->
     <section class="hero">
-      <div class="brand">
+      <div class="world" aria-hidden="true"></div>
+      <div class="bubble one"><img src="https://images.unsplash.com/photo-1520813792240-56fc4a3765a7?q=80&w=200&h=200&crop=faces&auto=format&fit=crop" alt=""></div>
+      <div class="bubble two"><img src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=200&h=200&crop=faces&auto=format&fit=crop" alt=""></div>
+      <div class="bubble three"><img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200&h=200&crop=faces&auto=format&fit=crop" alt=""></div>
+      <div class="hero-content">
         <div class="logo" aria-hidden="true">🦙</div>
-        <div>
-          <h1 class="title">Finding Llamas</h1>
-          <p class="subtitle">A playful, privacy-first travel diary.</p>
-        </div>
-      </div>
-
-      <div class="hero-points" role="region" aria-label="How it works">
-        <div class="point">✅ <span><b>No login required.</b> You start anonymous by default.</span></div>
-        <div class="point">🪪 <span><b>Un-anonymise anytime.</b> Pick a name and tell us in the comments.</span></div>
-        <div class="point">🗺️ <span><b>Drop footprints.</b> Add photos, locations and notes. We show them in stacks and on the map.</span></div>
-        <div class="point">🔒 <span><b>You own your data.</b> Local caching, clear export, easy delete.</span></div>
-      </div>
-
-      <div class="cta-row">
-        <a class="btn primary" href="#trips">Explore trips</a>
-        <a class="btn" href="#how">How it works</a>
+        <h1 class="title">Finding Llamas</h1>
+        <p class="note">No login required. Leave your name in comments so you are not called "anonymous".</p>
+        <div class="cta-row"><a class="btn primary" href="/index.html">Enter App</a></div>
       </div>
     </section>
 
     <!-- TRIPS -->
     <section class="section" id="trips" aria-labelledby="tripsh">
-      <h2 id="tripsh">Follow the Llama on our trip to Japan and South Korea</h2>
+      <h2 id="tripsh">Trips</h2>
       <div class="trip-grid">
-        <!-- Japan & South Korea card -->
-        <article class="trip" tabindex="0" aria-label="Open trip: Japan & South Korea"
-                 onclick="openTrip('japan-korea')" onkeydown="if(event.key==='Enter'||event.key===' '){openTrip('japan-korea');event.preventDefault();}">
+        <article class="trip" tabindex="0" aria-label="Open trip: Japan & South Korea" onclick="openTrip('japan-korea')" onkeydown="if(event.key==='Enter'||event.key===' '){openTrip('japan-korea');event.preventDefault();}">
           <div class="media" style="background-image:url('https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?q=80&w=1400&auto=format&fit=crop');"></div>
-
-          <div class="trip-badge">
-            <span class="pill"><span class="dot" aria-hidden="true"></span> Current</span>
-            <span class="pill flags" title="Japan and South Korea">🇯🇵 🇰🇷</span>
-          </div>
-
           <div class="trip-body">
             <h3 class="trip-title">Japan &amp; South Korea</h3>
-            <div class="trip-meta" aria-label="Trip stats">
-              <span class="meta-box">📅 Aug–Oct 2025</span>
-              <span class="meta-box">🏙️ 8 cities</span>
-            </div>
+            <div class="trip-meta">Aug–Oct 2025 • 8 cities</div>
           </div>
         </article>
-
-
-      </div>
-    </section>
-
-    <!-- HOW IT WORKS -->
-    <section class="section" id="how" aria-labelledby="howh">
-      <h2 id="howh">How it works</h2>
-      <div class="how-grid">
-        <div class="how-step">
-          <div class="step-number">1</div>
-          <div class="step-content">
-            <div class="step-title">Start Anonymous</div>
-            <div class="step-desc">Open the app and start dropping footprints — no account needed. You're anonymous by default.</div>
+        <article class="trip placeholder">
+          <div class="media" style="background-image:url('https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1400&auto=format&fit=crop');"></div>
+          <div class="trip-body">
+            <h3 class="trip-title">Coming Soon</h3>
+            <div class="trip-meta">Stay tuned for the next adventure</div>
           </div>
-        </div>
-        
-        <div class="how-step">
-          <div class="step-number">2</div>
-          <div class="step-content">
-            <div class="step-title">Drop Footprints</div>
-            <div class="step-desc">Each footprint can include photos, a short note, and your location. Build your travel story naturally.</div>
-          </div>
-        </div>
-        
-        <div class="how-step">
-          <div class="step-number">3</div>
-          <div class="step-content">
-            <div class="step-title">Smart Organization</div>
-            <div class="step-desc">We group nearby photos into <strong>stacks</strong> and place them on the map. Your journey comes alive visually.</div>
-          </div>
-        </div>
-        
-        <div class="how-step">
-          <div class="step-number">4</div>
-          <div class="step-content">
-            <div class="step-title">Own Your Story</div>
-            <div class="step-desc">Want your name on it? Switch from anonymous to a profile any time. Your data stays yours. 😉</div>
-          </div>
-        </div>
+        </article>
       </div>
     </section>
 
     <footer class="foot">
       <p>© 2025 Finding Llamas — Privacy-first travel for humans 🦙</p>
-      <p style="margin-top:8px;font-size:0.8rem;opacity:0.7">
-        <a href="/index.html" style="color:var(--accent)">Enter App</a> • 
-        <a href="#privacy" style="color:var(--muted)">Privacy</a> • 
-        <a href="#about" style="color:var(--muted)">About</a>
-      </p>
     </footer>
   </main>
-
-<script>
-  function openTrip(slug){
-    // Hook this to your router to open the specific trip
-    // For now, redirect to main app with trip parameter
-    if (slug === 'japan-korea') {
-      // Redirect to your main app - adjust URL as needed
-      window.location.href = '/index.html?trip=japan-korea';
-    } else {
-      // Fallback to main app
-      window.location.href = '/index.html';
-    }
-  }
-  
-  // Smooth scrolling for anchor links
-  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-    anchor.addEventListener('click', function (e) {
-      e.preventDefault();
-      const target = document.querySelector(this.getAttribute('href'));
-      if (target) {
-        target.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start'
-        });
+  <script>
+    function openTrip(slug){
+      if(slug==='japan-korea'){
+        window.location.href='/index.html?trip=japan-korea';
       }
-    });
-  });
-  
-  // Add some interactive feedback
-  document.querySelectorAll('.trip').forEach(trip => {
-    trip.addEventListener('mouseenter', () => {
-      trip.style.transform = 'translateY(-2px)';
-    });
-    
-    trip.addEventListener('mouseleave', () => {
-      trip.style.transform = 'translateY(0)';
-    });
-  });
-</script>
+    }
+  </script>
 </body>
 </html>
