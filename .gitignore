@@ -1,0 +1,9 @@
+.env
+
+# Ignore everything in data folders except .gitkeep files
+public/data/days/*
+!public/data/days/.gitkeep
+
+public/data/interactions/*
+!public/data/interactions/.gitkeep
+
