@@ -16,26 +16,17 @@
 
     /* HERO */
     .hero{position:relative;height:360px;border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
-    .world{position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?q=80&w=1400&auto=format&fit=crop') center/cover no-repeat;filter:brightness(.55)}
-    .bubble{position:absolute;width:64px;height:64px;border-radius:50%;overflow:hidden;border:3px solid var(--accent);box-shadow:0 6px 16px rgba(0,0,0,.45)}
-    .bubble img{width:100%;height:100%;object-fit:cover}
-    .bubble.one{top:45%;left:30%}
-    .bubble.two{top:20%;right:25%}
-    .bubble.three{bottom:15%;right:40%}
+
+
     .hero-content{position:relative;z-index:2;padding:24px}
-    .logo{font-size:36px;line-height:1;display:grid;place-items:center;width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#60a5fa,#22d3ee);color:#0b1220;font-weight:900}
-    .title{margin:12px 0 0;font-size:clamp(32px,6vw,48px);font-weight:900;letter-spacing:.2px}
+    .title{margin:0;font-size:clamp(32px,6vw,48px);font-weight:900;letter-spacing:.2px}
     .note{margin-top:8px;color:var(--muted);max-width:500px}
-    .cta-row{margin-top:20px}
-    .btn{display:inline-flex;align-items:center;gap:.55rem;padding:.75rem 1rem;border-radius:12px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,.08);background:#0f172a;transition:all 0.2s ease}
-    .btn.primary{background:linear-gradient(135deg,#60a5fa,#22d3ee);color:#0b1220;border-color:transparent}
-    .btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.3)}
 
     /* TRIPS */
     .section{margin-top:40px}
     .section h2{margin:0 0 20px;font-size:24px;letter-spacing:.2px}
-    .trip-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px}
-    .trip{position:relative;border-radius:16px;overflow:hidden;isolation:isolate;background:#0b1220;min-height:280px;display:flex;align-items:flex-end;box-shadow:var(--shadow);cursor:pointer;outline:0;border:1px solid var(--border);transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1)}
+    .trip-grid{display:grid;grid-template-columns:1fr;gap:24px;max-width:400px;margin:0 auto}
+    .trip{position:relative;border-radius:16px;overflow:hidden;isolation:isolate;background:#0b1220;min-height:400px;display:flex;align-items:flex-end;box-shadow:var(--shadow);cursor:pointer;outline:0;border:1px solid var(--border);transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1)}
     .trip.placeholder{cursor:default}
     .trip:focus-visible{box-shadow:0 0 0 3px rgba(96,165,250,.5), var(--shadow)}
     .trip:hover:not(.placeholder){transform:translateY(-2px);box-shadow:0 25px 50px rgba(2,6,23,.6)}
@@ -54,34 +45,23 @@
   <main class="wrap">
     <!-- HERO -->
     <section class="hero">
-      <div class="world" aria-hidden="true"></div>
-      <div class="bubble one"><img src="https://images.unsplash.com/photo-1520813792240-56fc4a3765a7?q=80&w=200&h=200&crop=faces&auto=format&fit=crop" alt=""></div>
-      <div class="bubble two"><img src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=200&h=200&crop=faces&auto=format&fit=crop" alt=""></div>
-      <div class="bubble three"><img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200&h=200&crop=faces&auto=format&fit=crop" alt=""></div>
+
+
       <div class="hero-content">
-        <div class="logo" aria-hidden="true">🦙</div>
-        <h1 class="title">Finding Llamas</h1>
+        <h1 class="title">Finding 🦙 Llamas</h1>
         <p class="note">No login required. Leave your name in comments so you are not called "anonymous".</p>
-        <div class="cta-row"><a class="btn primary" href="/index.html">Enter App</a></div>
       </div>
     </section>
 
     <!-- TRIPS -->
     <section class="section" id="trips" aria-labelledby="tripsh">
-      <h2 id="tripsh">Trips</h2>
+      <h2 id="tripsh">Follow us on our trip</h2>
       <div class="trip-grid">
         <article class="trip" tabindex="0" aria-label="Open trip: Japan & South Korea" onclick="openTrip('japan-korea')" onkeydown="if(event.key==='Enter'||event.key===' '){openTrip('japan-korea');event.preventDefault();}">
           <div class="media" style="background-image:url('https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?q=80&w=1400&auto=format&fit=crop');"></div>
           <div class="trip-body">
             <h3 class="trip-title">Japan &amp; South Korea</h3>
             <div class="trip-meta">Aug–Oct 2025 • 8 cities</div>
-          </div>
-        </article>
-        <article class="trip placeholder">
-          <div class="media" style="background-image:url('https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1400&auto=format&fit=crop');"></div>
-          <div class="trip-body">
-            <h3 class="trip-title">Coming Soon</h3>
-            <div class="trip-meta">Stay tuned for the next adventure</div>
           </div>
         </article>
       </div>
