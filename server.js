@@ -154,37 +154,77 @@ async function getAssetsForDayForServer(server, serverIndex, { date, albumId }) 
 
   if (effectiveAlbumId) {
     try {
-      app.log.info(`Fetching all assets from album ${effectiveAlbumId}, then filtering by date ${date}`);
+      app.log.info(`🔍 Server ${serverIndex}: Fetching assets for ${date} from ${server.url} with key ${server.key ? server.key.substring(0, 8) + '...' : 'NO_KEY'}`);
+      app.log.info(`📁 Server ${serverIndex}: Fetching all assets from album ${effectiveAlbumId}, then filtering by date ${date}`);
       
-      // First, get all assets from the specific album
+      // First, get all assets from the specific album with comprehensive approach
       let albumAssets = [];
       
-      // Try to get album with embedded assets first
+      // Method 1: Try to get album with embedded assets first
       try {
+        app.log.info(`🔗 Server ${serverIndex}: Trying GET /api/albums/${effectiveAlbumId}`);
         const album = await immichFetchJSON(server, `/api/albums/${effectiveAlbumId}`);
+        app.log.info(`📊 Server ${serverIndex}: Album response:`, typeof album, Object.keys(album || {}));
+        
         if (Array.isArray(album?.assets)) {
           albumAssets = album.assets;
-          app.log.info(`Got ${albumAssets.length} assets from album.assets`);
+          app.log.info(`✅ Server ${serverIndex}: Got ${albumAssets.length} assets from album.assets`);
         }
       } catch (e) {
-        app.log.warn(`Failed to get album with assets: ${e.message}`);
+        app.log.warn(`❌ Server ${serverIndex}: Failed to get album with assets: ${e.message}`);
       }
       
-      // If no assets found, try the assets endpoint
+      // Method 2: If no assets found, try the assets endpoint with pagination
       if (albumAssets.length === 0) {
         try {
+          app.log.info(`🔗 Server ${serverIndex}: Trying GET /api/albums/${effectiveAlbumId}/assets`);
           const assetsRes = await immichFetchJSON(server, `/api/albums/${effectiveAlbumId}/assets`);
           albumAssets = Array.isArray(assetsRes) ? assetsRes : assetsRes?.items || assetsRes?.assets || [];
-          app.log.info(`Got ${albumAssets.length} assets from /assets endpoint`);
+          app.log.info(`✅ Server ${serverIndex}: Got ${albumAssets.length} assets from /assets endpoint`);
         } catch (e) {
-          app.log.warn(`Failed to get album assets: ${e.message}`);
+          app.log.warn(`❌ Server ${serverIndex}: Failed to get album assets: ${e.message}`);
+        }
+      }
+      
+      // Method 3: If still no assets, try paginated approach for large albums
+      if (albumAssets.length === 0) {
+        try {
+          app.log.info(`🔗 Server ${serverIndex}: Trying paginated album assets approach`);
+          let page = 0;
+          const pageSize = 1000;
+          let hasMore = true;
+          
+          while (hasMore && page < 20) { // Safety limit
+            const paginatedUrl = `/api/albums/${effectiveAlbumId}/assets?page=${page}&size=${pageSize}`;
+            const pageRes = await immichFetchJSON(server, paginatedUrl);
+            const pageAssets = Array.isArray(pageRes) ? pageRes : pageRes?.items || pageRes?.assets || [];
+            
+            if (pageAssets.length === 0) {
+              hasMore = false;
+            } else {
+              albumAssets.push(...pageAssets);
+              app.log.info(`📄 Server ${serverIndex}: Page ${page}: Got ${pageAssets.length} assets (total: ${albumAssets.length})`);
+              
+              if (pageAssets.length < pageSize) {
+                hasMore = false; // Last page
+              } else {
+                page++;
+              }
+            }
+          }
+          
+          app.log.info(`✅ Server ${serverIndex}: Paginated approach got ${albumAssets.length} total assets`);
+        } catch (e) {
+          app.log.warn(`❌ Server ${serverIndex}: Paginated album approach failed: ${e.message}`);
         }
       }
       
       if (albumAssets.length === 0) {
-        app.log.info(`No assets found in album ${effectiveAlbumId}`);
+        app.log.info(`❌ Server ${serverIndex}: No assets found in album ${effectiveAlbumId} using any method`);
         return [];
       }
+      
+      app.log.info(`📊 Server ${serverIndex}: Processing ${albumAssets.length} total album assets for date filtering`);
       
       // Filter assets by the specific date range
       const dayAssets = albumAssets.filter(a => {
@@ -308,78 +348,135 @@ async function getAssetsForDayForServer(server, serverIndex, { date, albumId }) 
     app.log.warn({ msg: 'Monthly timeline bucket approach failed', err: String(e) });
   }
 
-  // 3) Comprehensive approach: Get ALL assets to ensure we don't miss any
+  // 3) Comprehensive approach: Get ALL assets systematically to ensure we don't miss any
   try {
-    app.log.info(`Getting ALL assets for ${date} using comprehensive approach`);
+    app.log.info(`Getting ALL assets for ${date} using systematic pagination approach`);
     
     const allAssets = [];
-    const seenIds = new Set();
-    const MAX_BATCHES = 20; // Increased to ensure complete coverage
-    const BATCH_SIZE = 5000;
-    let consecutiveDuplicateBatches = 0;
-    const MAX_CONSECUTIVE_DUPLICATES = 3; // Stop after 3 consecutive batches with >90% duplicates
+    const PAGE_SIZE = 1000; // Use reasonable page size
+    let page = 1;
+    let hasMore = true;
     
-    // Get batches until we've covered the entire library
-    for (let batch = 0; batch < MAX_BATCHES; batch++) {
-      const randomAssets = await immichFetchJSON(server, '/api/assets/random?count=' + BATCH_SIZE);
-      const assetsArray = Array.isArray(randomAssets) ? randomAssets : [];
-      
-      if (assetsArray.length === 0) {
-        app.log.info(`Batch ${batch + 1}: No more assets available`);
-        break;
-      }
-      
-      // Add unique assets
-      let newAssets = 0;
-      for (const asset of assetsArray) {
-        if (!seenIds.has(asset.id)) {
-          seenIds.add(asset.id);
-          allAssets.push(asset);
-          newAssets++;
+    // Get all assets using pagination
+    while (hasMore) {
+      try {
+        // Try different API endpoints for getting all assets
+        let assetsResponse;
+        let assetsArray = [];
+        
+        // Method 1: Try search API with date range
+        try {
+          const searchParams = new URLSearchParams({
+            'takenAfter': start.toISOString(),
+            'takenBefore': end.toISOString(),
+            'size': PAGE_SIZE.toString(),
+            'page': (page - 1).toString()
+          });
+          assetsResponse = await immichFetchJSON(server, `/api/search/metadata?${searchParams}`);
+          assetsArray = Array.isArray(assetsResponse?.assets?.items) ? assetsResponse.assets.items : 
+                       Array.isArray(assetsResponse?.items) ? assetsResponse.items :
+                       Array.isArray(assetsResponse) ? assetsResponse : [];
+          app.log.info(`Search API page ${page}: Found ${assetsArray.length} assets`);
+        } catch (searchErr) {
+          app.log.warn(`Search API failed on page ${page}: ${searchErr.message}`);
+          
+          // Method 2: Try assets API with pagination
+          try {
+            const assetsParams = new URLSearchParams({
+              'size': PAGE_SIZE.toString(),
+              'page': (page - 1).toString()
+            });
+            assetsResponse = await immichFetchJSON(server, `/api/assets?${assetsParams}`);
+            assetsArray = Array.isArray(assetsResponse) ? assetsResponse : [];
+            app.log.info(`Assets API page ${page}: Found ${assetsArray.length} assets`);
+          } catch (assetsErr) {
+            app.log.warn(`Assets API failed on page ${page}: ${assetsErr.message}`);
+            
+            // Method 3: Try timeline buckets for the specific month
+            const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
+            const monthEnd = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+            const monthBucket = `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, '0')}`;
+            
+            try {
+              const monthlyBucket = await immichFetchJSON(server, `/api/timeline/bucket?size=MONTH&timeBucket=${monthBucket}`);
+              if (monthlyBucket && Array.isArray(monthlyBucket.id)) {
+                app.log.info(`Monthly bucket for ${monthBucket}: Found ${monthlyBucket.id.length} asset IDs`);
+                
+                // Get assets in batches to avoid overwhelming the API
+                const batchSize = 100;
+                for (let i = 0; i < monthlyBucket.id.length; i += batchSize) {
+                  const batch = monthlyBucket.id.slice(i, i + batchSize);
+                  const batchPromises = batch.map(async (assetId) => {
+                    try {
+                      return await immichFetchJSON(server, `/api/assets/${assetId}`);
+                    } catch (e) {
+                      return null;
+                    }
+                  });
+                  const batchAssets = (await Promise.all(batchPromises)).filter(Boolean);
+                  assetsArray.push(...batchAssets);
+                }
+                app.log.info(`Monthly bucket approach: Retrieved ${assetsArray.length} assets for ${monthBucket}`);
+              }
+            } catch (monthErr) {
+              app.log.warn(`Monthly bucket approach failed: ${monthErr.message}`);
+              break; // Exit the while loop if all methods fail
+            }
+          }
         }
-      }
-      
-      const duplicateRatio = 1 - (newAssets / assetsArray.length);
-      app.log.info(`Batch ${batch + 1}: ${assetsArray.length} total, ${newAssets} new unique (${(duplicateRatio * 100).toFixed(1)}% duplicates)`);
-      
-      // Check if we're getting mostly duplicates
-      if (duplicateRatio > 0.9) {
-        consecutiveDuplicateBatches++;
-        if (consecutiveDuplicateBatches >= MAX_CONSECUTIVE_DUPLICATES) {
-          app.log.info(`Stopping after ${consecutiveDuplicateBatches} consecutive batches with >90% duplicates`);
+        
+        if (assetsArray.length === 0) {
+          app.log.info(`No more assets found on page ${page}, stopping pagination`);
+          hasMore = false;
           break;
         }
-      } else {
-        consecutiveDuplicateBatches = 0; // Reset counter
+        
+        // Filter assets by the target date and add to results
+        const dayAssets = assetsArray.filter(a => {
+          const t = a?.exifInfo?.dateTimeOriginal || a?.localDateTime || a?.fileCreatedAt || a?.createdAt;
+          if (!t) return false;
+          
+          const ts = new Date(t).getTime();
+          const inRange = !Number.isNaN(ts) && ts >= +start && ts < +end;
+          
+          if (inRange) {
+            app.log.info(`Page ${page} - Found asset for ${date}: ${t}, type: ${a?.type || 'unknown'}, id: ${a?.id}`);
+          }
+          
+          return inRange;
+        });
+        
+        allAssets.push(...dayAssets);
+        app.log.info(`Page ${page}: Found ${dayAssets.length} matching assets for ${date} (from ${assetsArray.length} total)`);
+        
+        // Check if we should continue pagination
+        if (assetsArray.length < PAGE_SIZE) {
+          hasMore = false; // Last page
+        } else {
+          page++;
+        }
+        
+        // Safety limit to prevent infinite loops
+        if (page > 50) {
+          app.log.warn(`Reached maximum page limit (50), stopping pagination`);
+          hasMore = false;
+        }
+        
+      } catch (pageErr) {
+        app.log.error(`Error on page ${page}: ${pageErr.message}`);
+        hasMore = false;
       }
     }
     
-    app.log.info(`Total unique assets retrieved: ${allAssets.length}`);
+    app.log.info(`Systematic approach: Found ${allAssets.length} total assets for ${date} across ${page} pages`);
 
-    // Filter by the specific date with strict date matching
-    const dayAssets = allAssets.filter(a => {
-      const t = a?.exifInfo?.dateTimeOriginal || a?.localDateTime || a?.fileCreatedAt || a?.createdAt;
-      if (!t) return false;
-      
-      const ts = new Date(t).getTime();
-      const inRange = !Number.isNaN(ts) && ts >= +start && ts < +end;
-      
-      // Debug logging for the target date
-      if (t.includes(date)) {
-        app.log.info(`Found asset for ${date}: ${t}, inRange: ${inRange}, type: ${a?.type || 'unknown'}, id: ${a?.id}`);
-      }
-      
-      return inRange;
-    });
-
-    if (dayAssets.length > 0) {
-      app.log.info(`Found ${dayAssets.length} assets for ${date} from ${allAssets.length} total assets`);
-      return dayAssets.map(a => mapAssetToPhoto(a, serverIndex));
+    if (allAssets.length > 0) {
+      return allAssets.map(a => mapAssetToPhoto(a, serverIndex));
     }
     
-    app.log.info(`No assets found for ${date} in ${allAssets.length} total assets`);
+    app.log.info(`No assets found for ${date} using systematic approach`);
   } catch (e) {
-    app.log.warn({ msg: 'Comprehensive approach failed', err: String(e) });
+    app.log.warn({ msg: 'Systematic approach failed', err: String(e) });
   }
 
   app.log.warn(`No assets found for date ${date}`);
