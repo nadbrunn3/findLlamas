@@ -187,26 +187,48 @@ async function renderStacksSection() {
     // Media grid (rest)
     const grid = document.createElement('div');
     grid.className = 'stack-grid';
-    st.photos.forEach((p, idx) => {
-      const el = renderMediaEl(p, { 
-        withControls: false, 
-        className: idx === 0 ? 'stack-cover-media' : 'stack-thumb',
-        useThumb: idx > 0  // Use thumbnails for grid items, full res for cover
+
+    // Cover click opens lightbox
+    const coverPhoto = st.photos[0];
+    if (coverPhoto) {
+      coverWrap.addEventListener('click', () => {
+        const gi = globalIndex.get(coverPhoto.id || coverPhoto.url) ?? 0;
+        openLightbox(gi);
       });
-      if (idx > 0) {
+    }
+
+    const thumbs = st.photos.slice(1);
+    const loadMoreBtn = document.createElement('button');
+    loadMoreBtn.type = 'button';
+    loadMoreBtn.className = 'stack-load-more';
+    loadMoreBtn.textContent = 'Load more photos';
+
+    function renderMore() {
+      const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').length || 1;
+      const batch = cols * 7; // roughly 7 rows
+      const start = grid.childElementCount;
+      const end = Math.min(start + batch, thumbs.length);
+
+      for (let i = start; i < end; i++) {
+        const p = thumbs[i];
+        const el = renderMediaEl(p, {
+          withControls: false,
+          className: 'stack-thumb',
+          useThumb: true
+        });
         el.addEventListener('click', () => {
           const gi = globalIndex.get(p.id || p.url) ?? 0;
           openLightbox(gi);
         });
         grid.appendChild(el);
-      } else {
-        // cover click opens lightbox
-        coverWrap.addEventListener('click', () => {
-          const gi = globalIndex.get(p.id || p.url) ?? 0;
-          openLightbox(gi);
-        });
       }
-    });
+
+      if (grid.childElementCount >= thumbs.length) {
+        loadMoreBtn.remove();
+      }
+    }
+
+    loadMoreBtn.addEventListener('click', renderMore);
 
     // Footer with likes count
     const footer = document.createElement('footer');
@@ -220,7 +242,13 @@ async function renderStacksSection() {
     card.appendChild(coverWrap);
     card.appendChild(header);
     if (caption) card.appendChild(descContainer);
-    if (st.photos.length > 1) card.appendChild(grid);
+    if (thumbs.length > 0) {
+      card.appendChild(grid);
+      renderMore();
+      if (grid.childElementCount < thumbs.length) {
+        card.appendChild(loadMoreBtn);
+      }
+    }
     card.appendChild(footer);
     host.appendChild(card);
 
