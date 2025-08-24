@@ -23,12 +23,37 @@ const DAYS_DIR = path.join(DATA_DIR, 'days');
 const INTERACTIONS_DIR = path.join(DATA_DIR, 'interactions');
 const DAY_INDEX_FILE = path.join(DAYS_DIR, 'index.json');
 
-// Immich
-const IMMICH_URL = (process.env.IMMICH_URL || '').replace(/\/$/, '');
-const IMMICH_API_KEYS = (process.env.IMMICH_API_KEYS || '')
-  .split(',')
-  .map(s => s.trim())
-  .filter(Boolean);
+// Immich can be configured with multiple base URLs and API keys
+// URLs and keys may be provided as comma-separated lists. If only one URL
+// is given but multiple API keys, the same URL will be used for each key.
+// Inline comments after a `#` are ignored so `.env` entries can be annotated.
+function parseEnvList(val = '') {
+  return val
+    .split(',')
+    .map(s => s.split('#')[0].trim())
+    .filter(Boolean);
+}
+
+const rawUrls = parseEnvList(process.env.IMMICH_URLS || process.env.IMMICH_URL)
+  .map(s => s.replace(/\/$/, ''));
+const rawKeys = parseEnvList(process.env.IMMICH_API_KEYS || process.env.IMMICH_API_KEY);
+const IMMICH_URLS = rawUrls;
+const IMMICH_API_KEYS = rawKeys;
+let IMMICH_SERVERS = [];
+if (rawUrls.length && rawKeys.length) {
+  if (rawUrls.length === rawKeys.length) {
+    IMMICH_SERVERS = rawUrls.map((url, i) => ({ url, key: rawKeys[i] }));
+  } else if (rawUrls.length === 1) {
+    IMMICH_SERVERS = rawKeys.map(key => ({ url: rawUrls[0], key }));
+  } else {
+    // Multiple URLs but only one key or mismatched counts
+    IMMICH_SERVERS = rawUrls.map(url => ({ url, key: rawKeys[0] || '' }));
+  }
+} else if (rawUrls.length) {
+  const fallbackKey = rawKeys[0] || '';
+  IMMICH_SERVERS = rawUrls.map(url => ({ url, key: fallbackKey }));
+}
+
 // Optional album ID to scope imports; matches README's IMMICH_ALBUM_ID
 // fallback to legacy DEFAULT_ALBUM_ID for backwards compat
 const IMMICH_ALBUM_ID = process.env.IMMICH_ALBUM_ID || process.env.DEFAULT_ALBUM_ID || '';
@@ -103,20 +128,14 @@ function requireAdmin(req) {
 }
 
 // ---- Immich helpers ---------------------------------------------------------
-function pickImmichKey() {
-  return IMMICH_API_KEYS[0] || process.env.IMMICH_API_KEY || '';
-}
-
-async function immichFetchJSON(route, init = {}) {
-  if (!IMMICH_URL) throw new Error('IMMICH_URL not set');
-  const key = pickImmichKey();
-  const url = `${IMMICH_URL}${route}`;
+async function immichFetchJSON(server, route, init = {}) {
+  if (!server?.url) throw new Error('Immich URL not set');
   const headers = {
     ...(init.headers || {}),
-    ...(key ? { 'x-api-key': key } : {}),
+    ...(server.key ? { 'x-api-key': server.key } : {}),
     'content-type': 'application/json'
   };
-  const res = await fetch(url, { ...init, headers });
+  const res = await fetch(`${server.url}${route}`, { ...init, headers });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Immich ${res.status} ${res.statusText}: ${text}`);
@@ -126,8 +145,8 @@ async function immichFetchJSON(route, init = {}) {
 
 // Try album-specific search first. When an album ID is provided we do not
 // fall back to the random asset approach because it could leak assets from
-// other albums.
-async function getAssetsForDay({ date, albumId }) {
+// other albums. This function operates on a single Immich server instance.
+async function getAssetsForDayForServer(server, serverIndex, { date, albumId }) {
   const start = new Date(date + 'T00:00:00.000Z');
   const end = new Date(start.getTime() + 24 * 3600 * 1000);
 
@@ -142,7 +161,7 @@ async function getAssetsForDay({ date, albumId }) {
       
       // Try to get album with embedded assets first
       try {
-        const album = await immichFetchJSON(`/api/albums/${effectiveAlbumId}`);
+        const album = await immichFetchJSON(server, `/api/albums/${effectiveAlbumId}`);
         if (Array.isArray(album?.assets)) {
           albumAssets = album.assets;
           app.log.info(`Got ${albumAssets.length} assets from album.assets`);
@@ -154,7 +173,7 @@ async function getAssetsForDay({ date, albumId }) {
       // If no assets found, try the assets endpoint
       if (albumAssets.length === 0) {
         try {
-          const assetsRes = await immichFetchJSON(`/api/albums/${effectiveAlbumId}/assets`);
+          const assetsRes = await immichFetchJSON(server, `/api/albums/${effectiveAlbumId}/assets`);
           albumAssets = Array.isArray(assetsRes) ? assetsRes : assetsRes?.items || assetsRes?.assets || [];
           app.log.info(`Got ${albumAssets.length} assets from /assets endpoint`);
         } catch (e) {
@@ -184,7 +203,7 @@ async function getAssetsForDay({ date, albumId }) {
       });
 
       if (dayAssets.length > 0) {
-        const photos = dayAssets.map(a => mapAssetToPhoto(a?.asset || a));
+        const photos = dayAssets.map(a => mapAssetToPhoto(a?.asset || a, serverIndex));
         app.log.info(`Album ${effectiveAlbumId}: found ${photos.length} assets for ${date}`);
         return photos;
       }
@@ -202,14 +221,14 @@ async function getAssetsForDay({ date, albumId }) {
     app.log.info(`Fetching assets for date ${date} using timeline bucket API`);
     
     // Try daily bucket first
-    const dailyBucket = await immichFetchJSON(`/api/timeline/bucket?size=DAY&timeBucket=${date}`);
+    const dailyBucket = await immichFetchJSON(server, `/api/timeline/bucket?size=DAY&timeBucket=${date}`);
     if (dailyBucket && dailyBucket.id && Array.isArray(dailyBucket.id) && dailyBucket.id.length > 0) {
       app.log.info(`Found ${dailyBucket.id.length} assets in daily bucket for ${date}`);
       
       // Get all assets by ID in parallel
       const assetPromises = dailyBucket.id.map(async (assetId) => {
         try {
-          return await immichFetchJSON(`/api/assets/${assetId}`);
+          return await immichFetchJSON(server, `/api/assets/${assetId}`);
         } catch (e) {
           app.log.warn(`Failed to fetch asset ${assetId}:`, e.message);
           return null;
@@ -236,7 +255,7 @@ async function getAssetsForDay({ date, albumId }) {
       
       if (dayAssets.length > 0) {
         app.log.info(`Successfully found ${dayAssets.length} assets for ${date} from daily bucket (filtered from ${allAssets.length} total)`);
-        return dayAssets.map(mapAssetToPhoto);
+        return dayAssets.map(a => mapAssetToPhoto(a, serverIndex));
       }
     }
   } catch (e) {
@@ -248,14 +267,14 @@ async function getAssetsForDay({ date, albumId }) {
     const targetMonth = date.substring(0, 7); // YYYY-MM format
     app.log.info(`Trying monthly bucket for ${targetMonth}`);
     
-    const monthlyBucket = await immichFetchJSON(`/api/timeline/bucket?size=MONTH&timeBucket=${targetMonth}`);
+    const monthlyBucket = await immichFetchJSON(server, `/api/timeline/bucket?size=MONTH&timeBucket=${targetMonth}`);
     if (monthlyBucket && monthlyBucket.id && Array.isArray(monthlyBucket.id) && monthlyBucket.id.length > 0) {
       app.log.info(`Found ${monthlyBucket.id.length} assets in monthly bucket for ${targetMonth}`);
       
       // Get all assets by ID in parallel
       const assetPromises = monthlyBucket.id.map(async (assetId) => {
         try {
-          return await immichFetchJSON(`/api/assets/${assetId}`);
+          return await immichFetchJSON(server, `/api/assets/${assetId}`);
         } catch (e) {
           app.log.warn(`Failed to fetch asset ${assetId}:`, e.message);
           return null;
@@ -282,7 +301,7 @@ async function getAssetsForDay({ date, albumId }) {
       
       if (dayAssets.length > 0) {
         app.log.info(`Successfully found ${dayAssets.length} assets for ${date} from monthly bucket`);
-        return dayAssets.map(mapAssetToPhoto);
+        return dayAssets.map(a => mapAssetToPhoto(a, serverIndex));
       }
     }
   } catch (e) {
@@ -302,7 +321,7 @@ async function getAssetsForDay({ date, albumId }) {
     
     // Get batches until we've covered the entire library
     for (let batch = 0; batch < MAX_BATCHES; batch++) {
-      const randomAssets = await immichFetchJSON('/api/assets/random?count=' + BATCH_SIZE);
+      const randomAssets = await immichFetchJSON(server, '/api/assets/random?count=' + BATCH_SIZE);
       const assetsArray = Array.isArray(randomAssets) ? randomAssets : [];
       
       if (assetsArray.length === 0) {
@@ -355,7 +374,7 @@ async function getAssetsForDay({ date, albumId }) {
 
     if (dayAssets.length > 0) {
       app.log.info(`Found ${dayAssets.length} assets for ${date} from ${allAssets.length} total assets`);
-      return dayAssets.map(mapAssetToPhoto);
+      return dayAssets.map(a => mapAssetToPhoto(a, serverIndex));
     }
     
     app.log.info(`No assets found for ${date} in ${allAssets.length} total assets`);
@@ -367,9 +386,53 @@ async function getAssetsForDay({ date, albumId }) {
   return [];
 }
 
-function mapAssetToPhoto(a) {
+// Combine results from all configured Immich servers
+async function getAssetsForDay({ date, albumId }) {
+  app.log.info(`🚀 Starting import for ${date} with ${IMMICH_SERVERS.length} servers`);
+  IMMICH_SERVERS.forEach((server, i) => {
+    app.log.info(`📡 Server ${i}: ${server.url} (key: ${server.key ? server.key.substring(0, 8) + '...' : 'NO_KEY'})`);
+  });
+
+  const allPhotos = [];
+  const seenAssets = new Set(); // Track unique assets by their original ID
+  
+  for (let i = 0; i < IMMICH_SERVERS.length; i++) {
+    const server = IMMICH_SERVERS[i];
+    try {
+      app.log.info(`🔄 Processing server ${i}/${IMMICH_SERVERS.length}`);
+      const photos = await getAssetsForDayForServer(server, i, { date, albumId });
+      app.log.info(`📸 Server ${i}: Found ${photos.length} photos`);
+      
+      // Deduplicate by original asset ID (remove server prefix)
+      const uniquePhotos = photos.filter(photo => {
+        const originalId = photo.id.split('_').slice(1).join('_'); // Remove server index prefix
+        if (seenAssets.has(originalId)) {
+          return false; // Skip duplicate
+        }
+        seenAssets.add(originalId);
+        return true;
+      });
+      
+      if (photos.length !== uniquePhotos.length) {
+        app.log.info(`Server ${i}: Added ${uniquePhotos.length} unique photos (${photos.length - uniquePhotos.length} duplicates skipped)`);
+      }
+      allPhotos.push(...uniquePhotos);
+    } catch (e) {
+      app.log.error(`❌ Server ${i} failed: ${e.message}`);
+    }
+  }
+  
+  app.log.info(`📊 Total unique photos found: ${allPhotos.length}`);
+  
+  // Sort combined photos by timestamp so they appear as a single source
+  allPhotos.sort((a, b) => (a.taken_at || '').localeCompare(b.taken_at || ''));
+  return allPhotos;
+}
+
+function mapAssetToPhoto(a, serverIndex) {
   const asset = a?.asset || a; // handle wrapped items
-  const id = asset.id || asset.assetId || asset._id;
+  const rawId = asset.id || asset.assetId || asset._id;
+  const id = `${serverIndex}_${rawId}`;
   const takenAt =
     asset?.exifInfo?.dateTimeOriginal ||
     asset?.localDateTime ||
@@ -409,72 +472,76 @@ async function autoLoadAlbum() {
     app.log.warn('IMMICH_ALBUM_ID not set; autoLoadAlbum disabled');
     return;
   }
-  try {
-    app.log.info(`autoLoadAlbum: fetching album ${IMMICH_ALBUM_ID}`);
-    let album;
+  for (let i = 0; i < IMMICH_SERVERS.length; i++) {
+    const server = IMMICH_SERVERS[i];
     try {
-      album = await immichFetchJSON(`/api/albums/${IMMICH_ALBUM_ID}`);
-    } catch (err) {
-      app.log.error({ msg: 'autoLoadAlbum fetch album failed', err: String(err) });
-      return;
-    }
-
-    let assets = [];
-    if (Array.isArray(album?.assets)) {
-      assets = album.assets;
-    } else {
+      app.log.info(`autoLoadAlbum: fetching album ${IMMICH_ALBUM_ID} from ${server.url}`);
+      let album;
       try {
-        const res = await immichFetchJSON(`/api/albums/${IMMICH_ALBUM_ID}/assets`);
-        assets = Array.isArray(res) ? res : res?.items || [];
+        album = await immichFetchJSON(server, `/api/albums/${IMMICH_ALBUM_ID}`);
       } catch (err) {
-        app.log.error({ msg: 'autoLoadAlbum fetch assets failed', err: String(err) });
-        return;
+        app.log.error({ msg: 'autoLoadAlbum fetch album failed', err: String(err) });
+        continue;
       }
-    }
 
-    if (!assets.length) {
-      app.log.warn(`autoLoadAlbum: no assets in album ${IMMICH_ALBUM_ID}`);
-      return;
-    }
-
-    const photos = assets.map(mapAssetToPhoto).filter(p => p.taken_at);
-    const groups = {};
-    for (const p of photos) {
-      const date = p.taken_at.slice(0, 10);
-      (groups[date] ||= []).push(p);
-    }
-
-    for (const [date, dayPhotos] of Object.entries(groups)) {
-      try {
-        const file = dayFile(date);
-        const existing = (await readJson(file)) || {
-          date,
-          segment: 'day',
-          slug: date,
-          title: `Day — ${date}`,
-          stats: {},
-          polyline: { type: 'LineString', coordinates: [] },
-          points: [],
-          photos: []
-        };
-        const seen = new Set(existing.photos.map(p => p.id || p.url));
-        for (const p of dayPhotos) {
-          const key = p.id || p.url;
-          if (key && !seen.has(key)) {
-            existing.photos.push(p);
-            seen.add(key);
-          }
+      let assets = [];
+      if (Array.isArray(album?.assets)) {
+        assets = album.assets;
+      } else {
+        try {
+          const res = await immichFetchJSON(server, `/api/albums/${IMMICH_ALBUM_ID}/assets`);
+          assets = Array.isArray(res) ? res : res?.items || [];
+        } catch (err) {
+          app.log.error({ msg: 'autoLoadAlbum fetch assets failed', err: String(err) });
+          continue;
         }
-        await writeJson(file, existing);
-        app.log.info(`autoLoadAlbum: merged ${dayPhotos.length} photos into ${date}`);
-      } catch (err) {
-        app.log.error({ msg: `autoLoadAlbum: failed to write day ${date}`, err: String(err) });
       }
-    }
 
-    app.log.info(`autoLoadAlbum: processed ${photos.length} photos`);
-  } catch (err) {
-    app.log.error({ msg: 'autoLoadAlbum failed', err: String(err) });
+      if (!assets.length) {
+        app.log.warn(`autoLoadAlbum: no assets in album ${IMMICH_ALBUM_ID}`);
+        continue;
+      }
+
+      const photos = assets.map(a => mapAssetToPhoto(a, i)).filter(p => p.taken_at);
+      const groups = {};
+      for (const p of photos) {
+        const date = p.taken_at.slice(0, 10);
+        (groups[date] ||= []).push(p);
+      }
+
+      for (const [date, dayPhotos] of Object.entries(groups)) {
+        try {
+          const file = dayFile(date);
+          const existing = (await readJson(file)) || {
+            date,
+            segment: 'day',
+            slug: date,
+            title: `Day — ${date}`,
+            stats: {},
+            polyline: { type: 'LineString', coordinates: [] },
+            points: [],
+            photos: []
+          };
+          const seen = new Set(existing.photos.map(p => p.id || p.url));
+          for (const p of dayPhotos) {
+            const key = p.id || p.url;
+            if (key && !seen.has(key)) {
+              existing.photos.push(p);
+              seen.add(key);
+            }
+          }
+          await writeJson(file, existing);
+          await upsertDayIndex(existing);
+          app.log.info(`autoLoadAlbum: merged ${dayPhotos.length} photos into ${date}`);
+        } catch (err) {
+          app.log.error({ msg: `autoLoadAlbum: failed to write day ${date}`, err: String(err) });
+        }
+      }
+
+      app.log.info(`autoLoadAlbum: processed ${photos.length} photos from ${server.url}`);
+    } catch (err) {
+      app.log.error({ msg: 'autoLoadAlbum failed', err: String(err) });
+    }
   }
 }
 
@@ -531,6 +598,10 @@ app.get('/api/local/day', async (req, reply) => {
 // Fetch day's photos from Immich (server-side), optional albumId to scope
 app.get('/api/immich/day', async (req, reply) => {
   try {
+    if (!requireAdmin(req)) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+
     const { date, albumId } = req.query;
     if (!date) return reply.code(400).send({ error: 'date required (YYYY-MM-DD)' });
 
@@ -547,9 +618,11 @@ app.get('/api/immich/day', async (req, reply) => {
 // Proxy original (keeps API key server-side; avoids CORS)
 app.get('/api/immich/assets/:id/original', async (req, reply) => {
   try {
-    const key = pickImmichKey();
-    const url = `${IMMICH_URL}/api/assets/${req.params.id}/original`;
-    const res = await fetch(url, { headers: key ? { 'x-api-key': key } : {} });
+    const [idx, assetId] = req.params.id.split('_');
+    const server = IMMICH_SERVERS[Number(idx)];
+    if (!server) return reply.code(404).send('immich server not found');
+    const url = `${server.url}/api/assets/${assetId}/original`;
+    const res = await fetch(url, { headers: server.key ? { 'x-api-key': server.key } : {} });
     if (!res.ok) return reply.code(res.status).send(await res.text());
 
     // Pass through headers we care about
@@ -564,10 +637,12 @@ app.get('/api/immich/assets/:id/original', async (req, reply) => {
 // Proxy thumbnail (Immich supports /thumbnail and size param on newer builds)
 app.get('/api/immich/assets/:id/thumb', async (req, reply) => {
   try {
-    const key = pickImmichKey();
+    const [idx, assetId] = req.params.id.split('_');
+    const server = IMMICH_SERVERS[Number(idx)];
+    if (!server) return reply.code(404).send('immich server not found');
     // try size=thumbnail; some builds accept ?size=tiny/thumbnail/preview
-    const url = `${IMMICH_URL}/api/assets/${req.params.id}/thumbnail?size=thumbnail`;
-    const res = await fetch(url, { headers: key ? { 'x-api-key': key } : {} });
+    const url = `${server.url}/api/assets/${assetId}/thumbnail?size=thumbnail`;
+    const res = await fetch(url, { headers: server.key ? { 'x-api-key': server.key } : {} });
     if (!res.ok) return reply.code(res.status).send(await res.text());
     reply.header('content-type', res.headers.get('content-type') || 'image/jpeg');
     reply.header('cache-control', res.headers.get('cache-control') || 'public, max-age=604800');
@@ -584,29 +659,34 @@ app.get('/api/admin/config', async (req, reply) => {
   // Return configuration from environment variables
   // Note: We don't expose actual tokens/keys for security
   const config = {
-    immichUrl: IMMICH_URL || '',
+    immichUrl: IMMICH_URLS[0] || '',
+    immichUrls: IMMICH_URLS,
     immichAlbumId: IMMICH_ALBUM_ID || '',
-    hasImmichKeys: IMMICH_API_KEYS.length > 0,
+    hasImmichKeys: IMMICH_SERVERS.some(s => s.key),
     hasAdminToken: !!ADMIN_TOKEN,
     serverPort: PORT,
     // Add more detailed status information
-    immichConfigured: !!(IMMICH_URL && IMMICH_API_KEYS.length > 0),
+    immichConfigured: IMMICH_SERVERS.length > 0 && IMMICH_SERVERS.some(s => s.key),
     configSource: 'environment', // Always prioritize .env
     missingConfig: []
   };
-  
+
   // Check what's missing
-  if (!IMMICH_URL) config.missingConfig.push('IMMICH_URL');
+  if (IMMICH_SERVERS.length === 0) config.missingConfig.push('IMMICH_URLS');
   if (IMMICH_API_KEYS.length === 0) config.missingConfig.push('IMMICH_API_KEYS');
-  
+
   reply.send(config);
 });
 
 // Helper endpoint to get .env template
 app.get('/api/admin/env-template', async (req, reply) => {
   const template = `# Immich Configuration
-IMMICH_URL=https://your-immich-url.com
-IMMICH_API_KEYS=your_api_key_1,your_api_key_2
+# Single server with two API keys
+IMMICH_URLS=https://photos.example.com
+IMMICH_API_KEYS=user_one_key,user_two_key
+# Or multiple servers
+# IMMICH_URLS=https://immich-one.example.com,https://immich-two.example.com
+# IMMICH_API_KEYS=key_for_one,key_for_two
 IMMICH_ALBUM_ID=your_album_id
 
 # Admin Token (optional)
@@ -619,7 +699,7 @@ ANON_COOKIE_SECRET=your_long_random_string_here
 PORT=4000
 REPO_DIR=.
 `;
-  
+
   reply.type('text/plain').send(template);
 });
 
@@ -1044,16 +1124,17 @@ app.delete('/api/stack/:stackId/comment/:commentId', async (req, reply) => {
   }
 });
 
-if (IMMICH_ALBUM_ID) {
-  autoLoadAlbum().catch(err =>
-    app.log.error({ msg: 'autoLoadAlbum initial run failed', err: String(err) })
-  );
-  setInterval(() => {
-    autoLoadAlbum().catch(err =>
-      app.log.error({ msg: 'autoLoadAlbum interval failed', err: String(err) })
-    );
-  }, AUTOLOAD_INTERVAL);
-}
+// Disable auto-loader to prevent conflicts with manual import
+// if (IMMICH_ALBUM_ID) {
+//   autoLoadAlbum().catch(err =>
+//     app.log.error({ msg: 'autoLoadAlbum initial run failed', err: String(err) })
+//   );
+//   setInterval(() => {
+//     autoLoadAlbum().catch(err =>
+//       app.log.error({ msg: 'autoLoadAlbum interval failed', err: String(err) })
+//     );
+//   }, AUTOLOAD_INTERVAL);
+// }
 
 // ---- Boot -------------------------------------------------------------------
 app.listen({ port: PORT, host: '0.0.0.0' }, (err, address) => {

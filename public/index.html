@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>My Trip — Index</title>
   <link rel="stylesheet" href="css/styles.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
 </head>
 <body>
   
@@ -28,21 +28,25 @@
     <button class="map-expand" aria-label="Expand map">🗺️</button>
   </section>
 
-
+  <nav class="view-tabs">
+    <button class="tab-button active" data-tab="footprints">Footprints</button>
+    <button class="tab-button" data-tab="photos">Photos</button>
+  </nav>
 
   <!-- Stack Feed -->
-  <main class="stack-feed-container">
+  <main class="stack-feed-container tab-content" id="footprints-view">
     <div class="stack-feed" id="stack-feed">
       <!-- Photo stack cards will be generated here -->
     </div>
   </main>
 
+  <!-- All Photos Grid -->
+  <section class="photos-container tab-content" id="photos-view" hidden>
+    <div class="photo-grid" id="photo-grid"></div>
+  </section>
 
 
-  
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
   <script src="js/photo-lightbox.js"></script>
   <script type="module" src="js/index.js"></script>
 </body>

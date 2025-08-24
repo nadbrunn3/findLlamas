@@ -1,7 +1,14 @@
 import { dataUrl, getApiBase, groupIntoStacks, debounce, urlParam, pushUrlParam, replaceUrlParam, fmtTime, escapeHtml, formatDate } from "./utils.js";
 
+const MAPBOX_STYLE = 'mapbox://styles/mapbox/satellite-v9';
+// Use provided Mapbox token by default; replace with your own for production.
+mapboxgl.accessToken =
+  mapboxgl.accessToken ||
+  'pk.eyJ1IjoianVkZ2UtbW9ja3VwLXdoYW0iLCJhIjoiY21lb3M4dHJiMGUxcjJqcXZ4YzZwZjhubSJ9.EptPsUdI5bt2hOIZfZL3Yg';
+
 const isMobile = matchMedia('(max-width:768px)').matches;
 let topMap;
+let mapMarkers = [];
 let photoStacks = [];
 let allPhotos = [];
 let stackMetaByDay = {};
@@ -346,6 +353,7 @@ async function init(){
   await resolveStackLocations();
   initMaps();
   renderFeed();
+  setupTabs();
 
   setupScrollSync();
 
@@ -458,81 +466,95 @@ async function loadStacks(){
 
 // ---------- maps ----------
 function initMaps(){
-  if (!window.L) return;
+  if (!window.mapboxgl) return;
 
-  topMap = L.map('top-map', {
-    zoomControl: true,          // Enable zoom controls on all devices
-    dragging: true,             // Enable dragging on all devices
-    scrollWheelZoom: !isMobile, // Keep scroll wheel zoom disabled on mobile to prevent conflicts
-    touchZoom: true,            // Enable touch zoom on all devices
-    doubleClickZoom: true,      // Enable double-click zoom
-    boxZoom: !isMobile,         // Enable box zoom on desktop only
-    keyboard: !isMobile         // Enable keyboard navigation on desktop only
+  topMap = new mapboxgl.Map({
+    container: 'top-map',
+    style: MAPBOX_STYLE,
+    center: [currentLocation.lng, currentLocation.lat],
+    zoom: 3,
+    pitch: 45,
+    bearing: 0,
+    antialias: true
   });
-
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    { attribution:"&copy; Esri", maxZoom:18 }).addTo(topMap);
-
-  addMarkersAndPath(topMap);
-
-  // Add fullscreen toggle button
+  topMap.addControl(new mapboxgl.NavigationControl());
+  // Remove native fullscreen control to avoid conflicts with custom one
+  // topMap.addControl(new mapboxgl.FullscreenControl());
   addFullscreenToggle(topMap, 'top-map');
 
-  // Fit once everything is known
-  const b = L.latLngBounds([[currentLocation.lat,currentLocation.lng]]);
-  allPhotos.forEach(p=> {
-    if (typeof p.lat === 'number' && typeof p.lon === 'number') {
-      b.extend([p.lat, p.lon]);
-    }
-  });
-  topMap.fitBounds(b, { padding:[20,20], maxZoom:3 });
+  topMap.on('load', () => {
+    applyBloom(topMap);
+    addMarkersAndPath(topMap);
 
-  // Important when sticky containers change size / orientation
-  setTimeout(()=>topMap.invalidateSize(), 250);
-  addEventListener('resize', ()=>topMap && topMap.invalidateSize());
+    const b = new mapboxgl.LngLatBounds([
+      currentLocation.lng,
+      currentLocation.lat
+    ], [currentLocation.lng, currentLocation.lat]);
+    allPhotos.forEach(p => {
+      if (typeof p.lat === 'number' && typeof p.lon === 'number') {
+        b.extend([p.lon, p.lat]);
+      }
+    });
+    topMap.fitBounds(b, { padding: 20, maxZoom: 3 });
+  });
+
+  setTimeout(() => topMap.resize(), 250);
+  addEventListener('resize', () => topMap && topMap.resize());
+}
+
+function applyBloom(map) {
+  map.setPaintProperty('water', 'fill-color', '#5fa4ff');
+  map.setPaintProperty('water', 'fill-opacity', 0.85);
+  map.setPaintProperty('water', 'fill-outline-color', '#a6d2ff');
+
+  map.setPaintProperty('road-primary', 'line-color', '#ffffff');
+  map.setPaintProperty('road-primary', 'line-width', [
+    'interpolate', ['linear'], ['zoom'], 5, 0.5, 15, 3
+  ]);
+  map.setPaintProperty('road-primary', 'line-blur', [
+    'interpolate', ['linear'], ['zoom'], 5, 1, 15, 6
+  ]);
+
+  map.setPaintProperty('poi-label', 'text-color', '#ffd166');
+  map.setPaintProperty('poi-label', 'text-halo-color', '#ffa600');
+  map.setPaintProperty('poi-label', 'text-halo-width', 2);
 }
 
 function addMarkersAndPath(map){
   const isTopMap = map === topMap;
-  
-  // current location
-  L.marker([currentLocation.lat, currentLocation.lng], {
-    icon: L.divIcon({ className:"current-location-marker", html:
-      `<div class="pulse-marker"><div class="pulse-dot"></div><div class="pulse-ring"></div></div>`,
-      iconSize:[40,40], iconAnchor:[20,20]
-    })
-  }).addTo(map);
 
-  const gpsPhotos = allPhotos.filter(p=> typeof p.lat === 'number' && typeof p.lon === 'number');
+  const curEl = document.createElement('div');
+  curEl.className = 'current-location-marker';
+  curEl.innerHTML = `<div class="pulse-marker"><div class="pulse-dot"></div><div class="pulse-ring"></div></div>`;
+  new mapboxgl.Marker(curEl).setLngLat([currentLocation.lng, currentLocation.lat]).addTo(map);
 
-  // path (chronological)
-  if (gpsPhotos.length>1){
-    const coords = gpsPhotos.map(p=>[p.lat, p.lon]);
-    L.polyline(coords, { color:"#3b82f6", weight:3, opacity:.7 }).addTo(map);
+  const gpsPhotos = allPhotos.filter(p => typeof p.lat === 'number' && typeof p.lon === 'number');
+
+  if (gpsPhotos.length > 1) {
+    const coords = gpsPhotos.map(p => [p.lon, p.lat]);
+    const data = { type: 'Feature', geometry: { type: 'LineString', coordinates: coords } };
+    if (map.getSource('path')) {
+      map.getSource('path').setData(data);
+    } else {
+      map.addSource('path', { type: 'geojson', data });
+      map.addLayer({ id: 'path-line', type: 'line', source: 'path', paint: { 'line-color': '#3b82f6', 'line-width': 3, 'line-opacity': 0.7 } });
+    }
   }
 
-  // photo markers with zoom-responsive sizing
-  gpsPhotos.forEach(photo=>{
+  gpsPhotos.forEach(photo => {
     const thumb = photo.thumb || photo.url;
-    const markerSize = getMarkerSize(map.getZoom(), isTopMap);
-
-    const m = L.marker([photo.lat, photo.lon], {
-      icon: L.divIcon({
-        className: `photo-marker${photo.stackId===activeStackId?' active':''}`,
-        html: `<div class="pm__wrap"><img src="${thumb}" alt=""></div>`,
-        iconSize:[markerSize, markerSize],
-        iconAnchor:[markerSize/2, markerSize/2]
-      })
-    }).addTo(map);
-    m.on("click", ()=>onMarkerClick(photo.stackId));
-    // store id and map reference for updates
-    m.stackId = photo.stackId;
-    m.isTopMap = isTopMap;
+    const markerSize = getMarkerSize(map.getZoom());
+    const el = document.createElement('div');
+    el.className = `photo-marker${photo.stackId === activeStackId ? ' active' : ''}`;
+    el.style.setProperty('--marker-size', `${markerSize}px`);
+    el.innerHTML = `<div class="pm__wrap"><img src="${thumb}" alt=""></div>`;
+    const m = new mapboxgl.Marker(el).setLngLat([photo.lon, photo.lat]).addTo(map);
+    el.addEventListener('click', () => onMarkerClick(photo.stackId));
+    mapMarkers.push({ marker: m, stackId: photo.stackId, isTopMap });
   });
 
-  // Add zoom event listener for responsive sizing
   if (isTopMap) {
-    map.on('zoomend', () => updateMarkerSizes(map));
+    map.on('zoom', () => updateMarkerSizes(map));
   }
 }
 
@@ -545,17 +567,9 @@ function getMarkerSize(zoom) {
 
 function updateMarkerSizes(map) {
   const currentZoom = map.getZoom();
-  map.eachLayer(layer => {
-    if (layer.stackId && layer.isTopMap) {
-      const newSize = getMarkerSize(currentZoom);
-      const prev = layer.getIcon(); // DivIcon
-      layer.setIcon(L.divIcon({
-        className: prev.options.className,
-        html: prev.options.html,
-        iconSize: [newSize, newSize],
-        iconAnchor: [newSize / 2, newSize / 2]
-      }));
-    }
+  mapMarkers.filter(m => m.isTopMap).forEach(m => {
+    const newSize = getMarkerSize(currentZoom);
+    m.marker.getElement().style.setProperty('--marker-size', `${newSize}px`);
   });
 }
 
@@ -2061,6 +2075,70 @@ function openLightboxForStack(stack, startIndex=0){
   }, 100);
 }
 
+// Render grid of all photos for Photos tab
+function renderPhotoGrid(){
+  const grid = document.getElementById('photo-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  const photos = allPhotos.map(p => ({
+    id: p.id,
+    url: p.url,
+    thumb: p.thumb || p.url,
+    caption: p.caption || '',
+    taken_at: p.taken_at,
+    lat: p.lat,
+    lon: p.lon,
+    mimeType: p.mimeType,
+    kind: p.kind
+  }));
+
+  photos.forEach((p, idx) => {
+    const img = document.createElement('img');
+    img.src = p.thumb || p.url;
+    img.alt = p.caption || '';
+    img.loading = 'lazy';
+    img.addEventListener('click', () => {
+      if (window.openPhotoLightbox) {
+        window.openPhotoLightbox(photos, idx);
+      }
+    });
+    grid.appendChild(img);
+  });
+}
+
+// Setup tab interactions
+function setupTabs(){
+  const tabs = document.querySelectorAll('.tab-button');
+  const footprintsView = document.getElementById('footprints-view');
+  const photosView = document.getElementById('photos-view');
+
+  tabs.forEach(btn => {
+    btn.addEventListener('click', () => {
+      tabs.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      if (btn.dataset.tab === 'photos') {
+        // Hide the stack feed and show the photo grid
+        footprintsView.hidden = true;
+        footprintsView.style.display = 'none';
+        photosView.hidden = false;
+        photosView.style.display = '';
+        renderPhotoGrid();
+        // Jump to the top so the grid appears in place of the feed
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      } else {
+        // Restore the stack feed view
+        footprintsView.hidden = false;
+        footprintsView.style.display = '';
+        photosView.hidden = true;
+        photosView.style.display = 'none';
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      }
+    });
+  });
+}
+
 // ---------- sync ----------
 function setActive(id){
   activeStackId = id;
@@ -2070,16 +2148,14 @@ function setActive(id){
 }
 
 function updateMarkerClasses(){
-  if (!topMap) return;
   // Update marker visual states based on activeStackId
-  topMap.eachLayer(layer => {
-    if (layer.stackId) {
-      const marker = layer.getElement ? layer.getElement() : layer._icon;
-      if (marker) {
-        marker.classList.toggle('active', layer.stackId === activeStackId);
-      }
-    }
-  });
+  mapMarkers
+    .filter(m => m.isTopMap)
+    .forEach(({ marker, stackId }) => {
+      marker
+        .getElement()
+        .classList.toggle('active', stackId === activeStackId);
+    });
 }
 
 function scrollToStack(id, { instant=false } = {}){
@@ -2113,10 +2189,11 @@ const panTopMapTo = debounce((id)=>{
     targetZoom = Math.min(targetZoom, 8); // Limit zoom when starting from far out
   }
   
-  topMap.setView([s.location.lat, s.location.lng], targetZoom, { 
-    animate: true, 
-    duration: 0.5,
-    easeLinearity: 0.1
+  topMap.flyTo({
+    center: [s.location.lng, s.location.lat],
+    zoom: targetZoom,
+    duration: 500,
+    essential: true
   });
 }, 80);
 
@@ -2173,34 +2250,46 @@ function setupScrollSync(){
 
 // ---------- fullscreen toggle for maps ----------
 function addFullscreenToggle(map, containerId) {
-  // Create fullscreen toggle button
-  const fullscreenControl = L.control({ position: 'topright' });
-  
-  fullscreenControl.onAdd = function() {
-    const button = L.DomUtil.create('button', 'leaflet-control-fullscreen');
-    button.innerHTML = `
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
-      </svg>
-    `;
-    button.title = 'Toggle fullscreen';
-    button.setAttribute('aria-label', 'Toggle fullscreen map');
-    
-    // Prevent map interaction when clicking the button
-    L.DomEvent.disableClickPropagation(button);
-    L.DomEvent.on(button, 'click', function(e) {
-      L.DomEvent.stopPropagation(e);
-      openFullscreenMapFromRegularMap(map, containerId);
-    });
-    
-    return button;
-  };
-  
-  fullscreenControl.addTo(map);
+  class FullscreenToggle {
+    onAdd(mapInstance) {
+      this._map = mapInstance;
+      const btn = document.createElement('button');
+      btn.className = 'custom-fullscreen-btn';
+      btn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+        </svg>
+      `;
+      btn.type = 'button';
+      btn.title = 'Toggle fullscreen';
+      btn.setAttribute('aria-label', 'Toggle fullscreen map');
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        console.log('🔘 Fullscreen button clicked!', containerId);
+        openFullscreenMapFromRegularMap(mapInstance, containerId);
+      });
+      const container = document.createElement('div');
+      container.className = 'mapboxgl-ctrl mapboxgl-ctrl-group';
+      container.appendChild(btn);
+      this._container = container;
+      return container;
+    }
+    onRemove() {
+      this._container.parentNode.removeChild(this._container);
+      this._map = undefined;
+    }
+  }
+  map.addControl(new FullscreenToggle(), 'top-right');
 }
 
 function openFullscreenMapFromRegularMap(sourceMap, containerId) {
   console.log('🗺️ Opening fullscreen map from regular map');
+  console.log('📊 Debug info:', {
+    containerId,
+    allPhotosCount: allPhotos.length,
+    allPhotosWithGPS: allPhotos.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon)).length,
+    samplePhoto: allPhotos[0]
+  });
   
   // Get all photos with coordinates for this map
   let photosForMap = [];
@@ -2239,9 +2328,11 @@ function openFullscreenMapFromRegularMap(sourceMap, containerId) {
     }
   }
   
+  console.log('📍 Photos for fullscreen map:', photosForMap.length);
   if (photosForMap.length === 0) {
     console.log('⚠️ No photos with coordinates found for fullscreen map');
-    return;
+    console.log('🔍 First few allPhotos for debugging:', allPhotos.slice(0, 3));
+    console.log('🗺️ Opening fullscreen map anyway (without photo markers)');
   }
   
   // Use the same fullscreen map function from photo-lightbox.js
@@ -2287,23 +2378,26 @@ function openMapOverlayAt(lat, lon, title=''){
   document.documentElement.style.overflow = 'hidden';
   document.body.style.overflow = 'hidden';
 
-  // create Leaflet map with mobile-friendly settings
-  const center = [lat, lon];
-  _mapOverlayMap = L.map('overlay-map', { 
-    zoomControl: true,
-    dragging: true,
-    scrollWheelZoom: !isMobile, // Prevent scroll conflicts on mobile
-    touchZoom: true,            // Enable touch zoom
-    doubleClickZoom: true,      // Enable double-click zoom
-    boxZoom: !isMobile,         // Enable box zoom on desktop only
-    keyboard: !isMobile         // Enable keyboard navigation on desktop only
+  const center = [lon, lat];
+  _mapOverlayMap = new mapboxgl.Map({
+    container: 'overlay-map',
+    style: MAPBOX_STYLE,
+    center,
+    zoom: 14,
+    pitch: 45,
+    bearing: 0,
+    antialias: true
   });
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution:'&copy; OSM contributors', maxZoom: 19
-  }).addTo(_mapOverlayMap);
-
-  L.marker(center).addTo(_mapOverlayMap).bindPopup(title || `${lat.toFixed(4)}, ${lon.toFixed(4)}`).openPopup();
-  _mapOverlayMap.setView(center, 14);
+  _mapOverlayMap.addControl(new mapboxgl.NavigationControl());
+  _mapOverlayMap.addControl(new mapboxgl.FullscreenControl());
+  _mapOverlayMap.on('load', () => {
+    applyBloom(_mapOverlayMap);
+    new mapboxgl.Marker()
+      .setLngLat(center)
+      .setPopup(new mapboxgl.Popup().setText(title || `${lat.toFixed(4)}, ${lon.toFixed(4)}`))
+      .addTo(_mapOverlayMap)
+      .togglePopup();
+  });
 }
 
 // expose if you call from other modules
