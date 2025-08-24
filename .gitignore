@@ -1,4 +1,5 @@
 .env
+.DS_Store
 
 # Ignore everything in data folders except .gitkeep files
 public/data/days/*
