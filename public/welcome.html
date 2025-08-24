@@ -57,6 +57,27 @@
     .hero-globe{position:relative;height:450px;width:100%;border-radius:0 0 16px 16px;overflow:hidden;background:transparent}
     #welcome-globe{width:100%;height:100%;position:relative;z-index:2}
     
+    /* Make map blend better with starry background */
+    #welcome-globe .mapboxgl-canvas{
+      mix-blend-mode:soft-light;
+      opacity:0.85;
+    }
+    
+    /* Ensure mapbox controls remain visible */
+    #welcome-globe .mapboxgl-ctrl{
+      z-index:5 !important;
+    }
+    
+    /* Add subtle overlay to further fade map boundaries */
+    #welcome-globe::after{
+      content:'';
+      position:absolute;
+      inset:0;
+      background:radial-gradient(circle at center, transparent 0%, rgba(10,10,15,0.1) 60%, rgba(10,10,15,0.3) 100%);
+      pointer-events:none;
+      z-index:1;
+    }
+    
     /* Globe markers */
     .globe-marker{
       width:10px;
@@ -68,19 +89,23 @@
       transition:all 0.3s ease;
       animation:globePulse 3s ease-in-out infinite;
       cursor:pointer;
+      position:relative;
+      z-index:10;
     }
     
     .globe-marker.photo-bubble{
-      background:rgba(34,211,238,0.9);
-      border-color:rgba(34,211,238,0.9);
-      box-shadow:0 0 10px rgba(34,211,238,0.7), 0 0 20px rgba(34,211,238,0.4);
+      background:rgba(34,211,238,0.95);
+      border-color:rgba(34,211,238,1);
+      box-shadow:0 0 12px rgba(34,211,238,0.8), 0 0 24px rgba(34,211,238,0.5);
+      z-index:15;
     }
     
     .globe-marker:hover{
       transform:scale(1.3);
-      border-color:rgba(34,211,238,0.9);
-      background:rgba(34,211,238,0.9);
-      box-shadow:0 0 12px rgba(34,211,238,0.8), 0 0 24px rgba(34,211,238,0.5);
+      border-color:rgba(34,211,238,1);
+      background:rgba(34,211,238,1);
+      box-shadow:0 0 16px rgba(34,211,238,0.9), 0 0 32px rgba(34,211,238,0.6);
+      z-index:20;
     }
     
     @keyframes globePulse{
@@ -157,32 +182,23 @@
     .adventure-header{text-align:center;margin-bottom:40px}
     .adventure-badge{
       display:inline-block;
-      background:linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+      background:rgba(96,165,250,0.8);
       color:white;
-      padding:8px 16px;
-      border-radius:20px;
-      font-size:0.8rem;
-      font-weight:700;
-      letter-spacing:0.5px;
+      padding:6px 12px;
+      border-radius:12px;
+      font-size:0.75rem;
+      font-weight:600;
+      letter-spacing:0.3px;
       margin-bottom:16px;
-      animation:pulse-badge 2s ease-in-out infinite;
-      box-shadow:0 4px 12px rgba(255,107,53,0.3);
-    }
-    
-    @keyframes pulse-badge{
-      0%, 100%{transform:scale(1);box-shadow:0 4px 12px rgba(255,107,53,0.3);}
-      50%{transform:scale(1.05);box-shadow:0 6px 20px rgba(255,107,53,0.5);}
+      box-shadow:0 2px 6px rgba(96,165,250,0.2);
     }
     
     .adventure-title{
-      font-size:clamp(28px, 5vw, 42px);
-      font-weight:900;
+      font-size:clamp(24px, 4vw, 32px);
+      font-weight:700;
       margin:0 0 16px;
-      background:linear-gradient(135deg, var(--text) 0%, #60a5fa 100%);
-      -webkit-background-clip:text;
-      background-clip:text;
-      -webkit-text-fill-color:transparent;
-      letter-spacing:-0.5px;
+      color:var(--text);
+      letter-spacing:-0.2px;
     }
     
     .adventure-subtitle{
@@ -194,10 +210,9 @@
     }
     
     .adventure-grid{
-      display:grid;
-      grid-template-columns:repeat(auto-fit, minmax(350px, 1fr));
-      gap:32px;
-      max-width:900px;
+      display:flex;
+      justify-content:center;
+      max-width:500px;
       margin:0 auto;
     }
     
@@ -206,20 +221,23 @@
       border-radius:20px;
       overflow:hidden;
       cursor:pointer;
-      transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      transition:all 0.3s ease;
       border:2px solid transparent;
       position:relative;
+      width:100%;
+      max-width:450px;
     }
     
     .adventure-card:hover{
-      transform:translateY(-8px) scale(1.02);
-      box-shadow:0 20px 60px rgba(0,0,0,0.4);
-      border-color:var(--accent);
+      transform:translateY(-3px);
+      box-shadow:0 8px 25px rgba(0,0,0,0.15);
+      border-color:rgba(96,165,250,0.3);
     }
     
     .adventure-card.current{
-      background:linear-gradient(135deg, var(--panel) 0%, rgba(96,165,250,0.1) 100%);
-      border-color:rgba(96,165,250,0.3);
+      background:var(--panel);
+      border-color:rgba(96,165,250,0.2);
+      box-shadow:0 4px 20px rgba(96,165,250,0.1);
     }
     
     .adventure-status{
@@ -241,17 +259,9 @@
     }
     
     .status-badge.live{
-      background:linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-      animation:live-pulse 2s ease-in-out infinite;
-    }
-    
-    @keyframes live-pulse{
-      0%, 100%{box-shadow:0 0 0 0 rgba(239,68,68,0.4);}
-      50%{box-shadow:0 0 0 8px rgba(239,68,68,0);}
-    }
-    
-    .status-badge.upcoming{
-      background:linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+      background:#ef4444;
+      font-weight:700;
+      opacity:0.9;
     }
     
     .adventure-media{
@@ -260,41 +270,6 @@
       background-position:center;
       position:relative;
       overflow:hidden;
-    }
-    
-    .adventure-media.mystery{
-      background:linear-gradient(135deg, #1e293b 0%, #334155 50%, #475569 100%);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-    }
-    
-    .mystery-content{
-      text-align:center;
-      color:white;
-    }
-    
-    .mystery-icon{
-      font-size:3rem;
-      margin-bottom:12px;
-      animation:mystery-float 3s ease-in-out infinite;
-    }
-    
-    @keyframes mystery-float{
-      0%, 100%{transform:translateY(0) rotate(0deg);}
-      25%{transform:translateY(-8px) rotate(2deg);}
-      75%{transform:translateY(8px) rotate(-2deg);}
-    }
-    
-    .mystery-text{
-      font-size:1.2rem;
-      font-weight:700;
-      margin-bottom:4px;
-    }
-    
-    .mystery-hint{
-      font-size:0.9rem;
-      opacity:0.8;
     }
     
     .adventure-overlay{
@@ -355,181 +330,53 @@
     
     .adventure-meta{
       display:flex;
-      justify-content:space-between;
+      justify-content:center;
       align-items:center;
       margin-bottom:20px;
-      flex-wrap:wrap;
-      gap:12px;
     }
     
     .adventure-date{
       color:var(--accent);
       font-weight:700;
-      font-size:0.9rem;
-    }
-    
-    .adventure-progress{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      font-size:0.85rem;
-      color:var(--muted);
-    }
-    
-    .progress-bar{
-      width:80px;
-      height:4px;
-      background:rgba(96,165,250,0.2);
-      border-radius:2px;
-      overflow:hidden;
-    }
-    
-    .progress-fill{
-      height:100%;
-      background:linear-gradient(90deg, var(--accent) 0%, #60a5fa 100%);
-      transition:width 0.3s ease;
+      font-size:1rem;
+      text-align:center;
     }
     
     .cta-button{
-      background:linear-gradient(135deg, var(--accent) 0%, #60a5fa 100%);
+      background:var(--accent);
       color:white;
       border:none;
-      padding:12px 20px;
-      border-radius:12px;
-      font-weight:700;
+      padding:10px 18px;
+      border-radius:8px;
+      font-weight:600;
       font-size:0.9rem;
       cursor:pointer;
-      transition:all 0.3s ease;
+      transition:all 0.2s ease;
       display:flex;
       align-items:center;
       gap:8px;
       width:100%;
       justify-content:center;
-      position:relative;
-      overflow:hidden;
+      opacity:0.9;
     }
     
     .cta-button:hover{
-      transform:translateY(-2px);
-      box-shadow:0 8px 25px rgba(96,165,250,0.4);
+      opacity:1;
+      transform:translateY(-1px);
+      box-shadow:0 4px 12px rgba(96,165,250,0.2);
     }
     
-    .cta-button.secondary{
-      background:linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-    }
-    
-    .cta-button.secondary:hover{
-      box-shadow:0 8px 25px rgba(139,92,246,0.4);
-    }
+
     
     .cta-arrow{
-      transition:transform 0.3s ease;
+      transition:transform 0.2s ease;
     }
     
     .cta-button:hover .cta-arrow{
-      transform:translateX(4px);
+      transform:translateX(2px);
     }
     
-    /* FOLLOW SECTION */
-    .follow-section{
-      margin:60px 0;
-      padding:40px 0;
-      background:linear-gradient(135deg, rgba(96,165,250,0.05) 0%, rgba(139,92,246,0.05) 100%);
-      border-radius:20px;
-      border:1px solid rgba(96,165,250,0.1);
-    }
-    
-    .follow-content{
-      text-align:center;
-      max-width:800px;
-      margin:0 auto;
-      padding:0 20px;
-    }
-    
-    .follow-title{
-      font-size:clamp(24px, 4vw, 32px);
-      font-weight:900;
-      margin:0 0 12px;
-      color:var(--text);
-    }
-    
-    .follow-subtitle{
-      color:var(--muted);
-      font-size:1.1rem;
-      margin:0 0 32px;
-      line-height:1.6;
-    }
-    
-    .follow-buttons{
-      display:grid;
-      grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
-      gap:20px;
-      max-width:600px;
-      margin:0 auto;
-    }
-    
-    .follow-btn{
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      padding:20px;
-      background:var(--panel);
-      border-radius:16px;
-      text-decoration:none;
-      color:var(--text);
-      transition:all 0.3s ease;
-      border:2px solid transparent;
-      position:relative;
-      overflow:hidden;
-    }
-    
-    .follow-btn:hover{
-      transform:translateY(-4px);
-      box-shadow:0 12px 30px rgba(0,0,0,0.3);
-    }
-    
-    .follow-btn.instagram{
-      border-color:rgba(225,48,108,0.3);
-    }
-    
-    .follow-btn.instagram:hover{
-      border-color:#e1306c;
-      box-shadow:0 12px 30px rgba(225,48,108,0.3);
-    }
-    
-    .follow-btn.youtube{
-      border-color:rgba(255,0,0,0.3);
-    }
-    
-    .follow-btn.youtube:hover{
-      border-color:#ff0000;
-      box-shadow:0 12px 30px rgba(255,0,0,0.3);
-    }
-    
-    .follow-btn.newsletter{
-      border-color:rgba(34,197,94,0.3);
-    }
-    
-    .follow-btn.newsletter:hover{
-      border-color:#22c55e;
-      box-shadow:0 12px 30px rgba(34,197,94,0.3);
-    }
-    
-    .follow-icon{
-      font-size:2rem;
-      margin-bottom:8px;
-    }
-    
-    .follow-text{
-      font-weight:700;
-      font-size:1rem;
-      margin-bottom:4px;
-    }
-    
-    .follow-count{
-      font-size:0.85rem;
-      color:var(--muted);
-    }
+
     
     /* ENHANCED FOOTER */
     .enhanced-footer{
@@ -631,9 +478,8 @@
       .hero-header{padding:16px 20px}
       .hero-globe{height:350px}
       .title{font-size:clamp(26px,4.5vw,36px)}
-      .adventure-grid{grid-template-columns:1fr;max-width:500px}
-      .adventure-card{margin:0 auto}
-      .follow-buttons{grid-template-columns:1fr;max-width:400px}
+      .adventure-grid{max-width:400px}
+      .adventure-card{max-width:400px}
       .footer-content{flex-direction:column;text-align:center}
       .footer-links{justify-content:center}
     }
@@ -645,7 +491,8 @@
       .note{font-size:0.85rem}
       .adventure-section{padding:20px 0}
       .adventure-header{margin-bottom:30px}
-      .follow-section{margin:40px 0;padding:30px 0}
+      .adventure-grid{max-width:320px}
+      .adventure-card{max-width:320px}
     }
   </style>
 </head>
@@ -655,7 +502,6 @@
     <section class="hero">
       <div class="hero-header">
         <h1 class="title">Find 🦙 Llamas</h1>
-        <p class="note">No login required. Leave your name in comments so you are not called "anonymous".</p>
       </div>
       <div class="hero-globe">
         <div id="welcome-globe"></div>
@@ -665,9 +511,9 @@
     <!-- ADVENTURE SECTION -->
     <section class="adventure-section" id="adventures">
       <div class="adventure-header">
-        <div class="adventure-badge">🌟 LIVE ADVENTURE</div>
-        <h2 class="adventure-title">Join Our Epic Journey!</h2>
-        <p class="adventure-subtitle">Follow along as we explore incredible destinations, discover hidden gems, and share unforgettable moments from around the globe</p>
+        <div class="adventure-badge">📍 Currently Traveling</div>
+        <h2 class="adventure-title">Our Current Trip</h2>
+        <p class="adventure-subtitle">No login required! Leave your name in comments so you're not called "anonymous". We post to our diary every evening with daily updates from our travels.</p>
       </div>
       
       <div class="adventure-grid">
@@ -683,8 +529,8 @@
                   <span class="stat-label">Cities</span>
                 </div>
                 <div class="stat">
-                  <span class="stat-number">47</span>
-                  <span class="stat-label">Photos</span>
+                  <span class="stat-number" id="gps-photo-count">0</span>
+                  <span class="stat-label">GPS Photos</span>
                 </div>
                 <div class="stat">
                   <span class="stat-number">12</span>
@@ -695,76 +541,25 @@
           </div>
           <div class="adventure-content">
             <h3 class="adventure-name">Japan & South Korea 🇯🇵🇰🇷</h3>
-            <p class="adventure-description">From Tokyo's neon streets to Seoul's vibrant markets - experiencing the perfect blend of tradition and modernity</p>
+            <p class="adventure-description">Exploring cities in Japan and South Korea, sharing daily updates from our travels</p>
             <div class="adventure-meta">
               <span class="adventure-date">Aug–Oct 2025</span>
-              <span class="adventure-progress">
-                <div class="progress-bar">
-                  <div class="progress-fill" style="width: 65%"></div>
-                </div>
-                65% Complete
-              </span>
             </div>
             <div class="adventure-cta">
               <button class="cta-button">
-                <span class="cta-icon">🗺️</span>
-                Follow Journey
+                <span class="cta-icon">📖</span>
+                View Travel Diary
                 <span class="cta-arrow">→</span>
               </button>
             </div>
           </div>
         </article>
         
-        <article class="adventure-card upcoming">
-          <div class="adventure-status">
-            <span class="status-badge upcoming">📅 COMING SOON</span>
-          </div>
-          <div class="adventure-media mystery">
-            <div class="mystery-content">
-              <div class="mystery-icon">🎒</div>
-              <div class="mystery-text">Next Adventure</div>
-              <div class="mystery-hint">Stay tuned for our next incredible journey...</div>
-            </div>
-          </div>
-          <div class="adventure-content">
-            <h3 class="adventure-name">Mystery Destination ❓</h3>
-            <p class="adventure-description">Our next adventure is being planned! Subscribe to be the first to know where we're heading next</p>
-            <div class="adventure-cta">
-              <button class="cta-button secondary">
-                <span class="cta-icon">🔔</span>
-                Get Notified
-                <span class="cta-arrow">→</span>
-              </button>
-            </div>
-          </div>
-        </article>
+
       </div>
     </section>
 
-    <!-- FOLLOW SECTION -->
-    <section class="follow-section">
-      <div class="follow-content">
-        <h3 class="follow-title">Don't Miss a Moment! 📸</h3>
-        <p class="follow-subtitle">Get real-time updates, behind-the-scenes moments, and exclusive travel tips</p>
-        <div class="follow-buttons">
-          <a href="#" class="follow-btn instagram" data-platform="instagram">
-            <span class="follow-icon">📷</span>
-            <span class="follow-text">Follow on Instagram</span>
-            <span class="follow-count">2.1k followers</span>
-          </a>
-          <a href="#" class="follow-btn youtube" data-platform="youtube">
-            <span class="follow-icon">🎥</span>
-            <span class="follow-text">Subscribe on YouTube</span>
-            <span class="follow-count">890 subscribers</span>
-          </a>
-          <a href="#" class="follow-btn newsletter" data-platform="newsletter">
-            <span class="follow-icon">📧</span>
-            <span class="follow-text">Join Newsletter</span>
-            <span class="follow-count">Weekly updates</span>
-          </a>
-        </div>
-      </div>
-    </section>
+
 
     <!-- ENHANCED FOOTER -->
     <footer class="enhanced-footer">
@@ -797,83 +592,7 @@
       }
     }
     
-    // Add interactive effects to follow buttons
-    document.addEventListener('DOMContentLoaded', () => {
-      const followButtons = document.querySelectorAll('.follow-btn');
-      
-      followButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          const platform = btn.dataset.platform;
-          
-          // Add click animation
-          btn.style.transform = 'scale(0.95)';
-          setTimeout(() => {
-            btn.style.transform = '';
-          }, 150);
-          
-          // Show a fun message based on platform
-          const messages = {
-            instagram: 'Thanks for the interest! 📷 Instagram coming soon!',
-            youtube: 'YouTube channel launching soon! 🎥',
-            newsletter: 'Newsletter signup coming soon! 📧'
-          };
-          
-          if (messages[platform]) {
-            // Create temporary notification
-            const notification = document.createElement('div');
-            notification.textContent = messages[platform];
-            notification.style.cssText = `
-              position: fixed;
-              top: 50%;
-              left: 50%;
-              transform: translate(-50%, -50%);
-              background: linear-gradient(135deg, var(--accent) 0%, #60a5fa 100%);
-              color: white;
-              padding: 16px 24px;
-              border-radius: 12px;
-              font-weight: 700;
-              z-index: 1000;
-              box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-              animation: notification-pop 0.3s ease-out;
-            `;
-            
-            // Add animation keyframes if not already added
-            if (!document.querySelector('#notification-styles')) {
-              const style = document.createElement('style');
-              style.id = 'notification-styles';
-              style.textContent = `
-                @keyframes notification-pop {
-                  0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
-                  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-                }
-              `;
-              document.head.appendChild(style);
-            }
-            
-            document.body.appendChild(notification);
-            
-            // Remove notification after 3 seconds
-            setTimeout(() => {
-              notification.style.opacity = '0';
-              setTimeout(() => notification.remove(), 300);
-            }, 3000);
-          }
-        });
-      });
-      
-      // Add hover effects to adventure cards
-      const adventureCards = document.querySelectorAll('.adventure-card');
-      adventureCards.forEach(card => {
-        card.addEventListener('mouseenter', () => {
-          card.style.transform = 'translateY(-8px) scale(1.02)';
-        });
-        
-        card.addEventListener('mouseleave', () => {
-          card.style.transform = '';
-        });
-      });
-    });
+
     
     // Load actual photo data and create bubbles
     async function loadPhotoData() {
@@ -908,13 +627,10 @@
         return { allPhotos, totalPhotoCount };
       } catch (e) {
         console.log('Using fallback photo data');
-        // Fallback data if loading fails
+        // Fallback data if loading fails - no fake photos
         return {
-          allPhotos: [
-            { date: '2025-08-03', photoCount: 4, title: 'Travel Day 1' },
-            { date: '2025-08-22', photoCount: 5, title: 'Travel Day 2' }
-          ],
-          totalPhotoCount: 9
+          allPhotos: [],
+          totalPhotoCount: 0
         };
       }
     }
@@ -944,38 +660,36 @@
       // Load actual photo data
       const { allPhotos, totalPhotoCount } = await loadPhotoData();
       
-      // Create photo bubbles based on actual data
-      // Since GPS data isn't available, distribute across realistic travel locations
-      const baseLocations = [
-        { coords: [139.6917, 35.6895], region: 'Tokyo Area' },
-        { coords: [126.9780, 37.5665], region: 'Seoul Area' },
-        { coords: [135.7681, 35.0116], region: 'Kyoto Area' },
-        { coords: [129.0756, 35.1796], region: 'Busan Area' },
-        { coords: [135.5022, 34.6937], region: 'Osaka Area' },
-        { coords: [127.7669, 35.9078], region: 'Central Korea' },
-        { coords: [128.5918, 35.8389], region: 'Gyeongju Area' }
-      ];
-      
-      // Create photo bubbles distributed across regions
+      // Create photo bubbles ONLY from photos with real GPS coordinates
       const photoBubbles = [];
-      allPhotos.forEach((dayData, dayIndex) => {
-        // Create multiple bubbles per day if there are many photos
-        const bubblesForDay = Math.max(1, Math.floor(dayData.photoCount / 2));
-        
-        for (let i = 0; i < bubblesForDay; i++) {
-          const baseLocation = baseLocations[(dayIndex * 2 + i) % baseLocations.length];
-          // Add small random offset for natural distribution
-          const offsetLat = (Math.random() - 0.5) * 0.5;
-          const offsetLng = (Math.random() - 0.5) * 0.5;
-          
-          photoBubbles.push({
-            coords: [baseLocation.coords[0] + offsetLng, baseLocation.coords[1] + offsetLat],
-            photoCount: Math.ceil(dayData.photoCount / bubblesForDay),
-            date: dayData.date,
-            title: dayData.title
+      
+      allPhotos.forEach((dayData) => {
+        if (dayData.photos && Array.isArray(dayData.photos)) {
+          dayData.photos.forEach((photo) => {
+            // Only add bubble if photo has real GPS coordinates
+            if (photo.lat !== null && photo.lon !== null && 
+                typeof photo.lat === 'number' && typeof photo.lon === 'number') {
+              photoBubbles.push({
+                coords: [photo.lon, photo.lat], // [longitude, latitude] for Mapbox
+                photoCount: 1, // One photo per bubble
+                date: dayData.date,
+                title: dayData.title,
+                photoId: photo.id,
+                photoUrl: photo.url,
+                photoTaken: photo.taken_at
+              });
+            }
           });
         }
       });
+      
+      console.log(`Found ${photoBubbles.length} photos with real GPS coordinates out of ${totalPhotoCount} total photos`);
+      
+      // Update the GPS photo count in the adventure card
+      const gpsPhotoCountElement = document.getElementById('gps-photo-count');
+      if (gpsPhotoCountElement) {
+        gpsPhotoCountElement.textContent = photoBubbles.length;
+      }
       
       map.on('style.load', () => {
         // Apply some visual enhancements
@@ -987,28 +701,89 @@
           'star-intensity': 1.0 // Maximum star brightness for beautiful starry effect
         });
         
-        // Add photo bubbles based on actual travel data
+        // Make map boundaries more subtle and fade into background
+        setTimeout(() => {
+          // Reduce country boundary visibility
+          if (map.getLayer('country-boundaries')) {
+            map.setPaintProperty('country-boundaries', 'line-opacity', 0.1);
+            map.setPaintProperty('country-boundaries', 'line-color', 'rgba(255,255,255,0.05)');
+          }
+          
+          // Reduce admin boundaries visibility
+          if (map.getLayer('admin-0-boundary')) {
+            map.setPaintProperty('admin-0-boundary', 'line-opacity', 0.08);
+            map.setPaintProperty('admin-0-boundary', 'line-color', 'rgba(255,255,255,0.03)');
+          }
+          
+          if (map.getLayer('admin-0-boundary-bg')) {
+            map.setPaintProperty('admin-0-boundary-bg', 'line-opacity', 0.05);
+          }
+          
+          if (map.getLayer('admin-0-boundary-disputed')) {
+            map.setPaintProperty('admin-0-boundary-disputed', 'line-opacity', 0.05);
+          }
+          
+          // Reduce state/province boundaries
+          if (map.getLayer('admin-1-boundary')) {
+            map.setPaintProperty('admin-1-boundary', 'line-opacity', 0.03);
+          }
+          
+          if (map.getLayer('admin-1-boundary-bg')) {
+            map.setPaintProperty('admin-1-boundary-bg', 'line-opacity', 0.02);
+          }
+          
+          // Make coastlines more subtle
+          if (map.getLayer('water')) {
+            map.setPaintProperty('water', 'fill-opacity', 0.6);
+          }
+          
+          // Reduce any other boundary layers
+          const layers = map.getStyle().layers;
+          layers.forEach(layer => {
+            if (layer.id.includes('boundary') && layer.type === 'line') {
+              map.setPaintProperty(layer.id, 'line-opacity', 0.05);
+            }
+          });
+        }, 100); // Small delay to ensure all layers are loaded
+        
+        // Add photo bubbles ONLY for photos with real GPS coordinates
+        if (photoBubbles.length === 0) {
+          console.log('No photos with GPS coordinates found - no photo bubbles will be displayed');
+        } else {
+          console.log(`Creating ${photoBubbles.length} photo bubbles with real GPS coordinates`);
+        }
+        
         photoBubbles.forEach((bubble, index) => {
           // Create custom marker element for photo bubble
           const el = document.createElement('div');
           el.className = 'globe-marker photo-bubble';
-          el.style.animationDelay = `${index * 0.3}s`;
+          el.style.animationDelay = `${index * 0.2}s`;
           
-          // Vary bubble size based on photo count
-          const size = Math.min(14, Math.max(8, 6 + bubble.photoCount));
+          // Standard size for individual photos (all are single photos now)
+          const size = 10; // Fixed size since each bubble represents one photo
           el.style.width = size + 'px';
           el.style.height = size + 'px';
           
-          // Create popup with photo information
+          // Format the date for display
+          const photoDate = new Date(bubble.photoTaken || bubble.date);
+          const displayDate = photoDate.toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+          
+          // Create popup with real photo information
           const popup = new mapboxgl.Popup({ 
             offset: 15,
             closeButton: false,
             closeOnClick: true
           }).setHTML(`
             <div style="color:#0f172a;font-weight:600;font-size:0.9rem;padding:4px 8px;">
-              <div style="font-weight:700;margin-bottom:4px;">${bubble.title || 'Travel Photos'}</div>
-              <div style="color:#6b7280;font-size:0.8rem;">${bubble.photoCount} photo${bubble.photoCount > 1 ? 's' : ''}</div>
-              <div style="color:#6b7280;font-size:0.75rem;">${bubble.date}</div>
+              <div style="font-weight:700;margin-bottom:4px;">📸 Photo</div>
+              <div style="color:#6b7280;font-size:0.8rem;">${displayDate}</div>
+              <div style="color:#6b7280;font-size:0.75rem;">${bubble.title}</div>
+              <div style="color:#22c55e;font-size:0.75rem;margin-top:2px;">Real GPS location</div>
             </div>
           `);
           
