@@ -26,14 +26,17 @@ const DAY_INDEX_FILE = path.join(DAYS_DIR, 'index.json');
 // Immich can be configured with multiple base URLs and API keys
 // URLs and keys may be provided as comma-separated lists. If only one URL
 // is given but multiple API keys, the same URL will be used for each key.
-const rawUrls = (process.env.IMMICH_URLS || process.env.IMMICH_URL || '')
-  .split(',')
-  .map(s => s.trim().replace(/\/$/, ''))
-  .filter(Boolean);
-const rawKeys = (process.env.IMMICH_API_KEYS || process.env.IMMICH_API_KEY || '')
-  .split(',')
-  .map(s => s.trim())
-  .filter(Boolean);
+// Inline comments after a `#` are ignored so `.env` entries can be annotated.
+function parseEnvList(val = '') {
+  return val
+    .split(',')
+    .map(s => s.split('#')[0].trim())
+    .filter(Boolean);
+}
+
+const rawUrls = parseEnvList(process.env.IMMICH_URLS || process.env.IMMICH_URL)
+  .map(s => s.replace(/\/$/, ''));
+const rawKeys = parseEnvList(process.env.IMMICH_API_KEYS || process.env.IMMICH_API_KEY);
 const IMMICH_URLS = rawUrls;
 const IMMICH_API_KEYS = rawKeys;
 let IMMICH_SERVERS = [];

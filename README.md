@@ -145,6 +145,7 @@ Since the admin calls your Immich/Dawarich directly, enable CORS on both:
 - `IMMICH_URLS` and `IMMICH_API_KEYS`: comma-separated lists of server URLs and API keys.
   - Use a single URL with multiple keys to import from multiple users on one server.
   - Provide matching counts of URLs and keys to pull from several servers.
+  - Inline comments after `#` are ignored, allowing you to annotate entries.
 - `IMMICH_ALBUM_ID` (optional): limit imports to a single Immich album. Leave unset to scan all assets visible to your API keys.
 - The auto-loader groups assets by the day they were taken and writes JSON files like `public/data/days/2025-08-14.json`.
 - Scheduling: there is no built-in scheduler. Run the loader manually or via an external cron job; each run processes one day and will overwrite that day's file on subsequent runs.
@@ -154,7 +155,7 @@ Minimal `.env` example:
 ```env
 # Single Immich server with two user API keys
 IMMICH_URLS=https://photos.example.com
-IMMICH_API_KEYS=user_one_key,user_two_key
+IMMICH_API_KEYS=user_one_key,user_two_key # comments after # are allowed
 IMMICH_ALBUM_ID=your_album_id
 ANON_COOKIE_SECRET=long_random_string
 
