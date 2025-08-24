@@ -71,12 +71,14 @@ function saveSettings(obj) {
   function apiBase() { return window.location.origin; }
 
   async function patchPhotoMeta(slug, photoId, meta) {
+    const adminToken = await getAdminToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (adminToken !== 'server-configured') {
+      headers['x-admin-token'] = adminToken;
+    }
     const res = await fetch(`${apiBase()}/api/day/${encodeURIComponent(slug)}/photo/${encodeURIComponent(photoId)}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-admin-token': getAdminToken()
-      },
+      headers,
       body: JSON.stringify(meta) // { title, caption }
     });
     if (!res.ok) throw new Error(await res.text());
@@ -290,9 +292,10 @@ function renderTripsTab(panel) {
       if (res.ok) {
         const config = await res.json();
         if (config.immichConfigured) {
+          const urls = Array.isArray(config.immichUrls) ? config.immichUrls.join(', ') : config.immichUrl;
           statusEl.innerHTML = `
             <span style="color: green;">✅ Immich configured</span>
-            <br><small>URL: ${config.immichUrl}</small>
+            <br><small>URL${Array.isArray(config.immichUrls) && config.immichUrls.length > 1 ? 's' : ''}: ${urls}</small>
             ${config.immichAlbumId ? `<br><small>Album: ${config.immichAlbumId}</small>` : ''}
           `;
           statusEl.style.backgroundColor = '#e8f5e8';
@@ -301,7 +304,7 @@ function renderTripsTab(panel) {
           statusEl.innerHTML = `
             <span style="color: red;">❌ Immich not configured</span>
             <br><small>Missing: ${config.missingConfig.join(', ')}</small>
-            <br><small>Create a .env file with IMMICH_URL and IMMICH_API_KEYS</small>
+            <br><small>Create a .env file with IMMICH_URLS and IMMICH_API_KEYS</small>
             <br><button onclick="downloadEnvTemplate()" style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.8rem;">📄 Get .env Template</button>
           `;
           statusEl.style.backgroundColor = '#ffe8e8';
@@ -469,7 +472,7 @@ function renderTripsTab(panel) {
     // Check if Immich is properly configured
     if (!serverConfig.immichConfigured) {
       const missing = serverConfig.missingConfig || [];
-      const errorMsg = `Immich not configured. Missing: ${missing.join(', ')}.\n\nPlease create a .env file with:\nIMMICH_URL=https://your-immich-url.com\nIMMICH_API_KEYS=your_api_key_1,your_api_key_2\nIMMICH_ALBUM_ID=your_album_id (optional)`;
+      const errorMsg = `Immich not configured. Missing: ${missing.join(', ')}.\n\nPlease create a .env file with:\nIMMICH_URLS=https://immich-one.example.com,https://immich-two.example.com\nIMMICH_API_KEYS=your_api_key_1,your_api_key_2\nIMMICH_ALBUM_ID=your_album_id (optional)`;
       alert(errorMsg);
       return;
     }
@@ -498,7 +501,15 @@ function renderTripsTab(panel) {
     // Ask backend to import any new photos for that calendar day from Immich
     const url = `${apiBase()}/api/immich/day?date=${dateVal}${effectiveAlbumId ? `&albumId=${encodeURIComponent(effectiveAlbumId)}` : ''}`;
     console.log('🔗 Immich URL:', url);
-    const resp = await fetch(url);
+
+    // Include admin token header if needed
+    const adminToken = await getAdminToken();
+    const headers = {};
+    if (adminToken !== 'server-configured') {
+      headers['x-admin-token'] = adminToken;
+    }
+
+    const resp = await fetch(url, { headers });
     if (!resp.ok) {
       const err = await resp.json().catch(()=> ({}));
       console.warn('Immich import failed', err);
@@ -974,7 +985,8 @@ async function renderSettingsTab(panel) {
   }
   
   // Auto-populate from server config, but allow local overrides
-  const immichUrl = s.immichUrl || serverConfig.immichUrl || '';
+  const immichUrls = s.immichUrls || serverConfig.immichUrls || [];
+  const immichUrlString = Array.isArray(immichUrls) ? immichUrls.join(',') : immichUrls;
   const immichAlbumId = s.immichAlbumId || serverConfig.immichAlbumId || '';
   const hasServerImmichKeys = serverConfig.hasImmichKeys || false;
   const hasServerAdminToken = serverConfig.hasAdminToken || false;
@@ -985,7 +997,7 @@ async function renderSettingsTab(panel) {
     <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
       <h4 style="margin: 0 0 8px 0; color: #0369a1;">📋 Server Configuration Status</h4>
       <div style="font-size: 14px; color: #0c4a6e;">
-        <div>✅ Immich URL: <strong>${serverConfig.immichUrl ? 'Configured' : 'Not set'}</strong></div>
+        <div>✅ Immich URLs: <strong>${(serverConfig.immichUrls && serverConfig.immichUrls.length) ? 'Configured' : 'Not set'}</strong></div>
         <div>✅ Immich Album ID: <strong>${serverConfig.immichAlbumId ? 'Configured' : 'Not set'}</strong></div>
         <div>🔑 Immich API Keys: <strong>${hasServerImmichKeys ? 'Configured' : 'Not set'}</strong></div>
         <div>🔑 Admin Token: <strong>${hasServerAdminToken ? 'Configured' : 'Not set'}</strong></div>
@@ -1000,8 +1012,8 @@ async function renderSettingsTab(panel) {
       <input type="text" id="set-api-base" value="${s.apiBase || ''}" placeholder="${window.location.origin} (auto-detected)" style="width:100%;" />
     </label>
     
-    <label style="display:block; margin-top:0.5rem;">Immich URL ${serverConfig.immichUrl ? '(from server .env)' : ''}
-      <input type="text" id="set-immich-url" value="${immichUrl}" placeholder="${serverConfig.immichUrl || 'http://your-immich-server:2283'}" style="width:100%;" />
+    <label style="display:block; margin-top:0.5rem;">Immich URLs ${serverConfig.immichUrls && serverConfig.immichUrls.length ? '(from server .env)' : ''}
+      <input type="text" id="set-immich-url" value="${immichUrlString}" placeholder="${(serverConfig.immichUrls && serverConfig.immichUrls.length ? serverConfig.immichUrls.join(',') : 'http://immich-one,http://immich-two')}" style="width:100%;" />
     </label>
     
     <label style="display:block; margin-top:0.5rem;">Immich Album ID ${serverConfig.immichAlbumId ? '(from server .env)' : ''}
@@ -1010,10 +1022,6 @@ async function renderSettingsTab(panel) {
     
     <h4>Optional Local Overrides</h4>
     <p style="font-size: 14px; color: #6b7280; margin: 8px 0;">These are only needed if you want to override server settings locally:</p>
-    
-    <label style="display:block; margin-top:0.5rem;">Immich Tokens (one per line) ${hasServerImmichKeys ? '✅ Server has keys' : '❌ Server missing keys'}
-      <textarea id="set-immich-tokens" style="width:100%; height:60px;" placeholder="${hasServerImmichKeys ? 'Keys configured on server (leave blank to use server keys)' : 'Add your Immich API keys here'}">${(s.immichTokens || []).join('\n')}</textarea>
-    </label>
     
     <label style="display:block; margin-top:0.5rem;">Admin API Token ${hasServerAdminToken ? '✅ Server has token' : '❌ Server missing token'}
       <input type="text" id="set-api-token" value="${s.apiToken || ''}" placeholder="${hasServerAdminToken ? 'Token configured on server (leave blank to use server token)' : 'Add your admin token here'}" style="width:100%;" />
@@ -1045,9 +1053,8 @@ async function renderSettingsTab(panel) {
       apiToken: panel.querySelector('#set-api-token').value.trim(),
       dawarichUrl: panel.querySelector('#set-dawarich-url').value.trim(),
       dawarichToken: panel.querySelector('#set-dawarich-token').value.trim(),
-      immichUrl: panel.querySelector('#set-immich-url').value.trim(),
-      immichTokens: panel.querySelector('#set-immich-tokens').value
-        .split('\n').map(t => t.trim()).filter(Boolean),
+      immichUrls: panel.querySelector('#set-immich-url').value
+        .split(',').map(u => u.trim()).filter(Boolean),
       immichAlbumId: panel.querySelector('#set-immich-album').value.trim()
     };
     saveSettings(newSet);
