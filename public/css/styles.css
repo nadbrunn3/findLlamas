@@ -95,7 +95,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 /* Make sure the map's container doesn't fight scrolling on mobile */
 @media (max-width: 768px){
   /* If you want the map to be "display-only" to keep scrolling smooth: */
-  .leaflet-container { touch-action: pan-y; } /* let vertical page scroll pass */
+  .mapboxgl-canvas { touch-action: pan-y; } /* let vertical page scroll pass */
   
   /* Slightly taller on mobile for better usability */
   .top-map { height: 40vh; }
@@ -770,7 +770,7 @@ video.drawer-thumbnail::after {
 
 /* lightbox shell */
 /* Fullscreen map toggle button */
-.leaflet-control-fullscreen {
+.mapboxgl-ctrl-fullscreen {
   background: white;
   border: 2px solid rgba(0,0,0,0.2);
   border-radius: 4px;
@@ -785,12 +785,12 @@ video.drawer-thumbnail::after {
   transition: all 0.2s ease;
 }
 
-.leaflet-control-fullscreen:hover {
+.mapboxgl-ctrl-fullscreen:hover {
   background: #f4f4f4;
   border-color: rgba(0,0,0,0.3);
 }
 
-.leaflet-control-fullscreen svg {
+.mapboxgl-ctrl-fullscreen svg {
   width: 16px;
   height: 16px;
 }
@@ -2319,30 +2319,31 @@ input[placeholder*="comment" i]::placeholder,
 /* ===== MOBILE MAP TOUCH IMPROVEMENTS ===== */
 @media (max-width: 768px) {
   /* Improve touch handling for maps */
-  .leaflet-container {
+  .mapboxgl-canvas {
     touch-action: pan-x pan-y;
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
   }
-  
+
   /* Prevent page scroll when interacting with map */
-  .leaflet-container.leaflet-touch-drag {
+  .mapboxgl-canvas.mapboxgl-touch-drag-pan {
     touch-action: none;
   }
-  
+
   /* Make zoom controls more touch-friendly */
-  .leaflet-control-zoom a {
+  .mapboxgl-ctrl-zoom-in,
+  .mapboxgl-ctrl-zoom-out {
     width: 36px !important;
     height: 36px !important;
     line-height: 36px !important;
     font-size: 20px !important;
     border-radius: 8px !important;
   }
-  
+
   /* Improve attribution positioning on mobile */
-  .leaflet-control-attribution {
+  .mapboxgl-ctrl-attrib {
     font-size: 10px !important;
     background: rgba(255,255,255,0.8) !important;
     padding: 2px 4px !important;

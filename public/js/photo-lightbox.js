@@ -1,3 +1,27 @@
+const MAPBOX_STYLE = 'mapbox://styles/mapbox/satellite-v9';
+// Use provided Mapbox token by default; replace with your own for production.
+mapboxgl.accessToken =
+  mapboxgl.accessToken ||
+  'pk.eyJ1IjoianVkZ2UtbW9ja3VwLXdoYW0iLCJhIjoiY21lb3M4dHJiMGUxcjJqcXZ4YzZwZjhubSJ9.EptPsUdI5bt2hOIZfZL3Yg';
+
+function applyBloom(map) {
+  map.setPaintProperty('water', 'fill-color', '#5fa4ff');
+  map.setPaintProperty('water', 'fill-opacity', 0.85);
+  map.setPaintProperty('water', 'fill-outline-color', '#a6d2ff');
+
+  map.setPaintProperty('road-primary', 'line-color', '#ffffff');
+  map.setPaintProperty('road-primary', 'line-width', [
+    'interpolate', ['linear'], ['zoom'], 5, 0.5, 15, 3
+  ]);
+  map.setPaintProperty('road-primary', 'line-blur', [
+    'interpolate', ['linear'], ['zoom'], 5, 1, 15, 6
+  ]);
+
+  map.setPaintProperty('poi-label', 'text-color', '#ffd166');
+  map.setPaintProperty('poi-label', 'text-halo-color', '#ffa600');
+  map.setPaintProperty('poi-label', 'text-halo-width', 2);
+}
+
 // --- Lightbox helpers ---
 function escapeHtml(s){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
@@ -507,93 +531,69 @@ function openFullscreenMapWithPhotos(photos, focusIndex = 0) {
   };
   document.addEventListener('keydown', escHandler);
   
-  // Create Leaflet map
-  let fullscreenMap = L.map('fullscreen-photo-map', {
-    zoomControl: true,
-    dragging: true,
-    scrollWheelZoom: true,
-    touchZoom: true,
-    doubleClickZoom: true,
-    boxZoom: true,
-    keyboard: true
+  const photosWithCoords = photos.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon));
+
+  let fullscreenMap = new mapboxgl.Map({
+    container: 'fullscreen-photo-map',
+    style: MAPBOX_STYLE,
+    center: [photosWithCoords[0]?.lon || 0, photosWithCoords[0]?.lat || 0],
+    zoom: 3,
+    pitch: 45,
+    bearing: 0,
+    antialias: true
   });
-  
-  // Add tile layer
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-    attribution: "&copy; Esri",
-    maxZoom: 18
-  }).addTo(fullscreenMap);
-  
-         // Add photo markers with circular bubbles (same as regular maps)
-       const bounds = L.latLngBounds();
-       const photosWithCoords = photos.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon));
+  fullscreenMap.addControl(new mapboxgl.NavigationControl());
+  fullscreenMap.addControl(new mapboxgl.FullscreenControl());
 
-       photosWithCoords.forEach((photo, index) => {
-         bounds.extend([photo.lat, photo.lon]);
-
-         // Create custom circular photo bubble marker (same as regular maps)
-         const bubbleIcon = L.divIcon({
-           className: 'photo-bubble-marker',
-           html: `
-             <div class="photo-bubble" style="
-               width: 40px;
-               height: 40px;
-               border-radius: 50%;
-               border: 3px solid white;
-               box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-               overflow: hidden;
-               cursor: pointer;
-               background: white;
-             ">
-               <img src="${photo.thumb || photo.url}" style="
-                 width: 100%;
-                 height: 100%;
-                 object-fit: cover;
-               " alt="Photo">
-             </div>
-           `,
-           iconSize: [40, 40],
-           iconAnchor: [20, 20]
-         });
-
-         const marker = L.marker([photo.lat, photo.lon], { icon: bubbleIcon }).addTo(fullscreenMap);
-
-         // Click handler to open lightbox
-         marker.on('click', () => {
-           // Close fullscreen map overlay first so the lightbox isn't hidden
-           closeFullscreenMap();
-
-           // Open the lightbox on the corresponding photo after a brief delay
-           setTimeout(() => {
-             const originalIndex = photos.findIndex(p => p.id === photo.id || p.url === photo.url);
-             if (typeof window.openPhotoLightbox === 'function') {
-               window.openPhotoLightbox(photos, originalIndex >= 0 ? originalIndex : index);
-             } else {
-               console.error('openPhotoLightbox function not available');
-             }
-           }, 100);
-         });
-       });
-  
-  // Fit map to show all markers
-  if (bounds.isValid()) {
-    fullscreenMap.fitBounds(bounds, { padding: [50, 50] });
-    
-    // If focusing on specific photo, zoom to it after a delay
-    if (focusIndex >= 0 && focusIndex < photosWithCoords.length) {
-      const focusPhoto = photosWithCoords[focusIndex] || photos[focusIndex];
-      if (focusPhoto && Number.isFinite(focusPhoto.lat) && Number.isFinite(focusPhoto.lon)) {
+  fullscreenMap.on('load', () => {
+    applyBloom(fullscreenMap);
+    const bounds = new mapboxgl.LngLatBounds();
+    photosWithCoords.forEach((photo, index) => {
+      bounds.extend([photo.lon, photo.lat]);
+      const el = document.createElement('div');
+      el.className = 'photo-bubble-marker';
+      el.innerHTML = `
+        <div class="photo-bubble" style="
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          border: 3px solid white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          overflow: hidden;
+          cursor: pointer;
+          background: white;
+        ">
+          <img src="${photo.thumb || photo.url}" style="width:100%;height:100%;object-fit:cover;" alt="Photo">
+        </div>`;
+      const marker = new mapboxgl.Marker(el).setLngLat([photo.lon, photo.lat]).addTo(fullscreenMap);
+      el.addEventListener('click', () => {
+        closeFullscreenMap();
         setTimeout(() => {
-          fullscreenMap.setView([focusPhoto.lat, focusPhoto.lon], Math.max(fullscreenMap.getZoom(), 12));
-        }, 1000);
+          const originalIndex = photos.findIndex(p => p.id === photo.id || p.url === photo.url);
+          if (typeof window.openPhotoLightbox === 'function') {
+            window.openPhotoLightbox(photos, originalIndex >= 0 ? originalIndex : index);
+          } else {
+            console.error('openPhotoLightbox function not available');
+          }
+        }, 100);
+      });
+    });
+
+    if (!bounds.isEmpty()) {
+      fullscreenMap.fitBounds(bounds, { padding: 50 });
+      if (focusIndex >= 0 && focusIndex < photosWithCoords.length) {
+        const focusPhoto = photosWithCoords[focusIndex] || photos[focusIndex];
+        if (focusPhoto && Number.isFinite(focusPhoto.lat) && Number.isFinite(focusPhoto.lon)) {
+          setTimeout(() => {
+            fullscreenMap.flyTo({ center: [focusPhoto.lon, focusPhoto.lat], zoom: Math.max(fullscreenMap.getZoom(), 12) });
+          }, 1000);
+        }
       }
     }
-  }
-  
-  // Invalidate size after a short delay
-  setTimeout(() => fullscreenMap.invalidateSize(), 100);
-  
-  console.log('✅ Fullscreen map created with', photosWithCoords.length, 'photo markers');
+
+    setTimeout(() => fullscreenMap.resize(), 100);
+    console.log('✅ Fullscreen map created with', photosWithCoords.length, 'photo markers');
+  });
 }
 
 // Make the function globally available
