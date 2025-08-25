@@ -108,16 +108,10 @@ function bindLbPanel(photoId){
   const form  = panel.querySelector('#lbComposer');
   const list  = panel.querySelector('#lbComments');
 
-  // Initial state differs for mobile/desktop
-  const isMobile = window.matchMedia('(max-width: 768px)').matches;
-  panel.classList.remove('open');
-  if (isMobile) {
-    list.style.display = 'none';
-    form.style.display = 'none';
-  } else {
-    list.style.display = 'block';
-    form.style.display = 'block';
-  }
+  // Initial state: show comments by default
+  list.style.display = 'block';
+  form.style.display = 'block';
+
 
   // Store current photo ID on panel to avoid duplicate bindings
   if (panel._currentPhotoId === photoId) return;
@@ -182,9 +176,8 @@ function bindLbPanel(photoId){
     commentsBtn.onclick = () => {
       const mobile = window.matchMedia('(max-width: 768px)').matches;
       if (mobile) {
-        const open = panel.classList.toggle('open');
-        list.style.display = open ? 'block' : 'none';
-        form.style.display = open ? 'block' : 'none';
+        document.getElementById('lbComments').scrollIntoView({ behavior: 'smooth' });
+
       } else {
         const hidden = list.style.display === 'none';
         list.style.display = hidden ? 'block' : 'none';
