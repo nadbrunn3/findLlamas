@@ -546,11 +546,11 @@
               <span class="adventure-date">Aug–Oct 2025</span>
             </div>
             <div class="adventure-cta">
-              <button class="cta-button">
+              <a class="cta-button" href="/index.html?trip=japan-korea">
                 <span class="cta-icon">📖</span>
                 View Travel Diary
                 <span class="cta-arrow">→</span>
-              </button>
+              </a>
             </div>
           </div>
         </article>
@@ -588,11 +588,11 @@
   <script type="module">
     import { groupIntoStacks } from './js/utils.js';
 
-    function openTrip(slug){
-      if(slug==='japan-korea'){
-        window.location.href='/index.html?trip=japan-korea';
+    window.openTrip = function(slug){
+      if(slug === 'japan-korea'){
+        window.location.href = '/index.html?trip=japan-korea';
       }
-    }
+    };
     
 
     
