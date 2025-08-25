@@ -2554,9 +2554,10 @@ input[placeholder*="comment" i]::placeholder,
     height: 40px;
     font-size: 20px;
   }
-  
-  .lightbox-prev { left: -50px; }
-  .lightbox-next { right: -50px; }
+
+  /* Keep navigation arrows visible on small screens */
+  .lightbox-prev { left: 10px; }
+  .lightbox-next { right: 10px; }
 }
 
 /* ==== Admin Map Photo Markers ==== */
