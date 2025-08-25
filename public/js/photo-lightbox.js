@@ -112,6 +112,7 @@ function bindLbPanel(photoId){
   list.style.display = 'block';
   form.style.display = 'block';
 
+
   // Store current photo ID on panel to avoid duplicate bindings
   if (panel._currentPhotoId === photoId) return;
   panel._currentPhotoId = photoId;
@@ -176,6 +177,7 @@ function bindLbPanel(photoId){
       const mobile = window.matchMedia('(max-width: 768px)').matches;
       if (mobile) {
         document.getElementById('lbComments').scrollIntoView({ behavior: 'smooth' });
+
       } else {
         const hidden = list.style.display === 'none';
         list.style.display = hidden ? 'block' : 'none';
