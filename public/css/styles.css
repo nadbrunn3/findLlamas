@@ -202,7 +202,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Int
 
 /* ===== MEDIA CONTAINER ===== */
 .stack-photo-area, .stack-media-container, .card-media{position:relative;background:transparent}
-.stack-main-photo, .card-media img.main-photo{width:100%;height:auto;display:block;cursor:default;transition:transform .18s ease;object-fit:cover;max-height:35vh !important;border-radius:0}
+.stack-main-photo, .card-media img.main-photo{width:100%;height:auto;display:block;cursor:default;transition:transform .18s ease;object-fit:cover;max-height:45vh !important;border-radius:0}
 
 /* Ensure videos in stacks are displayed properly */
 .stack-main-photo video,
@@ -211,7 +211,7 @@ video.stack-main-photo {
   height: auto !important;
   display: block !important;
   object-fit: cover !important;
-  max-height: 35vh !important;
+  max-height: 45vh !important;
   border-radius: 0;
 }
 .stack-main-photo:hover, .card-media img.main-photo:hover{transform:none}
@@ -596,9 +596,9 @@ video.drawer-thumbnail::after {
   .stack-actions, .card-actions{padding:10px 16px}
 
   /* Keep consistent stack heights */
-  .stack-main-photo, .card-media img.main-photo{max-height:35vh !important}
+  .stack-main-photo, .card-media img.main-photo{max-height:45vh !important}
   .stack-cover-media{max-height:28vh !important}
-  .photo-main-media{max-height:35vh}
+  .photo-main-media{max-height:45vh}
 
 }
 @media (max-width:480px){
@@ -607,9 +607,9 @@ video.drawer-thumbnail::after {
   .stack-action-btn, .action-btn{padding:6px 12px;font-size:.85rem}
   
   /* Keep consistent stack heights on small screens too */
-  .stack-main-photo, .card-media img.main-photo{max-height:35vh !important}
+  .stack-main-photo, .card-media img.main-photo{max-height:45vh !important}
   .stack-cover-media{max-height:28vh !important}
-  .photo-main-media{max-height:35vh}
+  .photo-main-media{max-height:45vh}
 }
 
 /* ===== FOCUS & ACCESSIBILITY ===== */
@@ -2614,7 +2614,7 @@ input[placeholder*="comment" i]::placeholder,
 /* Ensure video wrapper maintains proper sizing */
 .stack-main-photo > div {
   width: 100% !important;
-  max-height: 35vh !important;
+  max-height: 45vh !important;
   overflow: hidden;
 }
 
@@ -2994,6 +2994,8 @@ input[placeholder*="comment" i]::placeholder,
     height: 100vh;
     max-width: 100vw;
     max-height: none;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .lb-img,
