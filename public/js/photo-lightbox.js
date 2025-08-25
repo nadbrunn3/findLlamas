@@ -172,6 +172,9 @@ function bindLbPanel(photoId){
       const isHidden = list.style.display === 'none';
       list.style.display = isHidden ? 'block' : 'none';
       form.style.display = isHidden ? 'block' : 'none';
+      if (isHidden && window.matchMedia('(max-width: 768px)').matches) {
+        panel.scrollIntoView({ behavior: 'smooth' });
+      }
     };
   }
 
@@ -258,6 +261,80 @@ function bindLbPanel(photoId){
 
 // Cache lightbox DOM for better performance
 let cachedLightboxEl = null;
+
+// Enable pinch zoom and panning on touch devices for a given element
+function enablePinchZoom(el){
+  if (!el) return { reset: () => {} };
+
+  let scale = 1;
+  let startScale = 1;
+  let startDist = 0;
+  let panX = 0, panY = 0;
+  let startX = 0, startY = 0;
+  let lastTap = 0;
+
+  const apply = () => {
+    el.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+  };
+
+  const reset = () => {
+    scale = 1;
+    panX = 0;
+    panY = 0;
+    el.style.transform = '';
+    el.style.touchAction = '';
+  };
+
+  el.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      startDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      startScale = scale;
+      el.style.touchAction = 'none';
+    } else if (e.touches.length === 1 && scale > 1) {
+      e.preventDefault();
+      startX = e.touches[0].clientX - panX;
+      startY = e.touches[0].clientY - panY;
+    }
+  }, { passive: false });
+
+  el.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      scale = Math.min(5, Math.max(1, startScale * dist / startDist));
+      apply();
+    } else if (e.touches.length === 1 && scale > 1) {
+      e.preventDefault();
+      panX = e.touches[0].clientX - startX;
+      panY = e.touches[0].clientY - startY;
+      apply();
+    }
+  }, { passive: false });
+
+  el.addEventListener('touchend', () => {
+    el.style.touchAction = '';
+    if (scale <= 1) {
+      reset();
+    }
+  });
+
+  el.addEventListener('click', () => {
+    const now = Date.now();
+    if (now - lastTap < 300) {
+      reset();
+    }
+    lastTap = now;
+  });
+
+  return { reset };
+}
 
 // --- ORIGINAL STYLE LIGHTBOX WITH FIXES ---
 window.openPhotoLightbox = (photos, startIndex=0) => {
@@ -407,8 +484,10 @@ window.openPhotoLightbox = (photos, startIndex=0) => {
 
   const img = el.querySelector(".lb-img");
   const vid = el.querySelector(".lb-video");
+  const zoomer = enablePinchZoom(img);
 
   function show(next) {
+    zoomer.reset();
     i = (next + photos.length) % photos.length;
     const p = photos[i];
     if (isVideo(p)) {
