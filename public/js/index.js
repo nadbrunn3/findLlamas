@@ -357,8 +357,11 @@ async function init(){
 
   setupScrollSync();
 
-  const initial = urlParam("stack") || (photoStacks[0]?.id);
-  if (initial){ setActive(initial); requestAnimationFrame(()=>scrollToStack(initial, {instant:true})); }
+  const initial = urlParam("stack");
+  if (initial) {
+    setActive(initial);
+    requestAnimationFrame(() => scrollToStack(initial, { instant: true }));
+  }
   
   // Performance monitoring (only in development)
   if (window.location.hostname === 'localhost') {
