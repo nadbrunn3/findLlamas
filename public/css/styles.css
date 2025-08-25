@@ -2988,14 +2988,13 @@ input[placeholder*="comment" i]::placeholder,
 
   /* Photo-lightbox.js mobile styles */
   .lb-frame {
-    display: flex;
-    flex-direction: column;
+    display: block;
+    position: relative;
     width: 100vw;
     height: 100vh;
     max-width: 100vw;
-    max-height: none;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    max-height: 100vh;
+    overflow: hidden;
   }
 
   .lb-img,
@@ -3009,28 +3008,34 @@ input[placeholder*="comment" i]::placeholder,
   }
 
   .lb-panel {
-    position: static;
-    top: auto;
-    right: auto;
-    bottom: auto;
-    left: auto;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: 100%;
     max-width: 100%;
-    height: auto;
-    border-radius: 0;
-    max-height: none;
+    border-radius: 12px 12px 0 0;
+    max-height: 60vh;
+    
     border-left: none;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 16px;
+    padding: 12px 16px;
+    background: rgba(17, 24, 39, 0.95);
+    transform: translateY(calc(100% - 64px));
+    transition: transform 0.3s ease;
+    overflow: hidden;
+  }
+  .lb-panel.open {
+    transform: translateY(0);
   }
 
-  /* Mobile comments section - allow scrolling below full-screen image */
   .lb-comments-section {
-    margin-top: 16px;
+    display: none;
+    max-height: calc(60vh - 64px);
+    overflow-y: auto;
   }
-
-  .lb-comments {
-    max-height: none;
+  .lb-panel.open .lb-comments-section {
+    display: block;
   }
 
   .lb-toolbar {

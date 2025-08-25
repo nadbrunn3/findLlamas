@@ -106,6 +106,18 @@ function bindLbPanel(photoId){
   const commentsBtn = panel.querySelector('.lb-comments-btn');
   const input = panel.querySelector('.lb-input');
   const form  = panel.querySelector('#lbComposer');
+  const list  = panel.querySelector('#lbComments');
+
+  // Initial state differs for mobile/desktop
+  const isMobile = window.matchMedia('(max-width: 768px)').matches;
+  panel.classList.remove('open');
+  if (isMobile) {
+    list.style.display = 'none';
+    form.style.display = 'none';
+  } else {
+    list.style.display = 'block';
+    form.style.display = 'block';
+  }
 
   // Store current photo ID on panel to avoid duplicate bindings
   if (panel._currentPhotoId === photoId) return;
@@ -168,12 +180,15 @@ function bindLbPanel(photoId){
   if (!commentsBtn._bound) {
     commentsBtn._bound = true;
     commentsBtn.onclick = () => {
-      const list = document.getElementById('lbComments');
-      const isHidden = list.style.display === 'none';
-      list.style.display = isHidden ? 'block' : 'none';
-      form.style.display = isHidden ? 'block' : 'none';
-      if (isHidden && window.matchMedia('(max-width: 768px)').matches) {
-        panel.scrollIntoView({ behavior: 'smooth' });
+      const mobile = window.matchMedia('(max-width: 768px)').matches;
+      if (mobile) {
+        const open = panel.classList.toggle('open');
+        list.style.display = open ? 'block' : 'none';
+        form.style.display = open ? 'block' : 'none';
+      } else {
+        const hidden = list.style.display === 'none';
+        list.style.display = hidden ? 'block' : 'none';
+        form.style.display = hidden ? 'block' : 'none';
       }
     };
   }
