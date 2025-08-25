@@ -525,7 +525,7 @@
             <div class="adventure-overlay">
               <div class="adventure-stats">
                 <div class="stat">
-                  <span class="stat-number">8</span>
+                  <span class="stat-number" id="city-count">0</span>
                   <span class="stat-label">Cities</span>
                 </div>
                 <div class="stat">
@@ -533,7 +533,7 @@
                   <span class="stat-label">GPS Photos</span>
                 </div>
                 <div class="stat">
-                  <span class="stat-number">12</span>
+                  <span class="stat-number" id="day-count">0</span>
                   <span class="stat-label">Days</span>
                 </div>
               </div>
@@ -585,7 +585,9 @@
       </div>
     </footer>
   </main>
-  <script>
+  <script type="module">
+    import { groupIntoStacks } from './js/utils.js';
+
     function openTrip(slug){
       if(slug==='japan-korea'){
         window.location.href='/index.html?trip=japan-korea';
@@ -594,44 +596,106 @@
     
 
     
+    const GEO_CACHE_KEY = "reverse_geocode_cache";
+    let geocodeCache = JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || "{}");
+
+    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    async function fetchWithTimeout(resource, options = {}) {
+      const { timeout = 8000 } = options;
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeout);
+      try {
+        const response = await fetch(resource, { ...options, signal: controller.signal });
+        clearTimeout(id);
+        return response;
+      } catch (err) {
+        clearTimeout(id);
+        throw err;
+      }
+    }
+
+    async function reverseGeocode(lat, lon) {
+      const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+      if (geocodeCache[key]) return geocodeCache[key];
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`;
+      try {
+        const res = await fetchWithTimeout(url, {
+          headers: {
+            "User-Agent": "FindPenguinApp/1.0 (your_email@example.com)",
+            "Accept-Language": "en",
+          },
+          timeout: 8000,
+        });
+        if (!res.ok) {
+          console.warn("Reverse geocode failed:", res.status, await res.text());
+          return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+        }
+        const data = await res.json();
+        const addr = data.address || {};
+        const district = addr.suburb || addr.city_district || addr.district || addr.borough || addr.ward;
+        const city = addr.city || addr.town || addr.village || addr.municipality || addr.locality;
+        const region = addr.state || addr.region || addr.province || addr.state_district;
+        const country = addr.country;
+        let nameParts = [city, district, country].filter(Boolean);
+        nameParts = nameParts.filter((part, idx) => nameParts.indexOf(part) === idx);
+        const name = nameParts.length > 0 ? nameParts.join(", ") : `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+        geocodeCache[key] = name;
+        localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(geocodeCache));
+        return name;
+      } catch (e) {
+        console.warn("Reverse geocode failed:", e);
+        return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+      }
+    }
+
     // Load actual photo data and create bubbles
     async function loadPhotoData() {
       try {
         const response = await fetch('/data/days/index.json');
         const days = await response.json();
-        
-        let allPhotos = [];
+
+        let dayDataList = [];
+        let flatPhotos = [];
         let totalPhotoCount = 0;
-        
-        // Load photos from each day
+
         for (const day of days) {
           try {
             const dayResponse = await fetch(`/data/days/${day.slug}.json`);
             const dayData = await dayResponse.json();
-            
             if (dayData.photos && dayData.photos.length > 0) {
-              allPhotos.push({
+              dayDataList.push({
                 date: dayData.date,
                 title: dayData.title,
                 photoCount: dayData.photos.length,
                 photos: dayData.photos
               });
+              flatPhotos.push(...dayData.photos);
               totalPhotoCount += dayData.photos.length;
             }
           } catch (e) {
             console.log(`Could not load day: ${day.slug}`);
           }
         }
-        
-        console.log(`Loaded ${totalPhotoCount} photos from ${allPhotos.length} travel days`);
-        return { allPhotos, totalPhotoCount };
+
+        const stacks = groupIntoStacks(flatPhotos, 500);
+        const citySet = new Set();
+        for (const s of stacks) {
+          const { lat, lng } = s.location;
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            await delay(1100);
+            const label = await reverseGeocode(lat, lng);
+            s.location.label = label;
+            const city = label.split(',')[0].trim();
+            if (city) citySet.add(city);
+          }
+        }
+
+        console.log(`Loaded ${totalPhotoCount} photos from ${dayDataList.length} travel days`);
+        return { dayDataList, totalPhotoCount, stacks, uniqueCityCount: citySet.size };
       } catch (e) {
         console.log('Using fallback photo data');
-        // Fallback data if loading fails - no fake photos
-        return {
-          allPhotos: [],
-          totalPhotoCount: 0
-        };
+        return { dayDataList: [], totalPhotoCount: 0, stacks: [], uniqueCityCount: 0 };
       }
     }
 
@@ -658,12 +722,12 @@
       }), 'bottom-left');
       
       // Load actual photo data
-      const { allPhotos, totalPhotoCount } = await loadPhotoData();
+      const { dayDataList, totalPhotoCount, stacks, uniqueCityCount } = await loadPhotoData();
       
       // Create photo bubbles ONLY from photos with real GPS coordinates
       const photoBubbles = [];
-      
-      allPhotos.forEach((dayData) => {
+
+      dayDataList.forEach((dayData) => {
         if (dayData.photos && Array.isArray(dayData.photos)) {
           dayData.photos.forEach((photo) => {
             // Only add bubble if photo has real GPS coordinates
@@ -690,6 +754,12 @@
       if (gpsPhotoCountElement) {
         gpsPhotoCountElement.textContent = photoBubbles.length;
       }
+
+      const dayCountEl = document.getElementById('day-count');
+      if (dayCountEl) dayCountEl.textContent = stacks.length;
+
+      const cityCountEl = document.getElementById('city-count');
+      if (cityCountEl) cityCountEl.textContent = uniqueCityCount;
       
       map.on('style.load', () => {
         // Apply some visual enhancements
