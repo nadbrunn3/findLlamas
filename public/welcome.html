@@ -691,8 +691,9 @@
           }
         }
 
-        console.log(`Loaded ${totalPhotoCount} photos from ${dayDataList.length} travel days`);
-        return { dayDataList, totalPhotoCount, stacks, uniqueCityCount: citySet.size };
+        const uniqueDayCount = new Set(dayDataList.map(d => d.date)).size;
+        console.log(`Loaded ${totalPhotoCount} photos from ${uniqueDayCount} travel days`);
+        return { dayDataList, totalPhotoCount, stacks, uniqueCityCount: citySet.size, uniqueDayCount };
       } catch (e) {
         console.log('Using fallback photo data');
         return { dayDataList: [], totalPhotoCount: 0, stacks: [], uniqueCityCount: 0 };
@@ -722,7 +723,7 @@
       }), 'bottom-left');
       
       // Load actual photo data
-      const { dayDataList, totalPhotoCount, stacks, uniqueCityCount } = await loadPhotoData();
+      const { dayDataList, totalPhotoCount, stacks, uniqueCityCount, uniqueDayCount } = await loadPhotoData();
       
       // Create photo bubbles ONLY from photos with real GPS coordinates
       const photoBubbles = [];
@@ -756,7 +757,7 @@
       }
 
       const dayCountEl = document.getElementById('day-count');
-      if (dayCountEl) dayCountEl.textContent = stacks.length;
+      if (dayCountEl) dayCountEl.textContent = uniqueDayCount;
 
       const cityCountEl = document.getElementById('city-count');
       if (cityCountEl) cityCountEl.textContent = uniqueCityCount;
