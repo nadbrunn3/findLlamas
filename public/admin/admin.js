@@ -55,26 +55,27 @@ function saveSettings(obj) {
   // ----- Admin Helper Functions -----
   async function getAdminToken() {
     const settings = loadSettings();
-    // If local token is set, use it (for overrides)
     if (settings.apiToken) {
       return settings.apiToken;
     }
-    
-    // Otherwise, check if server has admin token configured
+
     try {
       const res = await fetch(`${apiBase()}/api/admin/config`);
       if (res.ok) {
         const config = await res.json();
         if (config.hasAdminToken) {
-          // Server has admin token configured, we don't need to send one
-          // The server will use its own ADMIN_TOKEN from .env
-          return 'server-configured';
+          let token = prompt('Enter admin API token:') || '';
+          token = token.trim();
+          if (token) {
+            settings.apiToken = token;
+            saveSettings(settings);
+            return token;
+          }
         }
       }
     } catch (error) {
       console.warn('Failed to check server admin token:', error);
     }
-    
     return '';
   }
   function apiBase() { return window.location.origin; }
@@ -82,7 +83,7 @@ function saveSettings(obj) {
   async function patchPhotoMeta(slug, photoId, meta) {
     const adminToken = await getAdminToken();
     const headers = { 'Content-Type': 'application/json' };
-    if (adminToken !== 'server-configured') {
+    if (adminToken) {
       headers['x-admin-token'] = adminToken;
     }
     const res = await fetch(`${apiBase()}/api/day/${encodeURIComponent(slug)}/photo/${encodeURIComponent(photoId)}`, {
@@ -99,12 +100,9 @@ function saveSettings(obj) {
     const headers = {
       'Content-Type': 'application/json'
     };
-    
-    // Only add admin token header if we have a real token (not 'server-configured')
-    if (adminToken !== 'server-configured') {
+    if (adminToken) {
       headers['x-admin-token'] = adminToken;
     }
-
     const res = await fetch(`${apiBase()}/api/day/${encodeURIComponent(slug)}/stack/${encodeURIComponent(stackId)}`, {
       method: 'PATCH',
       headers,
@@ -514,7 +512,7 @@ function renderTripsTab(panel) {
     // Include admin token header if needed
     const adminToken = await getAdminToken();
     const headers = {};
-    if (adminToken !== 'server-configured') {
+    if (adminToken) {
       headers['x-admin-token'] = adminToken;
     }
 
@@ -617,9 +615,7 @@ function renderTripsTab(panel) {
           const id = p.id || p.url; // backend uses id OR url
           const adminToken = await getAdminToken();
           const headers = {};
-          
-          // Only add admin token header if we have a real token (not 'server-configured')
-          if (adminToken !== 'server-configured') {
+          if (adminToken) {
             headers['x-admin-token'] = adminToken;
           }
           
@@ -898,9 +894,7 @@ function renderTripsTab(panel) {
       const headers = {
         'Content-Type': 'application/json'
       };
-      
-      // Only add admin token header if we have a real token (not 'server-configured')
-      if (adminToken !== 'server-configured') {
+      if (adminToken) {
         headers['x-admin-token'] = adminToken;
       }
 
@@ -947,9 +941,7 @@ function renderTripsTab(panel) {
     const headers = {
       'Content-Type': 'application/json'
     };
-    
-    // Only add admin token header if we have a real token (not 'server-configured')
-    if (adminToken !== 'server-configured') {
+    if (adminToken) {
       headers['x-admin-token'] = adminToken;
     }
 
@@ -1032,10 +1024,10 @@ async function renderSettingsTab(panel) {
     <h4>Optional Local Overrides</h4>
     <p style="font-size: 14px; color: #6b7280; margin: 8px 0;">These are only needed if you want to override server settings locally:</p>
     
-    <label style="display:block; margin-top:0.5rem;">Admin API Token ${hasServerAdminToken ? '✅ Server has token' : '❌ Server missing token'}
-      <input type="text" id="set-api-token" value="${s.apiToken || ''}" placeholder="${hasServerAdminToken ? 'Token configured on server (leave blank to use server token)' : 'Add your admin token here'}" style="width:100%;" />
+    <label style="display:block; margin-top:0.5rem;">Admin API Token
+      <input type="text" id="set-api-token" value="${s.apiToken || ''}" placeholder="${hasServerAdminToken ? 'Enter admin token for API requests' : 'Optional unless server has ADMIN_TOKEN'}" style="width:100%;" />
       <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
-        ${hasServerAdminToken ? '✅ Server has ADMIN_TOKEN configured in .env file' : '❌ Set ADMIN_TOKEN=your_token in .env file or add token below'}
+        ${hasServerAdminToken ? (s.apiToken ? '✅ Token stored locally' : '⚠️ Server requires ADMIN_TOKEN. Enter token above.') : 'Server has no ADMIN_TOKEN; token not required.'}
       </div>
     </label>
     
