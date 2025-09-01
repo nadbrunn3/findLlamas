@@ -1956,24 +1956,37 @@ function bindCommentsBlock(stackId, block){
       commentItem.remove();
 
       try {
-        // Get admin token the same way as the admin panel
-        const getAdminToken = () => {
+        // Retrieve admin token (prompt user if server requires one)
+        const getAdminToken = async () => {
           try {
             const settings = JSON.parse(localStorage.getItem('tripAdminSettings') || '{}');
-            return settings.apiToken || localStorage.getItem('tripAdminPass') || '';
-          } catch {
-            return localStorage.getItem('tripAdminPass') || '';
-          }
+            if (settings.apiToken) return settings.apiToken;
+          } catch {}
+          try {
+            const res = await fetch(`${getApiBase()}/api/admin/config`);
+            if (res.ok) {
+              const config = await res.json();
+              if (config.hasAdminToken) {
+                let token = prompt('Enter admin API token:') || '';
+                token = token.trim();
+                if (token) {
+                  const settings = JSON.parse(localStorage.getItem('tripAdminSettings') || '{}');
+                  settings.apiToken = token;
+                  localStorage.setItem('tripAdminSettings', JSON.stringify(settings));
+                  return token;
+                }
+              }
+            }
+          } catch {}
+          return localStorage.getItem('tripAdminPass') || '';
         };
-        
-        const adminToken = getAdminToken();
+
+        const adminToken = await getAdminToken();
         console.log('🔑 Using admin token for stack comment delete:', adminToken ? '***set***' : 'NOT SET');
-        
+
         const res = await fetch(`${getApiBase()}/api/stack/${stackId}/comment/${commentId}`, {
           method: 'DELETE',
-          headers: {
-            'x-admin-token': adminToken
-          }
+          headers: adminToken ? { 'x-admin-token': adminToken } : {}
         });
 
         if (!res.ok) {
