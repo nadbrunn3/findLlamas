@@ -511,8 +511,11 @@ window.openPhotoLightbox = (photos, startIndex=0) => {
     zoomer.reset();
     i = (next + photos.length) % photos.length;
     const p = photos[i];
+    img.dataset.photoId = p.id;
     if (isVideo(p)) {
       img.style.display = 'none';
+      img.removeAttribute('src');
+      img.removeAttribute('srcset');
       vid.style.display = 'block';
       vid.src = p.url;
       vid.poster = p.thumb || '';
@@ -524,7 +527,52 @@ window.openPhotoLightbox = (photos, startIndex=0) => {
       vid.removeAttribute('src');
       vid.style.display = 'none';
       img.style.display = 'block';
-      img.src = p.url;
+
+      // show thumbnail first
+      const thumbSrc = p.thumb || p.url;
+      const srcsetParts = [];
+      if (p.thumb) srcsetParts.push(`${p.thumb} 400w`);
+      if (p.variants?.medium) srcsetParts.push(`${p.variants.medium} 800w`);
+      if (p.url) srcsetParts.push(`${p.url} 1600w`);
+      const fullSrcset = srcsetParts.join(', ');
+
+      img.src = thumbSrc;
+      if (p.thumb) {
+        img.srcset = `${p.thumb} 400w`;
+      } else {
+        img.removeAttribute('srcset');
+      }
+
+      // preload full image then swap
+      if (p.url && p.url !== thumbSrc) {
+        const highRes = new Image();
+        if (fullSrcset) highRes.srcset = fullSrcset;
+        highRes.onload = () => {
+          if (img.dataset.photoId == p.id) {
+            img.src = p.url;
+            if (fullSrcset) img.srcset = fullSrcset;
+          }
+        };
+        highRes.src = p.url;
+      }
+
+      // optionally preload neighbours
+      const preload = (idx) => {
+        const ph = photos[idx];
+        if (!ph || isVideo(ph)) return;
+        const im = new Image();
+        if (ph.variants?.medium || ph.thumb) {
+          const parts = [];
+          if (ph.thumb) parts.push(`${ph.thumb} 400w`);
+          if (ph.variants?.medium) parts.push(`${ph.variants.medium} 800w`);
+          if (ph.url) parts.push(`${ph.url} 1600w`);
+          const ss = parts.join(', ');
+          if (ss) im.srcset = ss;
+        }
+        im.src = ph.url;
+      };
+      preload((i + 1) % photos.length);
+      preload((i - 1 + photos.length) % photos.length);
     }
     el.querySelector(".lb-prev").disabled = photos.length < 2;
     el.querySelector(".lb-next").disabled = photos.length < 2;
