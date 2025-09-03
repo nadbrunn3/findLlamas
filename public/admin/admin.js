@@ -298,7 +298,12 @@ function renderTripsTab(panel) {
       const res = await fetch(`${apiBase()}/api/admin/config`);
       if (res.ok) {
         const config = await res.json();
-        if (config.immichConfigured) {
+        const { immichConfigured, localMediaConfigured } = config;
+        if (immichConfigured && localMediaConfigured) {
+          statusEl.innerHTML = '<span style="color: green;">✅ Immich & local media configured</span>';
+          statusEl.style.backgroundColor = '#e8f5e8';
+          statusEl.style.border = '1px solid #4caf50';
+        } else if (immichConfigured) {
           const urls = Array.isArray(config.immichUrls) ? config.immichUrls.join(', ') : config.immichUrl;
           statusEl.innerHTML = `
             <span style="color: green;">✅ Immich configured</span>
@@ -307,11 +312,15 @@ function renderTripsTab(panel) {
           `;
           statusEl.style.backgroundColor = '#e8f5e8';
           statusEl.style.border = '1px solid #4caf50';
+        } else if (localMediaConfigured) {
+          statusEl.innerHTML = '<span style="color: green;">✅ Local media configured</span>';
+          statusEl.style.backgroundColor = '#e8f5e8';
+          statusEl.style.border = '1px solid #4caf50';
         } else {
           statusEl.innerHTML = `
-            <span style="color: red;">❌ Immich not configured</span>
+            <span style="color: red;">❌ No import source configured</span>
             <br><small>Missing: ${config.missingConfig.join(', ')}</small>
-            <br><small>Create a .env file with IMMICH_URLS and IMMICH_API_KEYS</small>
+            <br><small>Create a .env file with IMMICH_URLS and IMMICH_API_KEYS or set LOCAL_MEDIA_DIR</small>
             <br><button onclick="downloadEnvTemplate()" style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.8rem;">📄 Get .env Template</button>
           `;
           statusEl.style.backgroundColor = '#ffe8e8';
@@ -319,7 +328,7 @@ function renderTripsTab(panel) {
         }
       }
     } catch (error) {
-      statusEl.innerHTML = '<span style="color: orange;">⚠️ Cannot check Immich status</span>';
+      statusEl.innerHTML = '<span style="color: orange;">⚠️ Cannot check import status</span>';
       statusEl.style.backgroundColor = '#fff3cd';
       statusEl.style.border = '1px solid #ffc107';
     }
@@ -332,25 +341,38 @@ function renderTripsTab(panel) {
     <label>Date: <input type="date" id="trip-date" /></label>
     <button id="load-day">Load</button>
     <button id="import-day" disabled>Import</button>
+    <select id="import-source"></select>
     <button id="publish-day" disabled>Publish selected</button>
     <button id="save-day" disabled>Save</button>
   `;
   panel.appendChild(controls);
 
-  // Update import button state based on Immich configuration
+  // Update import button state based on server configuration
   async function updateImportButtonState() {
     try {
       const res = await fetch(`${apiBase()}/api/admin/config`);
       if (res.ok) {
         const config = await res.json();
         const importBtn = controls.querySelector('#import-day');
+        const sourceSel = controls.querySelector('#import-source');
+        const hasImmich = config.immichConfigured;
+        const hasLocal = config.localMediaConfigured;
         if (importBtn) {
-          importBtn.disabled = !config.immichConfigured;
-          if (!config.immichConfigured) {
-            importBtn.title = 'Immich not configured. Create a .env file first.';
+          importBtn.disabled = !(hasImmich || hasLocal);
+          if (!hasImmich && !hasLocal) {
+            importBtn.title = 'No import source configured. Create a .env file first.';
+          } else if (hasImmich && hasLocal) {
+            importBtn.title = 'Import photos from selected source';
+          } else if (hasLocal) {
+            importBtn.title = 'Import photos from local media';
           } else {
             importBtn.title = 'Import photos from Immich';
           }
+        }
+        if (sourceSel) {
+          sourceSel.innerHTML = '';
+          if (hasImmich) sourceSel.innerHTML += '<option value="immich">Immich</option>';
+          if (hasLocal) sourceSel.innerHTML += '<option value="local">Local</option>';
         }
       }
     } catch (error) {
@@ -475,18 +497,32 @@ function renderTripsTab(panel) {
     } catch (error) {
       console.warn('Failed to load server config:', error);
     }
-    
-    // Check if Immich is properly configured
-    if (!serverConfig.immichConfigured) {
+
+    const sourceSel = /** @type {HTMLSelectElement} */(document.getElementById('import-source'));
+    const importSource = sourceSel ? sourceSel.value : 'immich';
+
+    if (importSource === 'immich' && !serverConfig.immichConfigured) {
       const missing = serverConfig.missingConfig || [];
       const errorMsg = `Immich not configured. Missing: ${missing.join(', ')}.\n\nPlease create a .env file with:\nIMMICH_URLS=https://immich-one.example.com,https://immich-two.example.com\nIMMICH_API_KEYS=your_api_key_1,your_api_key_2\nIMMICH_ALBUM_ID=your_album_id (optional)`;
       alert(errorMsg);
       return;
     }
-    
-    // Always use server config (from .env) as primary source
-    const effectiveAlbumId = serverConfig.immichAlbumId || '';
-    console.log('⚙️ Using album ID from .env:', effectiveAlbumId);
+    if (importSource === 'local' && !serverConfig.localMediaConfigured) {
+      alert('Local media not configured. Set LOCAL_MEDIA_DIR in your .env file.');
+      return;
+    }
+
+    const sourceLabel = importSource === 'local' ? 'local media' : 'Immich';
+    let url = '';
+    if (importSource === 'immich') {
+      const effectiveAlbumId = serverConfig.immichAlbumId || '';
+      console.log('⚙️ Using album ID from .env:', effectiveAlbumId);
+      url = `${apiBase()}/api/immich/day?date=${dateVal}${effectiveAlbumId ? `&albumId=${encodeURIComponent(effectiveAlbumId)}` : ''}`;
+      console.log('🔗 Immich URL:', url);
+    } else {
+      url = `${apiBase()}/api/local/day?date=${dateVal}`;
+      console.log('🔗 Local media URL:', url);
+    }
 
     // Reset dayData if switching to a different date so only photos for
     // the imported day are shown
@@ -505,10 +541,6 @@ function renderTripsTab(panel) {
 
     dayData.photos = dayData.photos || [];
 
-    // Ask backend to import any new photos for that calendar day from Immich
-    const url = `${apiBase()}/api/immich/day?date=${dateVal}${effectiveAlbumId ? `&albumId=${encodeURIComponent(effectiveAlbumId)}` : ''}`;
-    console.log('🔗 Immich URL:', url);
-
     // Include admin token header if needed
     const adminToken = await getAdminToken();
     const headers = {};
@@ -518,20 +550,20 @@ function renderTripsTab(panel) {
 
     const resp = await fetch(url, { headers });
     if (!resp.ok) {
-      const err = await resp.json().catch(()=> ({}));
-      console.warn('Immich import failed', err);
-      
-      let errorMessage = 'Immich import failed. ';
+      const err = await resp.json().catch(() => ({}));
+      console.warn('Import failed', err);
+
+      let errorMessage = `${sourceLabel} import failed. `;
       if (err.error) {
         errorMessage += err.error;
       } else if (resp.status === 500) {
-        errorMessage += 'Server error. Check if Immich URL and API keys are correct.';
+        errorMessage += 'Server error. Check server configuration.';
       } else if (resp.status === 404) {
-        errorMessage += 'Immich endpoint not found. Check your Immich URL.';
+        errorMessage += 'Endpoint not found. Check your server URL.';
       } else {
         errorMessage += `HTTP ${resp.status}. Check the server logs.`;
       }
-      
+
       return alert(errorMessage);
     }
     const data = await resp.json();
@@ -558,15 +590,15 @@ function renderTripsTab(panel) {
     }
     dayData.stackMeta = dayData.stackMeta || {};
 
-      renderDay();
-    
+    renderDay();
+
     // Update map after importing photos
     ensureAdminMap();
     renderAdminMapMarkers(dayData.photos || []);
-    
-      controls.querySelector('#save-day').disabled = false;
+
+    controls.querySelector('#save-day').disabled = false;
     controls.querySelector('#publish-day').disabled = false;
-    alert(`Imported ${newCount} new photos from Immich for ${dateVal}`);
+    alert(`Imported ${newCount} new photos from ${sourceLabel} for ${dateVal}`);
   }
 
   function renderDay() {
