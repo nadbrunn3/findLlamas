@@ -89,6 +89,8 @@ app.get('/api/user/me', async (req, reply) => {
 app.register(fastifyStatic, {
   root: path.join(REPO_DIR, 'public'),
   prefix: '/', // so /day.html, /admin/index.html, /js/*
+  cacheControl: true,
+  maxAge: '1d',
 });
 
 // expose locally synced media if configured
@@ -96,7 +98,9 @@ if (LOCAL_MEDIA_DIR) {
   app.register(fastifyStatic, {
     root: LOCAL_MEDIA_DIR,
     prefix: '/media/',
-    decorateReply: false
+    decorateReply: false,
+    cacheControl: true,
+    maxAge: '1d',
   });
 }
 
