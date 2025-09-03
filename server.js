@@ -581,6 +581,66 @@ function mapAssetToPhoto(a, serverIndex) {
   };
 }
 
+// Read photos from LOCAL_MEDIA_DIR for a given date
+async function getLocalPhotosForDay({ date }) {
+  if (!LOCAL_MEDIA_DIR) return [];
+  const start = new Date(date + 'T00:00:00.000Z');
+  const end = new Date(start.getTime() + 24 * 3600 * 1000);
+  const results = [];
+
+  const allowed = new Set([
+    '.jpg', '.jpeg', '.png', '.webp', '.gif',
+    '.mp4', '.mov', '.webm'
+  ]);
+  const video = new Set(['.mp4', '.mov', '.webm']);
+  const mime = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp',
+    '.gif': 'image/gif',
+    '.mp4': 'video/mp4',
+    '.mov': 'video/quicktime',
+    '.webm': 'video/webm'
+  };
+
+  async function walk(dir) {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const ent of entries) {
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        if (ent.name === 'thumbs') continue;
+        await walk(full);
+      } else {
+        const ext = path.extname(ent.name).toLowerCase();
+        if (!allowed.has(ext)) continue;
+        const stat = await fs.stat(full);
+        const t = stat.mtime;
+        if (t >= start && t < end) {
+          const isVideo = video.has(ext);
+          const filename = path.basename(ent.name);
+          results.push({
+            id: `local_${filename}`,
+            kind: isVideo ? 'video' : 'photo',
+            mimeType: mime[ext] || (isVideo ? 'video/*' : 'image/*'),
+            duration: null,
+            url: `/media/${filename}`,
+            thumb: `/media/thumbs/${filename}`,
+            taken_at: t.toISOString(),
+            lat: null,
+            lon: null,
+            caption: filename
+          });
+        }
+      }
+    }
+  }
+
+  await walk(LOCAL_MEDIA_DIR);
+  results.sort((a, b) => new Date(a.taken_at) - new Date(b.taken_at));
+  return results;
+}
+
 async function autoLoadAlbum() {
   if (!IMMICH_ALBUM_ID) {
     app.log.warn('IMMICH_ALBUM_ID not set; autoLoadAlbum disabled');
@@ -662,49 +722,27 @@ async function autoLoadAlbum() {
 // ---- Routes: Health ---------------------------------------------------------
 app.get('/api/health', async () => ({ ok: true, dataRoot: DATA_DIR }));
 
-// ---- Routes: Local Testing --------------------------------------------------
+// ---- Routes: Local Media ----------------------------------------------------
 
-// Local testing route: simulate Immich assets
+// Fetch day's photos from a locally synced media directory
 app.get('/api/local/day', async (req, reply) => {
-  const { date } = req.query;
-  if (!date) return reply.code(400).send({ error: 'date required' });
+  try {
+    if (!requireAdmin(req)) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+    if (!LOCAL_MEDIA_DIR) {
+      return reply.code(500).send({ error: 'LOCAL_MEDIA_DIR not configured' });
+    }
 
-  // Use REPO_DIR so local testing works when repository root is overridden
-  const dir = path.join(REPO_DIR, 'public', 'test-photos');
-  const manifestPath = path.join(REPO_DIR, 'public', 'data', 'imported.json');
-  const imported = await readJson(manifestPath, []);
-  const importedSet = new Set(imported);
+    const { date } = req.query;
+    if (!date) return reply.code(400).send({ error: 'date required (YYYY-MM-DD)' });
 
-  const files = fsSync.readdirSync(dir).filter(f => /\.(jpg|jpeg|png)$/i.test(f));
-
-  const newHashes = [];
-  const photos = [];
-
-  for (const f of files) {
-    const filePath = path.join(dir, f);
-    const hash = crypto
-      .createHash('sha1')
-      .update(fsSync.readFileSync(filePath))
-      .digest('hex');
-    if (importedSet.has(hash)) continue;
-    importedSet.add(hash);
-    newHashes.push(hash);
-    photos.push({
-      id: hash,
-      url: `/test-photos/${f}`,
-      thumb: `/test-photos/${f}`,
-      taken_at: date + 'T12:00:00.000Z',
-      lat: null,
-      lon: null,
-      caption: f,
-    });
+    const photos = await getLocalPhotosForDay({ date });
+    reply.send({ date, count: photos.length, photos });
+  } catch (err) {
+    req.log.error(err);
+    reply.code(500).send({ error: `Failed to fetch photos from local media: ${String(err.message || err)}` });
   }
-
-  if (newHashes.length) {
-    await writeJson(manifestPath, [...imported, ...newHashes]);
-  }
-
-  reply.send({ date, count: photos.length, photos });
 });
 
 // ---- Routes: Immich ---------------------------------------------------------
@@ -781,6 +819,7 @@ app.get('/api/admin/config', async (req, reply) => {
     serverPort: PORT,
     // Add more detailed status information
     immichConfigured: IMMICH_SERVERS.length > 0 && IMMICH_SERVERS.some(s => s.key),
+    localMediaConfigured: !!LOCAL_MEDIA_DIR,
     configSource: 'environment', // Always prioritize .env
     missingConfig: []
   };

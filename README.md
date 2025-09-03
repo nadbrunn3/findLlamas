@@ -151,6 +151,7 @@ Since the admin calls your Immich/Dawarich directly, enable CORS on both:
 - Scheduling: there is no built-in scheduler. Run the loader manually or via an external cron job; each run processes one day and will overwrite that day's file on subsequent runs.
 - `ADMIN_TOKEN` (optional): protects admin endpoints. If set, the import button and other admin actions send this token in an `x-admin-token` header.
 - `LOCAL_MEDIA_DIR` (optional): absolute path to a folder of synced media. When set, imported photos point to `/media/` URLs instead of proxying through Immich.
+  - When configured, the admin panel's Import tool offers a **Local** option to pull photos directly from this folder without contacting Immich.
 
 Minimal `.env` example:
 
