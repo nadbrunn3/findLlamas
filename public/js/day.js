@@ -15,6 +15,8 @@ if (!daySlug) {
   throw new Error('No date parameter provided');
 }
 
+const isMobile = matchMedia('(max-width:768px)').matches;
+
 let dayData = null;
 let map = null;
 
@@ -37,7 +39,11 @@ function isVideo(item) {
 function renderMediaEl(item, { withControls = false, className = 'media-tile', useThumb = false } = {}) {
   if (isVideo(item)) {
     const v = document.createElement('video');
-    v.src = item.url;
+    const videoSrc =
+      isMobile && item.variants && (item.variants.mobile || item.variants.sd || item.variants.low)
+        ? item.variants.mobile || item.variants.sd || item.variants.low
+        : item.url;
+    v.src = videoSrc;
     if (item.thumb) v.poster = item.thumb;
     v.muted = true;
     v.playsInline = true;
@@ -91,6 +97,18 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
     img.loading = 'lazy';
     img.decoding = 'async';
     img.className = className;
+
+    if (!useThumb) {
+      const srcsetParts = [];
+      if (item.thumb) srcsetParts.push(`${item.thumb} 400w`);
+      if (item.variants?.medium) srcsetParts.push(`${item.variants.medium} 800w`);
+      if (item.url) srcsetParts.push(`${item.url} 1600w`);
+      if (srcsetParts.length > 1) {
+        img.srcset = srcsetParts.join(', ');
+        img.sizes = '(max-width: 768px) 100vw, 50vw';
+      }
+    }
+
     return img;
   }
 }

@@ -182,10 +182,10 @@ const lazyLoadObserver = new IntersectionObserver((entries) => {
     if (entry.isIntersecting) {
       const element = entry.target;
       
-      // Load full resolution image if available
-      if (element.dataset.fullSrc && element.tagName === 'IMG') {
-        element.src = element.dataset.fullSrc;
-        delete element.dataset.fullSrc;
+      // Upgrade to full srcset for images when available
+      if (element.dataset.fullSrcset && element.tagName === 'IMG') {
+        element.srcset = element.dataset.fullSrcset;
+        delete element.dataset.fullSrcset;
       }
       
       // Load video source if available
@@ -222,12 +222,18 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
     v.controls = !!withControls;
     v.setAttribute('preload', 'none'); // Changed from 'metadata' to 'none' for better performance
     if (className) v.className = className;
-    
+
+    // Prefer lower-resolution variant on mobile if provided
+    const videoSrc =
+      isMobile && item.variants && (item.variants.mobile || item.variants.sd || item.variants.low)
+        ? item.variants.mobile || item.variants.sd || item.variants.low
+        : item.url;
+
     // Only set src when needed (lazy loading)
     if (withControls || className.includes('lightbox')) {
-      v.src = item.url;
+      v.src = videoSrc;
     } else {
-      v.dataset.src = item.url; // Store for lazy loading
+      v.dataset.src = videoSrc; // Store for lazy loading
       // Add to lazy loading observer for videos
       lazyLoadObserver.observe(v);
     }
@@ -269,24 +275,39 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
   } else {
     // Photo - optimize image loading
     const img = document.createElement('img');
-    
+
     // Always use thumbnails for better performance, except in lightbox
-    const shouldUseThumbnail = useThumb || 
-      className.includes('drawer-thumbnail') || 
+    const shouldUseThumbnail = useThumb ||
+      className.includes('drawer-thumbnail') ||
       className.includes('stack-main-photo');
-    
-    img.src = shouldUseThumbnail ? (item.thumb || item.url) : item.url;
+
+    const srcsetParts = [];
+    if (item.thumb) srcsetParts.push(`${item.thumb} 400w`);
+    if (item.variants?.medium) srcsetParts.push(`${item.variants.medium} 800w`);
+    if (item.url) srcsetParts.push(`${item.url} 1600w`);
+    const fullSrcset = srcsetParts.join(', ');
+    const sizes = '(max-width: 768px) 100vw, 50vw';
+
+    if (shouldUseThumbnail && item.url !== item.thumb) {
+      img.src = item.thumb || item.url;
+      if (fullSrcset) {
+        img.srcset = item.thumb || item.url;
+        img.dataset.fullSrcset = fullSrcset;
+        img.sizes = sizes;
+        lazyLoadObserver.observe(img);
+      }
+    } else {
+      img.src = shouldUseThumbnail ? (item.thumb || item.url) : item.url;
+      if (fullSrcset) {
+        img.srcset = fullSrcset;
+        img.sizes = sizes;
+      }
+    }
+
     img.alt = item.title || item.caption || '';
     img.loading = 'lazy';
     img.decoding = 'async';
-    
-    // Store full URL for later if using thumbnail
-    if (shouldUseThumbnail && item.url !== item.thumb) {
-      img.dataset.fullSrc = item.url;
-      // Add to lazy loading observer
-      lazyLoadObserver.observe(img);
-    }
-    
+
     if (className) img.className = className;
     element = img;
   }
