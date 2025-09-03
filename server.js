@@ -550,7 +550,10 @@ async function ensureLocalThumb(original, thumb) {
         sharp = (await import('sharp')).default;
       }
       await fs.mkdir(path.dirname(thumb), { recursive: true });
-      await sharp(original).resize(400, 400, { fit: 'inside', withoutEnlargement: true }).toFile(thumb);
+      await sharp(original)
+        .rotate()
+        .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
+        .toFile(thumb);
     } catch (err) {
       app.log.error({ msg: 'thumb generation failed', err: String(err) });
     }
