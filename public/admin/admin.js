@@ -298,7 +298,12 @@ function renderTripsTab(panel) {
       const res = await fetch(`${apiBase()}/api/admin/config`);
       if (res.ok) {
         const config = await res.json();
-        if (config.immichConfigured) {
+        const { immichConfigured, localMediaConfigured } = config;
+        if (immichConfigured && localMediaConfigured) {
+          statusEl.innerHTML = '<span style="color: green;">✅ Immich & local media configured</span>';
+          statusEl.style.backgroundColor = '#e8f5e8';
+          statusEl.style.border = '1px solid #4caf50';
+        } else if (immichConfigured) {
           const urls = Array.isArray(config.immichUrls) ? config.immichUrls.join(', ') : config.immichUrl;
           statusEl.innerHTML = `
             <span style="color: green;">✅ Immich configured</span>
@@ -307,7 +312,7 @@ function renderTripsTab(panel) {
           `;
           statusEl.style.backgroundColor = '#e8f5e8';
           statusEl.style.border = '1px solid #4caf50';
-        } else if (config.localMediaConfigured) {
+        } else if (localMediaConfigured) {
           statusEl.innerHTML = '<span style="color: green;">✅ Local media configured</span>';
           statusEl.style.backgroundColor = '#e8f5e8';
           statusEl.style.border = '1px solid #4caf50';

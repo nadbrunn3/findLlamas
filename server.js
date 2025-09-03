@@ -92,7 +92,8 @@ app.register(fastifyStatic, {
 if (LOCAL_MEDIA_DIR) {
   app.register(fastifyStatic, {
     root: LOCAL_MEDIA_DIR,
-    prefix: '/media/'
+    prefix: '/media/',
+    decorateReply: false
   });
 }
 
