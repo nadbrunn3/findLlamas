@@ -10,6 +10,7 @@ import fsSync from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
+import exifr from 'exifr';
 
 dotenv.config();
 
@@ -638,6 +639,15 @@ async function getLocalPhotosForDay({ date }) {
     '.mov': 'video/quicktime',
     '.webm': 'video/webm'
   };
+  function toDecimal(dms, ref) {
+    if (!Array.isArray(dms)) return null;
+    let dec = dms[0];
+    if (dms[1]) dec += dms[1] / 60;
+    if (dms[2]) dec += dms[2] / 3600;
+    if (ref && /^[SW]/i.test(ref)) dec = -dec;
+    return dec;
+  }
+
 
   async function walk(dir) {
     const entries = await fs.readdir(dir, { withFileTypes: true });
@@ -650,7 +660,26 @@ async function getLocalPhotosForDay({ date }) {
         const ext = path.extname(ent.name).toLowerCase();
         if (!allowed.has(ext)) continue;
         const stat = await fs.stat(full);
-        const t = stat.mtime;
+        let t = stat.mtime;
+        let lat = null;
+        let lon = null;
+        if (!video.has(ext)) {
+          try {
+            const meta = await exifr.parse(full);
+            if (meta?.DateTimeOriginal) {
+              t = new Date(meta.DateTimeOriginal);
+            }
+            if (meta?.GPSLatitude && meta?.GPSLongitude) {
+              lat = toDecimal(meta.GPSLatitude, meta.GPSLatitudeRef);
+              lon = toDecimal(meta.GPSLongitude, meta.GPSLongitudeRef);
+            } else if (typeof meta?.latitude === 'number' && typeof meta?.longitude === 'number') {
+              lat = meta.latitude;
+              lon = meta.longitude;
+            }
+          } catch (err) {
+            // ignore EXIF parse errors
+          }
+        }
         if (t >= start && t < end) {
           const isVideo = video.has(ext);
           const filename = path.basename(ent.name);
@@ -662,8 +691,8 @@ async function getLocalPhotosForDay({ date }) {
             url: `/media/${filename}`,
             thumb: `/media/thumbs/${filename}`,
             taken_at: t.toISOString(),
-            lat: null,
-            lon: null,
+            lat,
+            lon,
             caption: filename
           });
         }

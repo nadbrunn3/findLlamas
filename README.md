@@ -116,6 +116,10 @@ FindPenguin/
    - In Settings: Backend API Base URL = `http://truenas.local:4000`
 
 ## ⚙️ Configuration
+### EXIF Metadata
+
+Local photo import uses the [`exifr`](https://www.npmjs.com/package/exifr) library to read timestamps and GPS coordinates from image files. Run `npm install` to install dependencies. Files without EXIF data (or videos) fall back to file modification time and omit location.
+
 
 ### Connect to Your Existing Services
 
