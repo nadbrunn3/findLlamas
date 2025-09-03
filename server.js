@@ -684,13 +684,25 @@ async function getLocalPhotosForDay({ date }) {
           const isVideo = video.has(ext);
           const rel = path.relative(LOCAL_MEDIA_DIR, full);
           const fileId = rel.replace(/[\\/]/g, '_');
+          const localThumb = path.join(LOCAL_MEDIA_DIR, 'thumbs', rel);
+          let thumbUrl = `/media/thumbs/${rel}`;
+          try {
+            await fs.access(localThumb);
+          } catch {
+            await ensureLocalThumb(full, localThumb);
+            try {
+              await fs.access(localThumb);
+            } catch {
+              thumbUrl = `/media/${rel}`;
+            }
+          }
           results.push({
             id: `local_${fileId}`,
             kind: isVideo ? 'video' : 'photo',
             mimeType: mime[ext] || (isVideo ? 'video/*' : 'image/*'),
             duration: null,
             url: `/media/${rel}`,
-            thumb: `/media/thumbs/${rel}`,
+            thumb: thumbUrl,
             taken_at: t.toISOString(),
             lat,
             lon,
