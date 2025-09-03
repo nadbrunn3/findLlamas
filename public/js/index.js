@@ -125,15 +125,34 @@ async function reverseGeocode(lat, lon) {
   }
 }
 
-// Sequentially resolve labels for all stacks (safe for Nominatim)
+// Resolve labels for all stacks concurrently with throttling
 async function resolveStackLocations() {
-  for (const s of photoStacks) {
+  const tasks = photoStacks.map((s, idx) => {
     const { lat, lng } = s.location;
-    if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      await delay(1100); // throttle to avoid 429s
-      s.location.label = await reverseGeocode(lat, lng);
-    }
-  }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return Promise.resolve();
+
+    // Throttle: allow up to 3 requests every ~1.1s
+    const startDelay = Math.floor(idx / 3) * 1100;
+
+    return delay(startDelay)
+      .then(() => reverseGeocode(lat, lng))
+      .then((label) => {
+        s.location.label = label;
+
+        // Update any rendered stack card with the new label
+        const card = document.getElementById(s.id);
+        if (card) {
+          const locEl = card.querySelector('.stack-location-time');
+          if (locEl) {
+            const t = fmtTime(s.takenAt);
+            locEl.textContent = `${label} • ${t}`;
+          }
+        }
+      })
+      .catch((e) => console.warn('Reverse geocode failed:', e));
+  });
+
+  await Promise.allSettled(tasks);
 }
 
 // Expose globals if needed elsewhere
@@ -350,7 +369,7 @@ async function init(){
   const startTime = performance.now();
   
   await loadStacks();
-  await resolveStackLocations();
+  resolveStackLocations();
   initMaps();
   renderFeed();
   setupTabs();
