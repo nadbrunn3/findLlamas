@@ -682,18 +682,19 @@ async function getLocalPhotosForDay({ date }) {
         }
         if (t >= start && t < end) {
           const isVideo = video.has(ext);
-          const filename = path.basename(ent.name);
+          const rel = path.relative(LOCAL_MEDIA_DIR, full);
+          const fileId = rel.replace(/[\\/]/g, '_');
           results.push({
-            id: `local_${filename}`,
+            id: `local_${fileId}`,
             kind: isVideo ? 'video' : 'photo',
             mimeType: mime[ext] || (isVideo ? 'video/*' : 'image/*'),
             duration: null,
-            url: `/media/${filename}`,
-            thumb: `/media/thumbs/${filename}`,
+            url: `/media/${rel}`,
+            thumb: `/media/thumbs/${rel}`,
             taken_at: t.toISOString(),
             lat,
             lon,
-            caption: filename
+            caption: path.basename(rel)
           });
         }
       }
