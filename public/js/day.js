@@ -357,15 +357,25 @@ function initMap() {
   console.log(`📍 Found ${photosWithGPS.length} media with GPS coordinates`);
 
   const isMobile = matchMedia('(max-width:768px)').matches;
-  
+  const center = [photosWithGPS[0]?.lon || 0, photosWithGPS[0]?.lat || 0];
+
+  if (isMobile) {
+    // On mobile, avoid heavy WebGL map by using a static Mapbox image
+    const staticUrl =
+      `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/${center[0]},${center[1]},8/600x400?access_token=${mapboxgl.accessToken}`;
+    mapContainer.innerHTML =
+      `<img src="${staticUrl}" alt="Map preview" style="width:100%;height:100%;object-fit:cover;border-radius:12px;" />`;
+    return;
+  }
+
   map = new mapboxgl.Map({
     container: 'map',
     style: MAPBOX_STYLE,
-    center: [photosWithGPS[0]?.lon || 0, photosWithGPS[0]?.lat || 0],
-    zoom: 12,
-    pitch: 45,
+    center,
+    zoom: isMobile ? 8 : 12,
+    pitch: isMobile ? 0 : 45,
     bearing: 0,
-    antialias: true
+    antialias: !isMobile
   });
   map.addControl(new mapboxgl.NavigationControl());
   // Remove native fullscreen control to avoid conflicts with custom one
