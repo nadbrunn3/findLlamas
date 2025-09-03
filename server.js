@@ -62,6 +62,9 @@ const IMMICH_ALBUM_ID = process.env.IMMICH_ALBUM_ID || process.env.DEFAULT_ALBUM
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const AUTOLOAD_INTERVAL = 60 * 60 * 1000; // 1 hour
 
+// optional local media folder (thumbnails + originals)
+const LOCAL_MEDIA_DIR = process.env.LOCAL_MEDIA_DIR || '';
+
 // helpers
 const app = fastify({ logger: true });
 app.register(cors, { origin: true });
@@ -84,6 +87,14 @@ app.register(fastifyStatic, {
   root: path.join(REPO_DIR, 'public'),
   prefix: '/', // so /day.html, /admin/index.html, /js/*
 });
+
+// expose locally synced media if configured
+if (LOCAL_MEDIA_DIR) {
+  app.register(fastifyStatic, {
+    root: LOCAL_MEDIA_DIR,
+    prefix: '/media/'
+  });
+}
 
 // Serve welcome.html as the main page
 app.get('/', async (req, reply) => {
@@ -550,13 +561,19 @@ function mapAssetToPhoto(a, serverIndex) {
       ? asset.duration
       : (asset?.exifInfo?.duration || null);
 
+  const filename = asset.originalFileName || `${rawId}`;
+
   return {
     id,
     kind: isVideo ? 'video' : 'photo',
     mimeType: mime || (isVideo ? 'video/*' : 'image/*'),
     duration,
-    url: `/api/immich/assets/${id}/original`,
-    thumb: `/api/immich/assets/${id}/thumb`,
+    url: LOCAL_MEDIA_DIR
+      ? `/media/${filename}`
+      : `/api/immich/assets/${id}/original`,
+    thumb: LOCAL_MEDIA_DIR
+      ? `/media/thumbs/${filename}`
+      : `/api/immich/assets/${id}/thumb`,
     taken_at: takenAt,
     lat,
     lon,
