@@ -13,6 +13,8 @@ import crypto from 'crypto';
 
 dotenv.config();
 
+let sharp;
+
 // ---- Config / Paths ---------------------------------------------------------
 const PORT = Number(process.env.PORT) || 4000;
 const REPO_DIR = path.resolve(process.env.REPO_DIR || process.cwd());
@@ -62,6 +64,9 @@ const IMMICH_ALBUM_ID = process.env.IMMICH_ALBUM_ID || process.env.DEFAULT_ALBUM
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const AUTOLOAD_INTERVAL = 60 * 60 * 1000; // 1 hour
 
+// optional local media folder (thumbnails + originals)
+const LOCAL_MEDIA_DIR = process.env.LOCAL_MEDIA_DIR || '';
+
 // helpers
 const app = fastify({ logger: true });
 app.register(cors, { origin: true });
@@ -84,6 +89,14 @@ app.register(fastifyStatic, {
   root: path.join(REPO_DIR, 'public'),
   prefix: '/', // so /day.html, /admin/index.html, /js/*
 });
+
+// expose locally synced media if configured
+if (LOCAL_MEDIA_DIR) {
+  app.register(fastifyStatic, {
+    root: LOCAL_MEDIA_DIR,
+    prefix: '/media/'
+  });
+}
 
 // Serve welcome.html as the main page
 app.get('/', async (req, reply) => {
@@ -243,7 +256,7 @@ async function getAssetsForDayForServer(server, serverIndex, { date, albumId }) 
       });
 
       if (dayAssets.length > 0) {
-        const photos = dayAssets.map(a => mapAssetToPhoto(a?.asset || a, serverIndex));
+        const photos = await Promise.all(dayAssets.map(a => mapAssetToPhoto(a?.asset || a, serverIndex)));
         app.log.info(`Album ${effectiveAlbumId}: found ${photos.length} assets for ${date}`);
         return photos;
       }
@@ -295,7 +308,7 @@ async function getAssetsForDayForServer(server, serverIndex, { date, albumId }) 
       
       if (dayAssets.length > 0) {
         app.log.info(`Successfully found ${dayAssets.length} assets for ${date} from daily bucket (filtered from ${allAssets.length} total)`);
-        return dayAssets.map(a => mapAssetToPhoto(a, serverIndex));
+        return await Promise.all(dayAssets.map(a => mapAssetToPhoto(a, serverIndex)));
       }
     }
   } catch (e) {
@@ -341,7 +354,7 @@ async function getAssetsForDayForServer(server, serverIndex, { date, albumId }) 
       
       if (dayAssets.length > 0) {
         app.log.info(`Successfully found ${dayAssets.length} assets for ${date} from monthly bucket`);
-        return dayAssets.map(a => mapAssetToPhoto(a, serverIndex));
+        return await Promise.all(dayAssets.map(a => mapAssetToPhoto(a, serverIndex)));
       }
     }
   } catch (e) {
@@ -471,7 +484,7 @@ async function getAssetsForDayForServer(server, serverIndex, { date, albumId }) 
     app.log.info(`Systematic approach: Found ${allAssets.length} total assets for ${date} across ${page} pages`);
 
     if (allAssets.length > 0) {
-      return allAssets.map(a => mapAssetToPhoto(a, serverIndex));
+      return await Promise.all(allAssets.map(a => mapAssetToPhoto(a, serverIndex)));
     }
     
     app.log.info(`No assets found for ${date} using systematic approach`);
@@ -526,7 +539,23 @@ async function getAssetsForDay({ date, albumId }) {
   return allPhotos;
 }
 
-function mapAssetToPhoto(a, serverIndex) {
+async function ensureLocalThumb(original, thumb) {
+  try {
+    await fs.access(thumb);
+  } catch {
+    try {
+      if (!sharp) {
+        sharp = (await import('sharp')).default;
+      }
+      await fs.mkdir(path.dirname(thumb), { recursive: true });
+      await sharp(original).resize(400, 400, { fit: 'inside', withoutEnlargement: true }).toFile(thumb);
+    } catch (err) {
+      app.log.error({ msg: 'thumb generation failed', err: String(err) });
+    }
+  }
+}
+
+async function mapAssetToPhoto(a, serverIndex) {
   const asset = a?.asset || a; // handle wrapped items
   const rawId = asset.id || asset.assetId || asset._id;
   const id = `${serverIndex}_${rawId}`;
@@ -550,13 +579,34 @@ function mapAssetToPhoto(a, serverIndex) {
       ? asset.duration
       : (asset?.exifInfo?.duration || null);
 
+  const filename = asset.originalFileName || `${rawId}`;
+  const localOriginal = LOCAL_MEDIA_DIR
+    ? path.join(LOCAL_MEDIA_DIR, filename)
+    : null;
+  const localThumb = LOCAL_MEDIA_DIR
+    ? path.join(LOCAL_MEDIA_DIR, 'thumbs', filename)
+    : null;
+
+  const hasLocal = localOriginal && fsSync.existsSync(localOriginal);
+  let hasThumb = localThumb && fsSync.existsSync(localThumb);
+  if (hasLocal && !hasThumb && localThumb) {
+    await ensureLocalThumb(localOriginal, localThumb);
+    hasThumb = fsSync.existsSync(localThumb);
+  }
+
   return {
     id,
     kind: isVideo ? 'video' : 'photo',
     mimeType: mime || (isVideo ? 'video/*' : 'image/*'),
     duration,
-    url: `/api/immich/assets/${id}/original`,
-    thumb: `/api/immich/assets/${id}/thumb`,
+    url: hasLocal
+      ? `/media/${filename}`
+      : `/api/immich/assets/${id}/original`,
+    thumb: hasThumb
+      ? `/media/thumbs/${filename}`
+      : hasLocal
+        ? `/media/${filename}`
+        : `/api/immich/assets/${id}/thumb`,
     taken_at: takenAt,
     lat,
     lon,
@@ -599,7 +649,7 @@ async function autoLoadAlbum() {
         continue;
       }
 
-      const photos = assets.map(a => mapAssetToPhoto(a, i)).filter(p => p.taken_at);
+      const photos = (await Promise.all(assets.map(a => mapAssetToPhoto(a, i)))).filter(p => p.taken_at);
       const groups = {};
       for (const p of photos) {
         const date = p.taken_at.slice(0, 10);

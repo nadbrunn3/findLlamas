@@ -41,6 +41,10 @@ const lazyLoadObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
     if (entry.isIntersecting) {
       const el = entry.target;
+      if (el.dataset.fullSrcset && el.tagName === 'IMG') {
+        el.srcset = el.dataset.fullSrcset;
+        delete el.dataset.fullSrcset;
+      }
       if (el.dataset.fullSrc && el.tagName === 'IMG') {
         el.src = el.dataset.fullSrc;
         delete el.dataset.fullSrc;
@@ -63,7 +67,6 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
       isMobile && item.variants && (item.variants.mobile || item.variants.sd || item.variants.low)
         ? item.variants.mobile || item.variants.sd || item.variants.low
         : item.url;
-    v.src = videoSrc;
     if (item.thumb) v.poster = item.thumb;
     v.muted = true;
     v.playsInline = true;
@@ -72,14 +75,11 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
     v.setAttribute('preload', 'none');
     v.className = className;
 
-    if (withControls) {
-      v.src = item.url;
-    } else {
-      v.dataset.src = item.url;
-      lazyLoadObserver.observe(v);
-    }
+    // Always defer loading video source until in view
+    v.dataset.src = videoSrc;
+    lazyLoadObserver.observe(v);
 
-    if (className.includes('stack-cover-media')) {
+    if (className.includes('stack-cover-media') || className.includes('photo-main-media')) {
       const playOverlay = document.createElement('div');
       playOverlay.className = 'video-play-overlay';
       playOverlay.innerHTML = '▶';
@@ -116,23 +116,33 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
   } else {
     const img = document.createElement('img');
     const thumbSrc = item.thumb || item.url;
-    img.src = thumbSrc;
+    const srcsetParts = [];
+    if (item.thumb) srcsetParts.push(`${item.thumb} 400w`);
+    if (item.variants?.medium) srcsetParts.push(`${item.variants.medium} 800w`);
+    if (item.url) srcsetParts.push(`${item.url} 1600w`);
+    const fullSrcset = srcsetParts.join(', ');
+    const sizes = '(max-width: 768px) 100vw, 50vw';
+
+    if (useThumb && item.url !== thumbSrc) {
+      img.src = thumbSrc;
+      if (fullSrcset) {
+        img.srcset = thumbSrc;
+        img.dataset.fullSrcset = fullSrcset;
+        img.sizes = sizes;
+        lazyLoadObserver.observe(img);
+      }
+    } else {
+      img.src = item.url;
+      if (fullSrcset) {
+        img.srcset = fullSrcset;
+        img.sizes = sizes;
+      }
+    }
+
     img.alt = item.title || item.caption || '';
     img.loading = 'lazy';
     img.decoding = 'async';
     img.className = className;
-
-    if (!useThumb) {
-      const srcsetParts = [];
-      if (item.thumb) srcsetParts.push(`${item.thumb} 400w`);
-      if (item.variants?.medium) srcsetParts.push(`${item.variants.medium} 800w`);
-      if (item.url) srcsetParts.push(`${item.url} 1600w`);
-      if (srcsetParts.length > 1) {
-        img.srcset = srcsetParts.join(', ');
-        img.sizes = '(max-width: 768px) 100vw, 50vw';
-      }
-    }
-
     return img;
   }
 }
@@ -177,7 +187,7 @@ async function renderStacksSection() {
     // Cover media
     const coverWrap = document.createElement('div');
     coverWrap.className = 'stack-cover';
-    const cover = renderMediaEl(st.photos[0], { withControls: false, className: 'stack-cover-media', useThumb: false });
+    const cover = renderMediaEl(st.photos[0], { withControls: false, className: 'stack-cover-media', useThumb: true });
     coverWrap.appendChild(cover);
 
     // Header (title + subline)
@@ -239,7 +249,7 @@ async function renderStacksSection() {
       const el = renderMediaEl(p, { 
         withControls: false, 
         className: idx === 0 ? 'stack-cover-media' : 'stack-thumb',
-        useThumb: idx > 0  // Use thumbnails for grid items, full res for cover
+        useThumb: true
       });
       if (idx > 0) {
         el.addEventListener('click', () => {
@@ -543,9 +553,9 @@ function renderPhotoPost() {
   `;
   container.innerHTML = headerHtml;
 
-  // Main media
+  // Main media (always start with thumbnail and lazy-load full version)
   const mainWrap = document.getElementById('photo-main');
-  const mainEl = renderMediaEl(main, { withControls: isVideo(main), className: 'photo-main-media' });
+  const mainEl = renderMediaEl(main, { withControls: false, className: 'photo-main-media', useThumb: true });
   mainWrap.appendChild(mainEl);
 
   // Thumbnails overlay
@@ -556,7 +566,7 @@ function renderPhotoPost() {
     mainWrap.appendChild(thumbs);
     const thumbItems = items.slice(1, 5);
     thumbItems.forEach((it, idx) => {
-      const el = renderMediaEl(it, { withControls: false, className: 'thumbnail' });
+      const el = renderMediaEl(it, { withControls: false, className: 'thumbnail', useThumb: true });
       el.addEventListener('click', () => openLightbox(idx + 1));
       thumbs.appendChild(el);
     });
@@ -569,11 +579,9 @@ function renderPhotoPost() {
     }
   }
 
-  // Click to open lightbox for images; videos keep controls/play
-  if (!isVideo(main)) {
-    mainEl.style.cursor = 'zoom-in';
-    mainEl.addEventListener('click', () => openLightbox(0));
-  }
+  // Clicking main media opens lightbox for both photos and videos
+  mainEl.style.cursor = isVideo(main) ? 'pointer' : 'zoom-in';
+  mainEl.addEventListener('click', () => openLightbox(0));
 
   // Caption removed - never display picture names
   const captionWrap = document.getElementById('photo-caption-container');

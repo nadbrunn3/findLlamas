@@ -150,6 +150,7 @@ Since the admin calls your Immich/Dawarich directly, enable CORS on both:
 - The auto-loader groups assets by the day they were taken and writes JSON files like `public/data/days/2025-08-14.json`.
 - Scheduling: there is no built-in scheduler. Run the loader manually or via an external cron job; each run processes one day and will overwrite that day's file on subsequent runs.
 - `ADMIN_TOKEN` (optional): protects admin endpoints. If set, the import button and other admin actions send this token in an `x-admin-token` header.
+- `LOCAL_MEDIA_DIR` (optional): absolute path to a folder of synced media. When set, imported photos point to `/media/` URLs instead of proxying through Immich. Missing thumbnails are generated on demand into a `thumbs/` subfolder using [`sharp`](https://sharp.pixelplumbing.com/).
 
 Minimal `.env` example:
 
@@ -160,6 +161,7 @@ IMMICH_API_KEYS=user_one_key,user_two_key # comments after # are allowed
 IMMICH_ALBUM_ID=your_album_id
 ADMIN_TOKEN=changeme # required for admin actions like importing
 ANON_COOKIE_SECRET=long_random_string
+LOCAL_MEDIA_DIR=/srv/immich-album
 
 # Or multiple servers:
 # IMMICH_URLS=https://immich-one.example.com,https://immich-two.example.com
@@ -167,6 +169,8 @@ ANON_COOKIE_SECRET=long_random_string
 ```
 
 Running the loader for `2025-08-14` with the above settings creates `public/data/days/2025-08-14.json` containing only photos from the specified album.
+
+After syncing new files into `LOCAL_MEDIA_DIR`, rerun the admin import so the generated day JSON files reference the local `/media/` paths.
 
 ## 📝 Daily Workflow
 
