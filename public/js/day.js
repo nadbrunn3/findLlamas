@@ -34,21 +34,45 @@ function isVideo(item) {
   );
 }
 
+// Lazy loading observer for media elements
+const lazyLoadObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const el = entry.target;
+      if (el.dataset.fullSrc && el.tagName === 'IMG') {
+        el.src = el.dataset.fullSrc;
+        delete el.dataset.fullSrc;
+      }
+      if (el.dataset.src && el.tagName === 'VIDEO') {
+        el.src = el.dataset.src;
+        delete el.dataset.src;
+      }
+      lazyLoadObserver.unobserve(el);
+    }
+  });
+}, {
+  rootMargin: '50px'
+});
+
 function renderMediaEl(item, { withControls = false, className = 'media-tile', useThumb = false } = {}) {
   if (isVideo(item)) {
     const v = document.createElement('video');
-    v.src = item.url;
     if (item.thumb) v.poster = item.thumb;
     v.muted = true;
     v.playsInline = true;
     v.loop = true;
     v.controls = !!withControls;
-    v.setAttribute('preload', 'metadata');
+    v.setAttribute('preload', 'none');
     v.className = className;
-    
-    // Add simple play button overlay for stack cover videos
+
+    if (withControls) {
+      v.src = item.url;
+    } else {
+      v.dataset.src = item.url;
+      lazyLoadObserver.observe(v);
+    }
+
     if (className.includes('stack-cover-media')) {
-      // Add play button overlay
       const playOverlay = document.createElement('div');
       playOverlay.className = 'video-play-overlay';
       playOverlay.innerHTML = '▶';
@@ -71,26 +95,31 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
         z-index: 10;
         border: 2px solid rgba(255,255,255,0.9);
       `;
-      
-      // Create wrapper for video + overlay
+
       const wrapper = document.createElement('div');
       wrapper.style.position = 'relative';
       wrapper.style.display = 'inline-block';
       wrapper.style.width = '100%';
       wrapper.appendChild(v);
       wrapper.appendChild(playOverlay);
-      
       return wrapper;
     }
-    
+
     return v;
   } else {
     const img = document.createElement('img');
-    img.src = useThumb ? (item.thumb || item.url) : (item.url || item.thumb);
+    const thumbSrc = item.thumb || item.url;
+    img.src = thumbSrc;
     img.alt = item.title || item.caption || '';
     img.loading = 'lazy';
     img.decoding = 'async';
     img.className = className;
+
+    if (item.url && item.url !== thumbSrc) {
+      img.dataset.fullSrc = item.url;
+      lazyLoadObserver.observe(img);
+    }
+
     return img;
   }
 }
