@@ -36,6 +36,26 @@ function isVideo(item) {
   );
 }
 
+// Lazy loading observer for media elements
+const lazyLoadObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const el = entry.target;
+      if (el.dataset.fullSrc && el.tagName === 'IMG') {
+        el.src = el.dataset.fullSrc;
+        delete el.dataset.fullSrc;
+      }
+      if (el.dataset.src && el.tagName === 'VIDEO') {
+        el.src = el.dataset.src;
+        delete el.dataset.src;
+      }
+      lazyLoadObserver.unobserve(el);
+    }
+  });
+}, {
+  rootMargin: '50px'
+});
+
 function renderMediaEl(item, { withControls = false, className = 'media-tile', useThumb = false } = {}) {
   if (isVideo(item)) {
     const v = document.createElement('video');
@@ -49,12 +69,17 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
     v.playsInline = true;
     v.loop = true;
     v.controls = !!withControls;
-    v.setAttribute('preload', 'metadata');
+    v.setAttribute('preload', 'none');
     v.className = className;
-    
-    // Add simple play button overlay for stack cover videos
+
+    if (withControls) {
+      v.src = item.url;
+    } else {
+      v.dataset.src = item.url;
+      lazyLoadObserver.observe(v);
+    }
+
     if (className.includes('stack-cover-media')) {
-      // Add play button overlay
       const playOverlay = document.createElement('div');
       playOverlay.className = 'video-play-overlay';
       playOverlay.innerHTML = '▶';
@@ -77,22 +102,21 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
         z-index: 10;
         border: 2px solid rgba(255,255,255,0.9);
       `;
-      
-      // Create wrapper for video + overlay
+
       const wrapper = document.createElement('div');
       wrapper.style.position = 'relative';
       wrapper.style.display = 'inline-block';
       wrapper.style.width = '100%';
       wrapper.appendChild(v);
       wrapper.appendChild(playOverlay);
-      
       return wrapper;
     }
-    
+
     return v;
   } else {
     const img = document.createElement('img');
-    img.src = useThumb ? (item.thumb || item.url) : (item.url || item.thumb);
+    const thumbSrc = item.thumb || item.url;
+    img.src = thumbSrc;
     img.alt = item.title || item.caption || '';
     img.loading = 'lazy';
     img.decoding = 'async';
@@ -346,15 +370,25 @@ function initMap() {
   console.log(`📍 Found ${photosWithGPS.length} media with GPS coordinates`);
 
   const isMobile = matchMedia('(max-width:768px)').matches;
-  
+  const center = [photosWithGPS[0]?.lon || 0, photosWithGPS[0]?.lat || 0];
+
+  if (isMobile) {
+    // On mobile, avoid heavy WebGL map by using a static Mapbox image
+    const staticUrl =
+      `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/${center[0]},${center[1]},8/600x400?access_token=${mapboxgl.accessToken}`;
+    mapContainer.innerHTML =
+      `<img src="${staticUrl}" alt="Map preview" style="width:100%;height:100%;object-fit:cover;border-radius:12px;" />`;
+    return;
+  }
+
   map = new mapboxgl.Map({
     container: 'map',
     style: MAPBOX_STYLE,
-    center: [photosWithGPS[0]?.lon || 0, photosWithGPS[0]?.lat || 0],
-    zoom: 12,
-    pitch: 45,
+    center,
+    zoom: isMobile ? 8 : 12,
+    pitch: isMobile ? 0 : 45,
     bearing: 0,
-    antialias: true
+    antialias: !isMobile
   });
   map.addControl(new mapboxgl.NavigationControl());
   // Remove native fullscreen control to avoid conflicts with custom one
