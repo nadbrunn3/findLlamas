@@ -8,3 +8,6 @@ public/data/days/*
 public/data/interactions/*
 !public/data/interactions/.gitkeep
 
+
+
+public/data
