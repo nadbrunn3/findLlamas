@@ -670,22 +670,30 @@ async function getLocalPhotosForDay({ date }) {
         let t = stat.mtime;
         let lat = null;
         let lon = null;
-        if (!video.has(ext)) {
-          try {
-            const meta = await exifr.parse(full);
-            if (meta?.DateTimeOriginal) {
-              t = new Date(meta.DateTimeOriginal);
-            }
-            if (meta?.GPSLatitude && meta?.GPSLongitude) {
-              lat = toDecimal(meta.GPSLatitude, meta.GPSLatitudeRef);
-              lon = toDecimal(meta.GPSLongitude, meta.GPSLongitudeRef);
-            } else if (typeof meta?.latitude === 'number' && typeof meta?.longitude === 'number') {
-              lat = meta.latitude;
-              lon = meta.longitude;
-            }
-          } catch (err) {
-            // ignore EXIF parse errors
+        let duration = null;
+        try {
+          const meta = await exifr.parse(full);
+          if (meta?.DateTimeOriginal) {
+            t = new Date(meta.DateTimeOriginal);
+          } else if (meta?.CreateDate) {
+            t = new Date(meta.CreateDate);
+          } else if (meta?.MediaCreateDate) {
+            t = new Date(meta.MediaCreateDate);
           }
+          if (meta?.GPSLatitude && meta?.GPSLongitude) {
+            lat = toDecimal(meta.GPSLatitude, meta.GPSLatitudeRef);
+            lon = toDecimal(meta.GPSLongitude, meta.GPSLongitudeRef);
+          } else if (typeof meta?.latitude === 'number' && typeof meta?.longitude === 'number') {
+            lat = meta.latitude;
+            lon = meta.longitude;
+          }
+          if (typeof meta?.duration === 'number') {
+            duration = meta.duration;
+          } else if (typeof meta?.Duration === 'number') {
+            duration = meta.Duration;
+          }
+        } catch (err) {
+          // ignore EXIF parse errors
         }
         if (t >= start && t < end) {
           const isVideo = video.has(ext);
@@ -707,7 +715,7 @@ async function getLocalPhotosForDay({ date }) {
             id: `local_${fileId}`,
             kind: isVideo ? 'video' : 'photo',
             mimeType: mime[ext] || (isVideo ? 'video/*' : 'image/*'),
-            duration: null,
+            duration,
             url: `/media/${rel}`,
             thumb: thumbUrl,
             taken_at: t.toISOString(),
