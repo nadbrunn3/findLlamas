@@ -946,11 +946,42 @@ function dayFile(slug) {
   return path.join(DAYS_DIR, `${slug}.json`);
 }
 
+const dayCache = new Map();
+
+async function ensureThumbsForDay(day) {
+  if (!LOCAL_MEDIA_DIR || !Array.isArray(day?.photos)) return;
+  for (const p of day.photos) {
+    if (p.url?.startsWith('/media/') && p.thumb?.startsWith('/media/')) {
+      const orig = path.join(LOCAL_MEDIA_DIR, p.url.replace('/media/', ''));
+      const th = path.join(LOCAL_MEDIA_DIR, p.thumb.replace('/media/', ''));
+      await ensureLocalThumb(orig, th);
+    }
+  }
+}
+
+async function loadDay(slug) {
+  if (dayCache.has(slug)) return dayCache.get(slug);
+  const file = dayFile(slug);
+  const json = await readJson(file);
+  if (json) {
+    await ensureThumbsForDay(json);
+    dayCache.set(slug, json);
+  }
+  return json;
+}
+
+async function preloadDays() {
+  const index = await readJson(DAY_INDEX_FILE, []);
+  for (const d of index) {
+    await loadDay(d.slug);
+  }
+  app.log.info(`Preloaded ${dayCache.size} days`);
+}
+
 // read a day
 app.get('/api/day/:slug', async (req, reply) => {
   try {
-    const file = dayFile(req.params.slug);
-    const json = await readJson(file);
+    const json = await loadDay(req.params.slug);
     if (!json) return reply.code(404).send({ error: 'Not found' });
     reply.type('application/json').send(json);
   } catch (e) {
@@ -969,6 +1000,8 @@ app.put('/api/day/:slug', async (req, reply) => {
     if (!body || typeof body !== 'object') return reply.code(400).send({ error: 'Invalid JSON' });
     await writeJson(dayFile(req.params.slug), body);
     await upsertDayIndex({ ...body, slug: req.params.slug });
+    await ensureThumbsForDay(body);
+    dayCache.set(req.params.slug, body);
     reply.send({ ok: true });
   } catch (e) {
     reply.code(500).send({ error: 'save failed' });
@@ -998,6 +1031,8 @@ app.patch('/api/day/:slug/photo/:id', async (req, reply) => {
       if (!p.title) delete p.title;
     }
     await writeJson(file, day);
+    await ensureThumbsForDay(day);
+    dayCache.set(req.params.slug, day);
     reply.send({ ok: true });
   } catch (e) {
     reply.code(500).send({ error: 'update failed' });
@@ -1053,6 +1088,8 @@ app.patch('/api/day/:slug/stack/:stackId', async (req, reply) => {
     else day.stackMeta[key] = meta;
 
     await writeJson(file, day);
+    await ensureThumbsForDay(day);
+    dayCache.set(req.params.slug, day);
     reply.send({ ok: true });
   } catch (e) {
     reply.code(500).send({ error: 'update failed' });
@@ -1084,6 +1121,8 @@ app.delete('/api/day/:slug/photo/:photoId', async (req, reply) => {
     day.photos.splice(photoIndex, 1);
     
     await writeJson(file, day);
+    await ensureThumbsForDay(day);
+    dayCache.set(req.params.slug, day);
     reply.send({ ok: true, message: 'Photo deleted successfully' });
   } catch (e) {
     app.log.error('Delete photo error:', e);
@@ -1128,6 +1167,8 @@ app.post('/api/publish', async (req, reply) => {
 
     await writeJson(file, existing);
     await upsertDayIndex(existing);
+    await ensureThumbsForDay(existing);
+    dayCache.set(date, existing);
     reply.send({ ok: true, added: photos.length, total: existing.photos.length });
   } catch (e) {
     req.log.error(e);
@@ -1145,38 +1186,75 @@ function interactionsPathForStack(stackId) {
   return path.join(INTERACTIONS_DIR, `stack_${stackId}.json`);
 }
 
+const photoMetaCache = new Map();
+const stackMetaCache = new Map();
+
+async function loadPhotoMeta(id) {
+  if (photoMetaCache.has(id)) return photoMetaCache.get(id);
+  const data = await readJson(interactionsPathForPhoto(id), { reactions: {}, comments: [] });
+  photoMetaCache.set(id, data);
+  return data;
+}
+
+async function loadStackMeta(id) {
+  if (stackMetaCache.has(id)) return stackMetaCache.get(id);
+  const data = await readJson(interactionsPathForStack(id), { reactions: {}, comments: [] });
+  stackMetaCache.set(id, data);
+  return data;
+}
+
+async function preloadInteractions() {
+  try {
+    const files = await fs.readdir(INTERACTIONS_DIR);
+    for (const f of files) {
+      if (!f.endsWith('.json')) continue;
+      const full = path.join(INTERACTIONS_DIR, f);
+      const data = await readJson(full, { reactions: {}, comments: [] });
+      if (f.startsWith('stack_')) {
+        stackMetaCache.set(f.slice(6, -5), data);
+      } else {
+        photoMetaCache.set(f.slice(0, -5), data);
+      }
+    }
+    app.log.info(`Preloaded ${photoMetaCache.size} photo interactions and ${stackMetaCache.size} stack interactions`);
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      app.log.error({ msg: 'interaction preload failed', err: String(err) });
+    }
+  }
+}
+
 // Photo interactions
 app.get('/api/photo/:photoId/interactions', async (req, reply) => {
-  const def = { reactions: {}, comments: [] };
-  const data = await readJson(interactionsPathForPhoto(req.params.photoId), def);
-  reply.send(data || def);
+  reply.send(await loadPhotoMeta(req.params.photoId));
 });
 
 app.post('/api/photo/:photoId/react', async (req, reply) => {
   try {
     const { emoji, action } = req.body || {};
     if (!emoji) return reply.code(400).send({ error: 'emoji required' });
-    const file = interactionsPathForPhoto(req.params.photoId);
-    const data = (await readJson(file)) || { reactions: {}, comments: [] };
+    const data = await loadPhotoMeta(req.params.photoId);
 
     if (action === 'remove') {
       if (data.reactions[emoji]) data.reactions[emoji] = Math.max(0, data.reactions[emoji] - 1);
       if (data.reactions[emoji] === 0) delete data.reactions[emoji];
-      } else {
+    } else {
       data.reactions[emoji] = (data.reactions[emoji] || 0) + 1;
     }
 
-    await writeJson(file, data);
+    await writeJson(interactionsPathForPhoto(req.params.photoId), data);
+    photoMetaCache.set(req.params.photoId, data);
     reply.send({ ok: true, count: data.reactions[emoji] || 0, removed: action === 'remove' });
-  } catch { reply.code(500).send({ error: 'react failed' }); }
+  } catch {
+    reply.code(500).send({ error: 'react failed' });
+  }
 });
 
 app.post('/api/photo/:photoId/comment', async (req, reply) => {
   try {
     const { text, author, parentId } = req.body || {};
     if (!text) return reply.code(400).send({ error: 'text required' });
-    const file = interactionsPathForPhoto(req.params.photoId);
-    const data = (await readJson(file)) || { reactions: {}, comments: [] };
+    const data = await loadPhotoMeta(req.params.photoId);
     const comment = {
       id: Date.now().toString(),
       text: String(text).trim(),
@@ -1184,16 +1262,16 @@ app.post('/api/photo/:photoId/comment', async (req, reply) => {
       authorId: req.anonId,
       timestamp: new Date().toISOString()
     };
-    
-    // Add parentId if this is a reply
-    if (parentId) {
-      comment.parentId = parentId;
-    }
-    
+
+    if (parentId) comment.parentId = parentId;
+
     data.comments.push(comment);
-    await writeJson(file, data);
+    await writeJson(interactionsPathForPhoto(req.params.photoId), data);
+    photoMetaCache.set(req.params.photoId, data);
     reply.send({ ok: true, comment });
-  } catch { reply.code(500).send({ error: 'comment failed' }); }
+  } catch {
+    reply.code(500).send({ error: 'comment failed' });
+  }
 });
 
 app.put('/api/photo/:photoId/comment/:commentId', async (req, reply) => {
@@ -1202,18 +1280,17 @@ app.put('/api/photo/:photoId/comment/:commentId', async (req, reply) => {
     const { text } = req.body || {};
     if (!text) return reply.code(400).send({ error: 'text required' });
 
-    const file = interactionsPathForPhoto(req.params.photoId);
-    const data = (await readJson(file)) || { reactions: {}, comments: [] };
+    const data = await loadPhotoMeta(req.params.photoId);
     const c = data.comments.find(x => x.id === req.params.commentId);
     if (!c) return reply.code(404).send({ error: 'comment not found' });
 
-    // allow if admin OR same anonId
     const isOwner = c.authorId && req.anonId === c.authorId;
     if (!(adminOk || isOwner)) return reply.code(403).send({ error: 'forbidden' });
 
     c.text = String(text).trim();
     c.edited = new Date().toISOString();
-    await writeJson(file, data);
+    await writeJson(interactionsPathForPhoto(req.params.photoId), data);
+    photoMetaCache.set(req.params.photoId, data);
     reply.send({ ok: true, comment: c });
   } catch {
     reply.code(500).send({ error: 'edit failed' });
@@ -1226,22 +1303,19 @@ app.delete('/api/photo/:photoId/comment/:commentId', async (req, reply) => {
       ADMIN_TOKEN &&
       ((req.headers['x-admin-token'] || '').replace(/^Bearer\s+/i, '') === ADMIN_TOKEN);
 
-    const file = interactionsPathForPhoto(req.params.photoId);
-    const data = (await readJson(file)) || { reactions: {}, comments: [] };
+    const data = await loadPhotoMeta(req.params.photoId);
     const idx = data.comments.findIndex(x => x.id === req.params.commentId);
     if (idx === -1) return reply.code(404).send({ error: 'comment not found' });
 
     const c = data.comments[idx];
     const isOwner = c.authorId && req.anonId === c.authorId;
-    
-    // Fallback: Allow deletion if comment was posted by "You" (client-side tracking)
-    // This is safe because only the browser that posted it would have the comment ID
     const isClientOwned = c.author === 'You' || c.author === 'Anonymous';
 
     if (!(adminToken || isOwner || isClientOwned)) return reply.code(403).send({ error: 'forbidden' });
 
     data.comments.splice(idx, 1);
-    await writeJson(file, data);
+    await writeJson(interactionsPathForPhoto(req.params.photoId), data);
+    photoMetaCache.set(req.params.photoId, data);
     reply.send({ ok: true });
   } catch {
     reply.code(500).send({ error: 'delete failed' });
@@ -1250,36 +1324,35 @@ app.delete('/api/photo/:photoId/comment/:commentId', async (req, reply) => {
 
 // Stack interactions (same shape)
 app.get('/api/stack/:stackId/interactions', async (req, reply) => {
-  const def = { reactions: {}, comments: [] };
-  const data = await readJson(interactionsPathForStack(req.params.stackId), def);
-  reply.send(data || def);
+  reply.send(await loadStackMeta(req.params.stackId));
 });
 
 app.post('/api/stack/:stackId/react', async (req, reply) => {
   try {
     const { emoji, action } = req.body || {};
     if (!emoji) return reply.code(400).send({ error: 'emoji required' });
-    const file = interactionsPathForStack(req.params.stackId);
-    const data = (await readJson(file)) || { reactions: {}, comments: [] };
+    const data = await loadStackMeta(req.params.stackId);
 
     if (action === 'remove') {
       if (data.reactions[emoji]) data.reactions[emoji] = Math.max(0, data.reactions[emoji] - 1);
       if (data.reactions[emoji] === 0) delete data.reactions[emoji];
-      } else {
+    } else {
       data.reactions[emoji] = (data.reactions[emoji] || 0) + 1;
     }
 
-    await writeJson(file, data);
+    await writeJson(interactionsPathForStack(req.params.stackId), data);
+    stackMetaCache.set(req.params.stackId, data);
     reply.send({ ok: true, count: data.reactions[emoji] || 0, removed: action === 'remove' });
-  } catch { reply.code(500).send({ error: 'react failed' }); }
+  } catch {
+    reply.code(500).send({ error: 'react failed' });
+  }
 });
 
 app.post('/api/stack/:stackId/comment', async (req, reply) => {
   try {
     const { text, author, parentId } = req.body || {};
     if (!text) return reply.code(400).send({ error: 'text required' });
-    const file = interactionsPathForStack(req.params.stackId);
-    const data = (await readJson(file)) || { reactions: {}, comments: [] };
+    const data = await loadStackMeta(req.params.stackId);
     const comment = {
       id: Date.now().toString(),
       text: String(text).trim(),
@@ -1287,16 +1360,16 @@ app.post('/api/stack/:stackId/comment', async (req, reply) => {
       authorId: req.anonId,
       timestamp: new Date().toISOString()
     };
-    
-    // Add parentId if this is a reply
-    if (parentId) {
-      comment.parentId = parentId;
-    }
-    
+
+    if (parentId) comment.parentId = parentId;
+
     data.comments.push(comment);
-    await writeJson(file, data);
+    await writeJson(interactionsPathForStack(req.params.stackId), data);
+    stackMetaCache.set(req.params.stackId, data);
     reply.send({ ok: true, comment });
-  } catch { reply.code(500).send({ error: 'comment failed' }); }
+  } catch {
+    reply.code(500).send({ error: 'comment failed' });
+  }
 });
 
 app.put('/api/stack/:stackId/comment/:commentId', async (req, reply) => {
@@ -1304,8 +1377,7 @@ app.put('/api/stack/:stackId/comment/:commentId', async (req, reply) => {
     const adminOk = requireAdmin(req);
     const { text } = req.body || {};
     if (!text) return reply.code(400).send({ error: 'text required' });
-    const file = interactionsPathForStack(req.params.stackId);
-    const data = (await readJson(file)) || { reactions: {}, comments: [] };
+    const data = await loadStackMeta(req.params.stackId);
     const c = data.comments.find(x => x.id === req.params.commentId);
     if (!c) return reply.code(404).send({ error: 'comment not found' });
 
@@ -1314,7 +1386,8 @@ app.put('/api/stack/:stackId/comment/:commentId', async (req, reply) => {
 
     c.text = String(text).trim();
     c.edited = new Date().toISOString();
-    await writeJson(file, data);
+    await writeJson(interactionsPathForStack(req.params.stackId), data);
+    stackMetaCache.set(req.params.stackId, data);
     reply.send({ ok: true, comment: c });
   } catch {
     reply.code(500).send({ error: 'edit failed' });
@@ -1327,16 +1400,12 @@ app.delete('/api/stack/:stackId/comment/:commentId', async (req, reply) => {
       ADMIN_TOKEN &&
       ((req.headers['x-admin-token'] || '').replace(/^Bearer\s+/i, '') === ADMIN_TOKEN);
 
-    const file = interactionsPathForStack(req.params.stackId);
-    const data = (await readJson(file)) || { reactions: {}, comments: [] };
+    const data = await loadStackMeta(req.params.stackId);
     const idx = data.comments.findIndex(x => x.id === req.params.commentId);
     if (idx === -1) return reply.code(404).send({ error: 'comment not found' });
 
     const c = data.comments[idx];
     const isOwner = c.authorId && req.anonId === c.authorId;
-    
-    // Fallback: Allow deletion if comment was posted by "You" (client-side tracking)
-    // This is safe because only the browser that posted it would have the comment ID
     const isClientOwned = c.author === 'You' || c.author === 'Anonymous';
 
     console.log('🗑️ Stack comment delete request:', {
@@ -1353,7 +1422,8 @@ app.delete('/api/stack/:stackId/comment/:commentId', async (req, reply) => {
     if (!(adminToken || isOwner || isClientOwned)) return reply.code(403).send({ error: 'forbidden' });
 
     data.comments.splice(idx, 1);
-    await writeJson(file, data);
+    await writeJson(interactionsPathForStack(req.params.stackId), data);
+    stackMetaCache.set(req.params.stackId, data);
     reply.send({ ok: true });
   } catch (e) {
     console.error('❌ Delete failed:', e);
@@ -1374,10 +1444,17 @@ app.delete('/api/stack/:stackId/comment/:commentId', async (req, reply) => {
 // }
 
 // ---- Boot -------------------------------------------------------------------
+await preloadDays().catch(err =>
+  app.log.error({ msg: 'preload failed', err: String(err) })
+);
+await preloadInteractions().catch(err =>
+  app.log.error({ msg: 'interaction preload failed', err: String(err) })
+);
+
 app.listen({ port: PORT, host: '0.0.0.0' }, (err, address) => {
   if (err) {
     app.log.error(err);
     process.exit(1);
   }
   app.log.info(`Backend running at ${address}`);
-  });
+});
