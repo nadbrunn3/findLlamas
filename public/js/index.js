@@ -643,6 +643,7 @@ function renderFeed(){
     card.className = `stack-card${stack.id===activeStackId?' active':''}`;
     card.id = stack.id; card.dataset.stackId = stack.id; card.tabIndex = 0;
 
+    const d = formatDate(stack.takenAt);
     const t = fmtTime(stack.takenAt);
     card.innerHTML = `
       <div class="stack-photo-area" data-stack-id="${stack.id}">
@@ -669,7 +670,7 @@ function renderFeed(){
 
       <div class="stack-card-header">
         ${stack.title ? `<h2 class="stack-card-title">${escapeHtml(stack.title)}</h2>` : ''}
-        <div class="stack-location-time">${stack.location.label} • ${t}</div>
+        <div class="stack-location-time">${stack.location.label} • ${d} • ${t}</div>
       </div>
       <div class="stack-desc-container-main" data-stack-id="${stack.id}"></div>
 
