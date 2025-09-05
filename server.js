@@ -85,6 +85,8 @@ const IMMICH_ALBUM_ID = process.env.IMMICH_ALBUM_ID || process.env.DEFAULT_ALBUM
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const AUTOLOAD_INTERVAL = 60 * 60 * 1000; // 1 hour
 
+const FETCH_TIMEOUT = Number(process.env.FETCH_TIMEOUT) || 15000; // 15 seconds
+
 // optional local media folder (thumbnails + originals)
 const LOCAL_MEDIA_DIR = process.env.LOCAL_MEDIA_DIR || '';
 const CDN_URL = (process.env.CDN_URL || '').replace(/\/$/, '');
@@ -109,6 +111,22 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 collectAssetHashes(PUBLIC_DIR);
+
+async function fetchWithTimeout(url, options = {}, timeout = FETCH_TIMEOUT) {
+  const ms = options.timeout || timeout;
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error(`Request to ${url} timed out after ${ms}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(id);
+  }
+}
 
 // helpers
 const app = fastify({ logger: true });
@@ -228,7 +246,7 @@ async function immichFetchJSON(server, route, init = {}) {
     ...(server.key ? { 'x-api-key': server.key } : {}),
     'content-type': 'application/json'
   };
-  const res = await fetch(`${server.url}${route}`, { ...init, headers });
+  const res = await fetchWithTimeout(`${server.url}${route}`, { ...init, headers });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Immich ${res.status} ${res.statusText}: ${text}`);
@@ -969,7 +987,7 @@ app.get('/api/immich/assets/:id/original', async (req, reply) => {
     const server = IMMICH_SERVERS[Number(idx)];
     if (!server) return reply.code(404).send('immich server not found');
     const url = `${server.url}/api/assets/${assetId}/original`;
-    const res = await fetch(url, { headers: server.key ? { 'x-api-key': server.key } : {} });
+    const res = await fetchWithTimeout(url, { headers: server.key ? { 'x-api-key': server.key } : {} });
     if (!res.ok) return reply.code(res.status).send(await res.text());
 
     // Pass through headers we care about
@@ -992,7 +1010,7 @@ app.get('/api/immich/assets/:id/thumb', async (req, reply) => {
     if (!server) return reply.code(404).send('immich server not found');
     // try size=thumbnail; some builds accept ?size=tiny/thumbnail/preview
     const url = `${server.url}/api/assets/${assetId}/thumbnail?size=thumbnail`;
-    const res = await fetch(url, { headers: server.key ? { 'x-api-key': server.key } : {} });
+    const res = await fetchWithTimeout(url, { headers: server.key ? { 'x-api-key': server.key } : {} });
     if (!res.ok) return reply.code(res.status).send(await res.text());
     reply.header('content-type', res.headers.get('content-type') || 'image/jpeg');
     reply.header('cache-control', res.headers.get('cache-control') || 'public, max-age=604800');

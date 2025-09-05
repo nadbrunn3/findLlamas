@@ -171,6 +171,7 @@ Since the admin calls your Immich/Dawarich directly, enable CORS on both:
 - Scheduling: there is no built-in scheduler. Run the loader manually or via an external cron job; each run processes one day and will overwrite that day's file on subsequent runs.
 - `ADMIN_TOKEN` (optional): protects admin endpoints. If set, the import button and other admin actions send this token in an `x-admin-token` header.
 - `LOCAL_MEDIA_DIR` (optional): absolute path to a folder of synced media. When set, imported photos point to `/media/` URLs instead of proxying through Immich. Missing thumbnails are generated on demand into a `thumbs/` subfolder using [`sharp`](https://sharp.pixelplumbing.com/).
+- `FETCH_TIMEOUT` (optional): milliseconds to wait for responses from external services like Immich. Defaults to `15000`.
 
 Minimal `.env` example:
 
@@ -182,6 +183,7 @@ IMMICH_ALBUM_ID=your_album_id
 ADMIN_TOKEN=changeme # required for admin actions like importing
 ANON_COOKIE_SECRET=long_random_string
 LOCAL_MEDIA_DIR=/srv/immich-album
+FETCH_TIMEOUT=15000
 
 # Or multiple servers:
 # IMMICH_URLS=https://immich-one.example.com,https://immich-two.example.com
