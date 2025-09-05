@@ -4,7 +4,9 @@ import fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import cors from '@fastify/cors';
 import fastifyCookie from '@fastify/cookie';
-import fastifyCompress from '@fastify/compress';
+
+// dynamically import compression to avoid hard failure when dependency is missing
+
 import { anonPlugin } from './anon.js';
 import fs from 'fs/promises';
 import fsSync from 'fs';
@@ -115,7 +117,14 @@ collectAssetHashes(PUBLIC_DIR);
 const app = fastify({ logger: true });
 app.register(cors, { origin: true });
 app.register(fastifyCookie, { secret: process.env.ANON_COOKIE_SECRET });
-app.register(fastifyCompress);
+let fastifyCompress;
+try {
+  fastifyCompress = (await import('@fastify/compress')).default;
+} catch {
+  app.log.warn('@fastify/compress not installed, skipping compression');
+}
+if (fastifyCompress) app.register(fastifyCompress);
+
 app.register(anonPlugin);
 
 // ---- User Identity ----------------------------------------------------------
