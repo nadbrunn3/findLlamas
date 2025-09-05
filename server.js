@@ -465,7 +465,7 @@ async function getAssetsForDayForServer(server, serverIndex, { date, albumId }) 
           app.log.warn(`Search API failed on page ${page}: ${searchErr.message}`);
           
           // Method 2: Try assets API with pagination
-          try {
+        try {
             const assetsParams = new URLSearchParams({
               'size': PAGE_SIZE.toString(),
               'page': (page - 1).toString()
@@ -756,29 +756,29 @@ async function getLocalPhotosForDay({ date }) {
         let lon = null;
         let duration = null;
         try {
-          const meta = exifr ? await exifr.parse(full) : {};
-          if (meta?.DateTimeOriginal) {
-            t = new Date(meta.DateTimeOriginal);
-          } else if (meta?.CreateDate) {
-            t = new Date(meta.CreateDate);
-          } else if (meta?.MediaCreateDate) {
-            t = new Date(meta.MediaCreateDate);
+            const meta = await exifr.parse(full);
+            if (meta?.DateTimeOriginal) {
+              t = new Date(meta.DateTimeOriginal);
+            } else if (meta?.CreateDate) {
+              t = new Date(meta.CreateDate);
+            } else if (meta?.MediaCreateDate) {
+              t = new Date(meta.MediaCreateDate);
+            }
+            if (meta?.GPSLatitude && meta?.GPSLongitude) {
+              lat = toDecimal(meta.GPSLatitude, meta.GPSLatitudeRef);
+              lon = toDecimal(meta.GPSLongitude, meta.GPSLongitudeRef);
+            } else if (typeof meta?.latitude === 'number' && typeof meta?.longitude === 'number') {
+              lat = meta.latitude;
+              lon = meta.longitude;
+            }
+            if (typeof meta?.duration === 'number') {
+              duration = meta.duration;
+            } else if (typeof meta?.Duration === 'number') {
+              duration = meta.Duration;
+            }
+          } catch (err) {
+            // ignore EXIF parse errors
           }
-          if (meta?.GPSLatitude && meta?.GPSLongitude) {
-            lat = toDecimal(meta.GPSLatitude, meta.GPSLatitudeRef);
-            lon = toDecimal(meta.GPSLongitude, meta.GPSLongitudeRef);
-          } else if (typeof meta?.latitude === 'number' && typeof meta?.longitude === 'number') {
-            lat = meta.latitude;
-            lon = meta.longitude;
-          }
-          if (typeof meta?.duration === 'number') {
-            duration = meta.duration;
-          } else if (typeof meta?.Duration === 'number') {
-            duration = meta.Duration;
-          }
-        } catch (err) {
-          // ignore EXIF parse errors
-        }
         if (t >= start && t < end) {
           const isVideo = video.has(ext);
           const rel = path.relative(LOCAL_MEDIA_DIR, full);

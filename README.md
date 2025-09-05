@@ -77,6 +77,12 @@ parameter.
    node server.js
    ```
 
+   The backend relies on several Node packages, including
+   [`@fastify/compress`](https://www.npmjs.com/package/@fastify/compress) for
+   response compression and [`exifr`](https://www.npmjs.com/package/exifr) for
+   reading EXIF metadata. Running `npm install` will install these
+   dependencies automatically as defined in `package.json`.
+
 3. **Configure the admin**:
    - Open http://localhost:8000/admin/index.html
    - Enter any password (stored locally)
