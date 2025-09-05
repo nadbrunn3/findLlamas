@@ -11,6 +11,15 @@ import path from 'path';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 
+// Polyfill global fetch on Node.js environments that lack it (e.g. Node <18)
+if (!globalThis.fetch) {
+  try {
+    globalThis.fetch = (await import('node-fetch')).default;
+  } catch (err) {
+    console.warn('⚠️  node-fetch not installed, fetch API unavailable');
+  }
+}
+
 dotenv.config();
 
 let sharp;
