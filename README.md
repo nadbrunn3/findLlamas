@@ -45,6 +45,16 @@ FindPenguin/
         └── admin.js        # Admin logic (Trips, Blog, Settings tabs)
 ```
 
+## 🗂 Asset Caching and CDN
+
+Static files in `public/` are served with a long cache lifetime (`maxAge` of 1 year).
+To ensure browsers receive updates when files change, the server appends a content hash
+to asset URLs (e.g. `/js/index.js?v=abcd1234`).
+
+If you host assets behind a CDN, set the `CDN_URL` environment variable. When provided,
+all static paths are rewritten to use the CDN domain while retaining the hash query
+parameter.
+
 ## 🚀 How to Run
 
 ### Option A: Local Development (Your Laptop)
