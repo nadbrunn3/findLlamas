@@ -4,18 +4,28 @@ import fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import cors from '@fastify/cors';
 import fastifyCookie from '@fastify/cookie';
-import fastifyCompress from '@fastify/compress';
 import { anonPlugin } from './anon.js';
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
-import exifr from 'exifr';
 
 dotenv.config();
 
 let sharp;
+let fastifyCompress;
+let exifr;
+try {
+  fastifyCompress = (await import('@fastify/compress')).default;
+} catch (err) {
+  console.warn('⚠️  @fastify/compress not installed, skipping compression');
+}
+try {
+  exifr = (await import('exifr')).default;
+} catch (err) {
+  console.warn('⚠️  exifr not installed, skipping EXIF parsing');
+}
 
 // ---- Config / Paths ---------------------------------------------------------
 const PORT = Number(process.env.PORT) || 4000;
@@ -95,7 +105,9 @@ collectAssetHashes(PUBLIC_DIR);
 const app = fastify({ logger: true });
 app.register(cors, { origin: true });
 app.register(fastifyCookie, { secret: process.env.ANON_COOKIE_SECRET });
-app.register(fastifyCompress);
+if (fastifyCompress) {
+  app.register(fastifyCompress);
+}
 app.register(anonPlugin);
 
 // ---- User Identity ----------------------------------------------------------
