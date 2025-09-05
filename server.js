@@ -4,6 +4,7 @@ import fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import cors from '@fastify/cors';
 import fastifyCookie from '@fastify/cookie';
+// dynamically import compression to avoid hard failure when dependency is missing
 import { anonPlugin } from './anon.js';
 import fs from 'fs/promises';
 import fsSync from 'fs';
@@ -72,6 +73,13 @@ const LOCAL_MEDIA_DIR = process.env.LOCAL_MEDIA_DIR || '';
 const app = fastify({ logger: true });
 app.register(cors, { origin: true });
 app.register(fastifyCookie, { secret: process.env.ANON_COOKIE_SECRET });
+let fastifyCompress;
+try {
+  fastifyCompress = (await import('@fastify/compress')).default;
+} catch {
+  app.log.warn('@fastify/compress not installed, skipping compression');
+}
+if (fastifyCompress) app.register(fastifyCompress);
 app.register(anonPlugin);
 
 // ---- User Identity ----------------------------------------------------------
@@ -872,6 +880,9 @@ app.get('/api/immich/assets/:id/original', async (req, reply) => {
     // Pass through headers we care about
     reply.header('content-type', res.headers.get('content-type') || 'application/octet-stream');
     reply.header('cache-control', res.headers.get('cache-control') || 'public, max-age=604800');
+    const enc = res.headers.get('content-encoding');
+    if (enc) reply.header('content-encoding', enc);
+    reply.header('vary', res.headers.get('vary') || 'accept-encoding');
     return reply.send(res.body);
   } catch (e) {
     reply.code(500).send('immich proxy failed');
@@ -890,6 +901,9 @@ app.get('/api/immich/assets/:id/thumb', async (req, reply) => {
     if (!res.ok) return reply.code(res.status).send(await res.text());
     reply.header('content-type', res.headers.get('content-type') || 'image/jpeg');
     reply.header('cache-control', res.headers.get('cache-control') || 'public, max-age=604800');
+    const enc = res.headers.get('content-encoding');
+    if (enc) reply.header('content-encoding', enc);
+    reply.header('vary', res.headers.get('vary') || 'accept-encoding');
     return reply.send(res.body);
   } catch (e) {
     reply.code(500).send('immich thumb proxy failed');
