@@ -41,13 +41,24 @@ const lazyLoadObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
     if (entry.isIntersecting) {
       const el = entry.target;
-      if (el.dataset.fullSrcset && el.tagName === 'IMG') {
-        el.srcset = el.dataset.fullSrcset;
-        delete el.dataset.fullSrcset;
-      }
-      if (el.dataset.fullSrc && el.tagName === 'IMG') {
-        el.src = el.dataset.fullSrc;
-        delete el.dataset.fullSrc;
+      if (el.tagName === 'IMG') {
+        if (el.dataset.fullSrcset) {
+          el.srcset = el.dataset.fullSrcset;
+          delete el.dataset.fullSrcset;
+        }
+        if (el.dataset.fullSrc) {
+          el.src = el.dataset.fullSrc;
+          delete el.dataset.fullSrc;
+        }
+        const pic = el.parentElement;
+        if (pic && pic.tagName === 'PICTURE') {
+          pic.querySelectorAll('source').forEach(src => {
+            if (src.dataset.srcset) {
+              src.srcset = src.dataset.srcset;
+              delete src.dataset.srcset;
+            }
+          });
+        }
       }
       if (el.dataset.src && el.tagName === 'VIDEO') {
         el.src = el.dataset.src;
@@ -114,14 +125,51 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
 
     return v;
   } else {
+    const picture = document.createElement('picture');
     const img = document.createElement('img');
     const thumbSrc = item.thumb || item.url;
+    const sizes = '(max-width: 768px) 100vw, 50vw';
+
     const srcsetParts = [];
     if (item.thumb) srcsetParts.push(`${item.thumb} 400w`);
     if (item.variants?.medium) srcsetParts.push(`${item.variants.medium} 800w`);
     if (item.url) srcsetParts.push(`${item.url} 1600w`);
     const fullSrcset = srcsetParts.join(', ');
-    const sizes = '(max-width: 768px) 100vw, 50vw';
+
+    const webpParts = [];
+    if (item.thumbWebp) webpParts.push(`${item.thumbWebp} 400w`);
+    if (item.variants?.mediumWebp) webpParts.push(`${item.variants.mediumWebp} 800w`);
+    if (item.urlWebp) webpParts.push(`${item.urlWebp} 1600w`);
+    const webpSrcset = webpParts.join(', ');
+
+    const avifParts = [];
+    if (item.thumbAvif) avifParts.push(`${item.thumbAvif} 400w`);
+    if (item.variants?.mediumAvif) avifParts.push(`${item.variants.mediumAvif} 800w`);
+    if (item.urlAvif) avifParts.push(`${item.urlAvif} 1600w`);
+    const avifSrcset = avifParts.join(', ');
+
+    if (avifSrcset) {
+      const s = document.createElement('source');
+      s.type = 'image/avif';
+      if (useThumb && item.thumbAvif && item.urlAvif) {
+        s.srcset = item.thumbAvif;
+        s.dataset.srcset = avifSrcset;
+      } else {
+        s.srcset = avifSrcset;
+      }
+      picture.appendChild(s);
+    }
+    if (webpSrcset) {
+      const s = document.createElement('source');
+      s.type = 'image/webp';
+      if (useThumb && item.thumbWebp && item.urlWebp) {
+        s.srcset = item.thumbWebp;
+        s.dataset.srcset = webpSrcset;
+      } else {
+        s.srcset = webpSrcset;
+      }
+      picture.appendChild(s);
+    }
 
     if (useThumb && item.url !== thumbSrc) {
       img.src = thumbSrc;
@@ -129,6 +177,7 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
         img.srcset = thumbSrc;
         img.dataset.fullSrcset = fullSrcset;
         img.sizes = sizes;
+        img.dataset.fullSrc = item.url;
         lazyLoadObserver.observe(img);
       }
     } else {
@@ -143,7 +192,9 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
     img.loading = 'lazy';
     img.decoding = 'async';
     img.className = className;
-    return img;
+    picture.className = className;
+    picture.appendChild(img);
+    return picture;
   }
 }
 

@@ -554,10 +554,23 @@ async function ensureLocalThumb(original, thumb) {
         sharp = (await import('sharp')).default;
       }
       await fs.mkdir(path.dirname(thumb), { recursive: true });
-      await sharp(original)
-        .rotate()
-        .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
-        .toFile(thumb);
+
+      let pipeline = sharp(original).rotate();
+      if (/[/\\]thumbs[/\\]/.test(thumb)) {
+        pipeline = pipeline.resize(400, 400, {
+          fit: 'inside',
+          withoutEnlargement: true
+        });
+      }
+
+      const ext = path.extname(thumb).toLowerCase();
+      if (ext === '.webp') {
+        pipeline = pipeline.webp();
+      } else if (ext === '.avif') {
+        pipeline = pipeline.avif();
+      }
+
+      await pipeline.toFile(thumb);
     } catch (err) {
       app.log.error({ msg: 'thumb generation failed', err: String(err) });
     }
@@ -596,13 +609,49 @@ async function mapAssetToPhoto(a, serverIndex) {
     ? path.join(LOCAL_MEDIA_DIR, 'thumbs', filename)
     : null;
 
+  const parsed = path.parse(filename);
+  const localOriginalWebp = LOCAL_MEDIA_DIR
+    ? path.join(LOCAL_MEDIA_DIR, `${parsed.name}.webp`)
+    : null;
+  const localOriginalAvif = LOCAL_MEDIA_DIR
+    ? path.join(LOCAL_MEDIA_DIR, `${parsed.name}.avif`)
+    : null;
+  const localThumbWebp = LOCAL_MEDIA_DIR
+    ? path.join(LOCAL_MEDIA_DIR, 'thumbs', `${parsed.name}.webp`)
+    : null;
+  const localThumbAvif = LOCAL_MEDIA_DIR
+    ? path.join(LOCAL_MEDIA_DIR, 'thumbs', `${parsed.name}.avif`)
+    : null;
+
   const hasLocal = localOriginal && fsSync.existsSync(localOriginal);
   let hasThumb = localThumb && fsSync.existsSync(localThumb);
-  if (hasLocal && !hasThumb && localThumb) {
-    await ensureLocalThumb(localOriginal, localThumb);
-    hasThumb = fsSync.existsSync(localThumb);
-  }
+  let hasThumbWebp = localThumbWebp && fsSync.existsSync(localThumbWebp);
+  let hasThumbAvif = localThumbAvif && fsSync.existsSync(localThumbAvif);
+  let hasWebp = localOriginalWebp && fsSync.existsSync(localOriginalWebp);
+  let hasAvif = localOriginalAvif && fsSync.existsSync(localOriginalAvif);
 
+  if (hasLocal) {
+    if (!hasThumb && localThumb) {
+      await ensureLocalThumb(localOriginal, localThumb);
+      hasThumb = fsSync.existsSync(localThumb);
+    }
+    if (!hasThumbWebp && localThumbWebp) {
+      await ensureLocalThumb(localOriginal, localThumbWebp);
+      hasThumbWebp = fsSync.existsSync(localThumbWebp);
+    }
+    if (!hasThumbAvif && localThumbAvif) {
+      await ensureLocalThumb(localOriginal, localThumbAvif);
+      hasThumbAvif = fsSync.existsSync(localThumbAvif);
+    }
+    if (!hasWebp && localOriginalWebp) {
+      await ensureLocalThumb(localOriginal, localOriginalWebp);
+      hasWebp = fsSync.existsSync(localOriginalWebp);
+    }
+    if (!hasAvif && localOriginalAvif) {
+      await ensureLocalThumb(localOriginal, localOriginalAvif);
+      hasAvif = fsSync.existsSync(localOriginalAvif);
+    }
+  }
 
   return {
     id,
@@ -612,11 +661,15 @@ async function mapAssetToPhoto(a, serverIndex) {
     url: hasLocal
       ? `/media/${filename}`
       : `/api/immich/assets/${id}/original`,
+    urlWebp: hasWebp ? `/media/${parsed.name}.webp` : undefined,
+    urlAvif: hasAvif ? `/media/${parsed.name}.avif` : undefined,
     thumb: hasThumb
       ? `/media/thumbs/${filename}`
       : hasLocal
         ? `/media/${filename}`
         : `/api/immich/assets/${id}/thumb`,
+    thumbWebp: hasThumbWebp ? `/media/thumbs/${parsed.name}.webp` : undefined,
+    thumbAvif: hasThumbAvif ? `/media/thumbs/${parsed.name}.avif` : undefined,
     taken_at: takenAt,
     lat,
     lon,
@@ -699,25 +752,69 @@ async function getLocalPhotosForDay({ date }) {
           const isVideo = video.has(ext);
           const rel = path.relative(LOCAL_MEDIA_DIR, full);
           const fileId = rel.replace(/[\\/]/g, '_');
+          const parsed = path.parse(rel);
+
           const localThumb = path.join(LOCAL_MEDIA_DIR, 'thumbs', rel);
+          const localThumbWebp = path.join(
+            LOCAL_MEDIA_DIR,
+            'thumbs',
+            path.join(parsed.dir, `${parsed.name}.webp`)
+          );
+          const localThumbAvif = path.join(
+            LOCAL_MEDIA_DIR,
+            'thumbs',
+            path.join(parsed.dir, `${parsed.name}.avif`)
+          );
+          const localWebp = path.join(LOCAL_MEDIA_DIR, path.join(parsed.dir, `${parsed.name}.webp`));
+          const localAvif = path.join(LOCAL_MEDIA_DIR, path.join(parsed.dir, `${parsed.name}.avif`));
+
           let thumbUrl = `/media/thumbs/${rel}`;
+          let thumbWebpUrl = `/media/thumbs/${path.join(parsed.dir, `${parsed.name}.webp`)}`;
+          let thumbAvifUrl = `/media/thumbs/${path.join(parsed.dir, `${parsed.name}.avif`)}`;
           try {
             await fs.access(localThumb);
           } catch {
             await ensureLocalThumb(full, localThumb);
-            try {
-              await fs.access(localThumb);
-            } catch {
-              thumbUrl = `/media/${rel}`;
+          }
+          try {
+            await fs.access(localThumbWebp);
+          } catch {
+            await ensureLocalThumb(full, localThumbWebp);
+          }
+          try {
+            await fs.access(localThumbAvif);
+          } catch {
+            await ensureLocalThumb(full, localThumbAvif);
+          }
+          try {
+            await fs.access(localWebp);
+          } catch {
+            if (!isVideo) {
+              await ensureLocalThumb(full, localWebp);
             }
           }
+          try {
+            await fs.access(localAvif);
+          } catch {
+            if (!isVideo) {
+              await ensureLocalThumb(full, localAvif);
+            }
+          }
+
+          const existsThumb = fsSync.existsSync(localThumb);
+          if (!existsThumb) thumbUrl = `/media/${rel}`;
+
           results.push({
             id: `local_${fileId}`,
             kind: isVideo ? 'video' : 'photo',
             mimeType: mime[ext] || (isVideo ? 'video/*' : 'image/*'),
             duration,
             url: `/media/${rel}`,
+            urlWebp: fsSync.existsSync(localWebp) ? `/media/${path.join(parsed.dir, `${parsed.name}.webp`)}` : undefined,
+            urlAvif: fsSync.existsSync(localAvif) ? `/media/${path.join(parsed.dir, `${parsed.name}.avif`)}` : undefined,
             thumb: thumbUrl,
+            thumbWebp: fsSync.existsSync(localThumbWebp) ? thumbWebpUrl : undefined,
+            thumbAvif: fsSync.existsSync(localThumbAvif) ? thumbAvifUrl : undefined,
             taken_at: t.toISOString(),
             lat,
             lon,
