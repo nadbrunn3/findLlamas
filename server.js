@@ -138,6 +138,11 @@ app.register(fastifyStatic, {
   prefix: '/', // so /day.html, /admin/index.html, /js/*
   cacheControl: true,
   maxAge: '1y',
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('cache-control', 'no-cache');
+    }
+  },
 });
 
 // expose locally synced media if configured
