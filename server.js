@@ -545,22 +545,30 @@ async function getAssetsForDay({ date, albumId }) {
   return allPhotos;
 }
 
-async function ensureLocalThumb(original, thumb) {
+async function ensureLocalThumb(original, thumbBase) {
+  const sizes = [400, 800, 1600];
   try {
-    await fs.access(thumb);
-  } catch {
-    try {
-      if (!sharp) {
-        sharp = (await import('sharp')).default;
-      }
-      await fs.mkdir(path.dirname(thumb), { recursive: true });
-      await sharp(original)
-        .rotate()
-        .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
-        .toFile(thumb);
-    } catch (err) {
-      app.log.error({ msg: 'thumb generation failed', err: String(err) });
+    if (!sharp) {
+      sharp = (await import('sharp')).default;
     }
+    await fs.mkdir(path.dirname(thumbBase), { recursive: true });
+    for (const size of sizes) {
+      const thumbPath = `${thumbBase}-${size}.jpg`;
+      try {
+        await fs.access(thumbPath);
+      } catch {
+        try {
+          await sharp(original)
+            .rotate()
+            .resize(size, size, { fit: 'inside', withoutEnlargement: true })
+            .toFile(thumbPath);
+        } catch (err) {
+          app.log.error({ msg: `thumb generation failed (${size})`, err: String(err) });
+        }
+      }
+    }
+  } catch (err) {
+    app.log.error({ msg: 'thumb generation setup failed', err: String(err) });
   }
 }
 
@@ -589,20 +597,30 @@ async function mapAssetToPhoto(a, serverIndex) {
       : (asset?.exifInfo?.duration || null);
 
   const filename = asset.originalFileName || `${rawId}`;
+  const nameNoExt = path.parse(filename).name;
   const localOriginal = LOCAL_MEDIA_DIR
     ? path.join(LOCAL_MEDIA_DIR, filename)
     : null;
-  const localThumb = LOCAL_MEDIA_DIR
-    ? path.join(LOCAL_MEDIA_DIR, 'thumbs', filename)
+  const localThumbBase = LOCAL_MEDIA_DIR
+    ? path.join(LOCAL_MEDIA_DIR, 'thumbs', nameNoExt)
     : null;
 
   const hasLocal = localOriginal && fsSync.existsSync(localOriginal);
-  let hasThumb = localThumb && fsSync.existsSync(localThumb);
-  if (hasLocal && !hasThumb && localThumb) {
-    await ensureLocalThumb(localOriginal, localThumb);
-    hasThumb = fsSync.existsSync(localThumb);
+  let hasThumb = localThumbBase && fsSync.existsSync(`${localThumbBase}-400.jpg`);
+  if (hasLocal && !hasThumb && localThumbBase) {
+    await ensureLocalThumb(localOriginal, localThumbBase);
+    hasThumb = fsSync.existsSync(`${localThumbBase}-400.jpg`);
   }
 
+  const thumbRelBase = `thumbs/${nameNoExt}`;
+  const variants = {};
+  if (hasThumb) {
+    variants.medium = `/media/${thumbRelBase}-800.jpg`;
+    variants.large = `/media/${thumbRelBase}-1600.jpg`;
+  } else if (!hasLocal) {
+    variants.medium = `/api/immich/assets/${id}/thumb?size=preview`;
+    variants.large = `/api/immich/assets/${id}/thumb?size=large`;
+  }
 
   return {
     id,
@@ -613,10 +631,11 @@ async function mapAssetToPhoto(a, serverIndex) {
       ? `/media/${filename}`
       : `/api/immich/assets/${id}/original`,
     thumb: hasThumb
-      ? `/media/thumbs/${filename}`
+      ? `/media/${thumbRelBase}-400.jpg`
       : hasLocal
         ? `/media/${filename}`
         : `/api/immich/assets/${id}/thumb`,
+    variants: Object.keys(variants).length ? variants : undefined,
     taken_at: takenAt,
     lat,
     lon,
@@ -699,18 +718,27 @@ async function getLocalPhotosForDay({ date }) {
           const isVideo = video.has(ext);
           const rel = path.relative(LOCAL_MEDIA_DIR, full);
           const fileId = rel.replace(/[\\/]/g, '_');
-          const localThumb = path.join(LOCAL_MEDIA_DIR, 'thumbs', rel);
-          let thumbUrl = `/media/thumbs/${rel}`;
+          const relBase = path.join(path.dirname(rel), path.parse(rel).name);
+          const localThumbBase = path.join(LOCAL_MEDIA_DIR, 'thumbs', relBase);
+          const thumbUrlBase = `/media/thumbs/${relBase}`;
+          let thumbUrl = `${thumbUrlBase}-400.jpg`;
           try {
-            await fs.access(localThumb);
+            await fs.access(`${localThumbBase}-400.jpg`);
           } catch {
-            await ensureLocalThumb(full, localThumb);
+            await ensureLocalThumb(full, localThumbBase);
             try {
-              await fs.access(localThumb);
+              await fs.access(`${localThumbBase}-400.jpg`);
             } catch {
               thumbUrl = `/media/${rel}`;
             }
           }
+          const variants =
+            thumbUrl.startsWith('/media/thumbs/')
+              ? {
+                  medium: `${thumbUrlBase}-800.jpg`,
+                  large: `${thumbUrlBase}-1600.jpg`
+                }
+              : undefined;
           results.push({
             id: `local_${fileId}`,
             kind: isVideo ? 'video' : 'photo',
@@ -718,6 +746,7 @@ async function getLocalPhotosForDay({ date }) {
             duration,
             url: `/media/${rel}`,
             thumb: thumbUrl,
+            variants,
             taken_at: t.toISOString(),
             lat,
             lon,
@@ -961,8 +990,11 @@ async function ensureThumbsForDay(day) {
   for (const p of day.photos) {
     if (p.url?.startsWith('/media/') && p.thumb?.startsWith('/media/')) {
       const orig = path.join(LOCAL_MEDIA_DIR, p.url.replace('/media/', ''));
-      const th = path.join(LOCAL_MEDIA_DIR, p.thumb.replace('/media/', ''));
-      await ensureLocalThumb(orig, th);
+      const thumbBaseRel = p.thumb
+        .replace('/media/', '')
+        .replace(/-400\.jpg$/, '');
+      const thBase = path.join(LOCAL_MEDIA_DIR, thumbBaseRel);
+      await ensureLocalThumb(orig, thBase);
     }
   }
 }
