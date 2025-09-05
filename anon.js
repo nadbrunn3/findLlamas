@@ -1,6 +1,7 @@
 import crypto from 'crypto';
+import fp from 'fastify-plugin';
 
-export function anonPlugin(app, opts, done) {
+export const anonPlugin = fp(function (app, opts, done) {
   const COOKIE = 'anon';
   const SECRET = process.env.ANON_COOKIE_SECRET || 'dev-secret-change-me';
 
@@ -38,4 +39,4 @@ export function anonPlugin(app, opts, done) {
   });
 
   done();
-}
+});

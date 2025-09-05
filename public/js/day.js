@@ -119,7 +119,8 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
     const srcsetParts = [];
     if (item.thumb) srcsetParts.push(`${item.thumb} 400w`);
     if (item.variants?.medium) srcsetParts.push(`${item.variants.medium} 800w`);
-    if (item.url) srcsetParts.push(`${item.url} 1600w`);
+    if (item.variants?.large) srcsetParts.push(`${item.variants.large} 1600w`);
+    if (item.url) srcsetParts.push(`${item.url} 2400w`);
     const fullSrcset = srcsetParts.join(', ');
     const sizes = '(max-width: 768px) 100vw, 50vw';
 
