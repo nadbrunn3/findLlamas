@@ -117,12 +117,6 @@ collectAssetHashes(PUBLIC_DIR);
 const app = fastify({ logger: true });
 app.register(cors, { origin: true });
 app.register(fastifyCookie, { secret: process.env.ANON_COOKIE_SECRET });
-let fastifyCompress;
-try {
-  fastifyCompress = (await import('@fastify/compress')).default;
-} catch {
-  app.log.warn('@fastify/compress not installed, skipping compression');
-}
 if (fastifyCompress) app.register(fastifyCompress);
 
 app.register(anonPlugin);
