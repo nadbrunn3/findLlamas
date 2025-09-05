@@ -67,6 +67,28 @@ const AUTOLOAD_INTERVAL = 60 * 60 * 1000; // 1 hour
 
 // optional local media folder (thumbnails + originals)
 const LOCAL_MEDIA_DIR = process.env.LOCAL_MEDIA_DIR || '';
+const CDN_URL = (process.env.CDN_URL || '').replace(/\/$/, '');
+const PUBLIC_DIR = path.join(REPO_DIR, 'public');
+const assetHashes = {};
+function collectAssetHashes(dir) {
+  for (const entry of fsSync.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) collectAssetHashes(full);
+    else if (/\.(js|css)$/.test(entry.name)) {
+      const rel = path.relative(PUBLIC_DIR, full).replace(/\\/g, '/');
+      const buf = fsSync.readFileSync(full);
+      assetHashes[rel] = crypto
+        .createHash('sha1')
+        .update(buf)
+        .digest('hex')
+        .slice(0, 10);
+    }
+  }
+}
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+collectAssetHashes(PUBLIC_DIR);
 
 // helpers
 const app = fastify({ logger: true });
@@ -90,7 +112,7 @@ app.register(fastifyStatic, {
   root: path.join(REPO_DIR, 'public'),
   prefix: '/', // so /day.html, /admin/index.html, /js/*
   cacheControl: true,
-  maxAge: '1d',
+  maxAge: '1y',
 });
 
 // expose locally synced media if configured
@@ -100,9 +122,38 @@ if (LOCAL_MEDIA_DIR) {
     prefix: '/media/',
     decorateReply: false,
     cacheControl: true,
-    maxAge: '1d',
+    maxAge: '1y',
   });
 }
+
+// rewrite static asset paths with hashes/CDN
+app.addHook('onSend', (req, reply, payload, done) => {
+  const type = reply.getHeader('content-type') || '';
+  if (typeof payload === 'string' || Buffer.isBuffer(payload)) {
+    let body = payload.toString();
+    if (type.includes('text/html')) {
+      for (const [rel, hash] of Object.entries(assetHashes)) {
+        const regex = new RegExp(`(?:/)?${escapeRegex(rel)}(?!\\?v=)`, 'g');
+        const prefix = CDN_URL ? CDN_URL : '';
+        body = body.replace(regex, `${prefix}/${rel}?v=${hash}`);
+      }
+      done(null, body);
+      return;
+    }
+    if (type.includes('javascript')) {
+      const utilsHash = assetHashes['js/utils.js'];
+      if (utilsHash) {
+        const prefix = CDN_URL ? CDN_URL : '';
+        body = body
+          .replace(/\.\/utils\.js(?!\\?v=)/g, `./utils.js?v=${utilsHash}`)
+          .replace(/\/js\/utils\.js(?!\\?v=)/g, `${prefix}/js/utils.js?v=${utilsHash}`);
+      }
+      done(null, body);
+      return;
+    }
+  }
+  done(null, payload);
+});
 
 // Serve welcome.html as the main page
 app.get('/', async (req, reply) => {
