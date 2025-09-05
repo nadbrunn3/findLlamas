@@ -2,6 +2,7 @@
 .DS_Store
 
 # Ignore everything in data folders except .gitkeep files
+node_modules/
 public/data/days/*
 !public/data/days/.gitkeep
 
