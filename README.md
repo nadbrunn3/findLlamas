@@ -45,6 +45,16 @@ FindPenguin/
         └── admin.js        # Admin logic (Trips, Blog, Settings tabs)
 ```
 
+## 🗂 Asset Caching and CDN
+
+Static files in `public/` are served with a long cache lifetime (`maxAge` of 1 year).
+To ensure browsers receive updates when files change, the server appends a content hash
+to asset URLs (e.g. `/js/index.js?v=abcd1234`).
+
+If you host assets behind a CDN, set the `CDN_URL` environment variable. When provided,
+all static paths are rewritten to use the CDN domain while retaining the hash query
+parameter.
+
 ## 🚀 How to Run
 
 ### Option A: Local Development (Your Laptop)
@@ -66,6 +76,12 @@ FindPenguin/
    GIT_USER_EMAIL="you@example.com" \
    node server.js
    ```
+
+   The backend relies on several Node packages, including
+   [`@fastify/compress`](https://www.npmjs.com/package/@fastify/compress) for
+   response compression and [`exifr`](https://www.npmjs.com/package/exifr) for
+   reading EXIF metadata. Running `npm install` will install these
+   dependencies automatically as defined in `package.json`.
 
 3. **Configure the admin**:
    - Open http://localhost:8000/admin/index.html

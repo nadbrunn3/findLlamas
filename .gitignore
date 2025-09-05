@@ -1,5 +1,6 @@
 .env
 .DS_Store
+node_modules/
 
 # Ignore everything in data folders except .gitkeep files
 node_modules/
