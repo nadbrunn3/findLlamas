@@ -4,6 +4,7 @@ import fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import cors from '@fastify/cors';
 import fastifyCookie from '@fastify/cookie';
+import fastifyCompress from '@fastify/compress';
 import { anonPlugin } from './anon.js';
 import fs from 'fs/promises';
 import fsSync from 'fs';
@@ -114,9 +115,7 @@ collectAssetHashes(PUBLIC_DIR);
 const app = fastify({ logger: true });
 app.register(cors, { origin: true });
 app.register(fastifyCookie, { secret: process.env.ANON_COOKIE_SECRET });
-if (fastifyCompress) {
-  app.register(fastifyCompress);
-}
+app.register(fastifyCompress);
 app.register(anonPlugin);
 
 // ---- User Identity ----------------------------------------------------------
