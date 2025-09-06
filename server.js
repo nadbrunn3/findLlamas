@@ -139,7 +139,8 @@ app.register(fastifyStatic, {
   cacheControl: true,
   maxAge: '1y',
   setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.html')) {
+    const relPath = filePath.replace(/\\/g, '/');
+    if (filePath.endsWith('.html') || relPath.includes('/data/')) {
       res.setHeader('cache-control', 'no-cache');
     }
   },
