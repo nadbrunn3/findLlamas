@@ -53,6 +53,10 @@ const lazyLoadObserver = new IntersectionObserver((entries) => {
         el.src = el.dataset.src;
         delete el.dataset.src;
       }
+      // Keep loaded media in memory when leaving the viewport
+      if (el.tagName === 'IMG') {
+        el.loading = 'eager';
+      }
       lazyLoadObserver.unobserve(el);
     }
   });
@@ -144,6 +148,10 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
     img.loading = 'lazy';
     img.decoding = 'async';
     img.className = className;
+    // Once loaded, switch to eager so it doesn't unload on scroll
+    img.addEventListener('load', () => {
+      img.loading = 'eager';
+    }, { once: true });
     return img;
   }
 }
