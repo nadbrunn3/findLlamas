@@ -193,6 +193,10 @@ function isVideo(item) {
 }
 
 // Cache for created media elements to avoid recreation
+// The cache stores a "template" element that we clone whenever the same
+// media needs to be rendered again.  Once the media finishes loading, the
+// cache entry is updated so subsequent renders use the fully loaded version
+// instead of triggering another network request.
 const mediaElementCache = new Map();
 
 // Intersection Observer for lazy loading
@@ -223,10 +227,31 @@ const lazyLoadObserver = new IntersectionObserver((entries) => {
 function renderMediaEl(item, { withControls = false, className = '', useThumb = false } = {}) {
   // Create cache key
   const cacheKey = `${item.id || item.url}-${className}-${useThumb}-${withControls}`;
-  
+
   // Return cached element if available
   if (mediaElementCache.has(cacheKey)) {
-    return mediaElementCache.get(cacheKey).cloneNode(true);
+    const cachedTemplate = mediaElementCache.get(cacheKey);
+    const clone = cachedTemplate.cloneNode(true);
+
+    // If the clone still relies on lazy loading, reattach the observer so it
+    // upgrades when entering the viewport.
+    const media = clone.tagName === 'VIDEO' ? clone : clone.querySelector('video');
+    if (clone.dataset.fullSrcset && clone.tagName === 'IMG') {
+      lazyLoadObserver.observe(clone);
+      clone.addEventListener('load', () => {
+        if (!clone.dataset.fullSrcset) {
+          mediaElementCache.set(cacheKey, clone.cloneNode(true));
+        }
+      }, { once: true });
+    } else if (clone.dataset.src && (clone.tagName === 'VIDEO' || media)) {
+      const target = media || clone;
+      lazyLoadObserver.observe(target);
+      target.addEventListener('loadeddata', () => {
+        mediaElementCache.set(cacheKey, clone.cloneNode(true));
+      }, { once: true });
+    }
+
+    return clone;
   }
   
   let element;
@@ -330,10 +355,27 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
     if (className) img.className = className;
     element = img;
   }
-  
-  // Cache the element (clone it to avoid reference issues)
+
+  // Store a template for future renders and update the cache once the media
+  // has fully loaded so repeat visits don't trigger additional network
+  // requests.
   mediaElementCache.set(cacheKey, element.cloneNode(true));
-  
+
+  const updateCache = () => {
+    mediaElementCache.set(cacheKey, element.cloneNode(true));
+  };
+
+  if (isVideo(item)) {
+    const vid = element.tagName === 'VIDEO' ? element : element.querySelector('video');
+    if (vid) {
+      vid.addEventListener('loadeddata', updateCache, { once: true });
+    }
+  } else {
+    element.addEventListener('load', () => {
+      if (!element.dataset.fullSrcset) updateCache();
+    }, { once: true });
+  }
+
   return element;
 }
 
