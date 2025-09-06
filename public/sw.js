@@ -1,5 +1,6 @@
 // Increment CACHE_NAME to bust old caches on deploys
 const CACHE_NAME = 'findllamas-v4';
+
 // Only cache static assets that rarely change. HTML files are fetched from
 // the network on each navigation to avoid serving stale pages from cache.
 const STATIC_ASSETS = [
@@ -32,7 +33,6 @@ self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // cache-first for images, ignoring query params so legacy stacks don't reload
   if (/\.(?:png|jpg|jpeg|gif|webp|avif|svg)$/.test(url.pathname)) {
     const cacheKey = url.origin + url.pathname;
     event.respondWith(
@@ -41,6 +41,7 @@ self.addEventListener('fetch', event => {
           if (cached) return cached;
           return fetch(request).then(response => {
             cache.put(cacheKey, response.clone());
+
             return response;
           });
         })
