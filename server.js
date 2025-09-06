@@ -992,16 +992,34 @@ app.get('/api/immich/assets/:id/original', async (req, reply) => {
   }
 });
 
-// Proxy thumbnail (Immich supports /thumbnail and size param on newer builds)
+// Proxy thumbnail. Newer Immich builds support a size parameter while
+// older ones only expose `/thumbnail` with a default size. We forward the
+// requested `size` when available and fall back to the legacy endpoint if
+// the request fails (e.g. running against an older Immich version).
 app.get('/api/immich/assets/:id/thumb', async (req, reply) => {
   try {
     const [idx, assetId] = req.params.id.split('_');
     const server = IMMICH_SERVERS[Number(idx)];
     if (!server) return reply.code(404).send('immich server not found');
-    // try size=thumbnail; some builds accept ?size=tiny/thumbnail/preview
-    const url = `${server.url}/api/assets/${assetId}/thumbnail?size=thumbnail`;
-    const res = await fetch(url, { headers: server.key ? { 'x-api-key': server.key } : {} });
-    if (!res.ok) return reply.code(res.status).send(await res.text());
+
+    const size = req.query?.size || 'thumbnail';
+    const headers = server.key ? { 'x-api-key': server.key } : {};
+
+    // First try with the requested size parameter
+    let url = `${server.url}/api/assets/${assetId}/thumbnail?size=${size}`;
+    let res = await fetch(url, { headers });
+
+    // If the response is not ok, fall back to legacy endpoint without size
+    if (!res.ok) {
+      const legacyUrl = `${server.url}/api/assets/${assetId}/thumbnail`;
+      const legacyRes = await fetch(legacyUrl, { headers });
+      if (legacyRes.ok) {
+        res = legacyRes;
+      } else {
+        return reply.code(legacyRes.status).send(await legacyRes.text());
+      }
+    }
+
     reply.header('content-type', res.headers.get('content-type') || 'image/jpeg');
     reply.header('cache-control', res.headers.get('cache-control') || 'public, max-age=604800');
     const enc = res.headers.get('content-encoding');
