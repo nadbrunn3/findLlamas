@@ -199,36 +199,6 @@ function isVideo(item) {
 // instead of triggering another network request.
 const mediaElementCache = new Map();
 
-// Intersection Observer for lazy loading
-const lazyLoadObserver = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting) {
-      const element = entry.target;
-      
-      // Upgrade to full srcset for images when available
-      if (element.dataset.fullSrcset && element.tagName === 'IMG') {
-        element.srcset = element.dataset.fullSrcset;
-        delete element.dataset.fullSrcset;
-      }
-      
-      // Load video source if available
-      if (element.dataset.src && element.tagName === 'VIDEO') {
-        element.src = element.dataset.src;
-        delete element.dataset.src;
-      }
-      
-      // Once media is in view, ensure the browser keeps it loaded
-      if (element.tagName === 'IMG') {
-        element.loading = 'eager';
-      }
-
-      lazyLoadObserver.unobserve(element);
-    }
-  });
-}, {
-  rootMargin: '50px' // Start loading 50px before element comes into view
-});
-
 function renderMediaEl(item, { withControls = false, className = '', useThumb = false } = {}) {
   // Create cache key
   const cacheKey = `${item.id || item.url}-${className}-${useThumb}-${withControls}`;
@@ -236,27 +206,7 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
   // Return cached element if available
   if (mediaElementCache.has(cacheKey)) {
     const cachedTemplate = mediaElementCache.get(cacheKey);
-    const clone = cachedTemplate.cloneNode(true);
-
-    // If the clone still relies on lazy loading, reattach the observer so it
-    // upgrades when entering the viewport.
-    const media = clone.tagName === 'VIDEO' ? clone : clone.querySelector('video');
-    if (clone.dataset.fullSrcset && clone.tagName === 'IMG') {
-      lazyLoadObserver.observe(clone);
-      clone.addEventListener('load', () => {
-        if (!clone.dataset.fullSrcset) {
-          mediaElementCache.set(cacheKey, clone.cloneNode(true));
-        }
-      }, { once: true });
-    } else if (clone.dataset.src && (clone.tagName === 'VIDEO' || media)) {
-      const target = media || clone;
-      lazyLoadObserver.observe(target);
-      target.addEventListener('loadeddata', () => {
-        mediaElementCache.set(cacheKey, clone.cloneNode(true));
-      }, { once: true });
-    }
-
-    return clone;
+    return cachedTemplate.cloneNode(true);
   }
   
   let element;
@@ -269,7 +219,7 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
     v.playsInline = true;
     v.loop = true;
     v.controls = !!withControls;
-    v.setAttribute('preload', 'none'); // Changed from 'metadata' to 'none' for better performance
+    v.setAttribute('preload', 'auto');
     if (className) v.className = className;
 
     // Prefer lower-resolution variant on mobile if provided
@@ -278,14 +228,7 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
         ? item.variants.mobile || item.variants.sd || item.variants.low
         : item.url;
 
-    // Only set src when needed (lazy loading)
-    if (withControls || className.includes('lightbox')) {
-      v.src = videoSrc;
-    } else {
-      v.dataset.src = videoSrc; // Store for lazy loading
-      // Add to lazy loading observer for videos
-      lazyLoadObserver.observe(v);
-    }
+    v.src = videoSrc;
     
     // Add simple play button overlay for stack videos
     if (className.includes('stack-main-photo')) {
@@ -322,14 +265,10 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
       element = v;
     }
   } else {
-    // Photo - optimize image loading
+    // Photo - load eagerly
     const img = document.createElement('img');
 
-    // Always use thumbnails for better performance, except in lightbox
-    const shouldUseThumbnail = useThumb ||
-      className.includes('drawer-thumbnail') ||
-      className.includes('stack-main-photo');
-
+    // Determine appropriate source
     const srcsetParts = [];
     if (item.thumb) srcsetParts.push(`${item.thumb} 400w`);
     if (item.variants?.medium) srcsetParts.push(`${item.variants.medium} 800w`);
@@ -337,30 +276,16 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
     const fullSrcset = srcsetParts.join(', ');
     const sizes = '(max-width: 768px) 100vw, 50vw';
 
-    if (shouldUseThumbnail && item.url !== item.thumb) {
-      img.src = item.thumb || item.url;
-      if (fullSrcset) {
-        img.srcset = item.thumb || item.url;
-        img.dataset.fullSrcset = fullSrcset;
-        img.sizes = sizes;
-        lazyLoadObserver.observe(img);
-      }
-    } else {
-      img.src = shouldUseThumbnail ? (item.thumb || item.url) : item.url;
-      if (fullSrcset) {
-        img.srcset = fullSrcset;
-        img.sizes = sizes;
-      }
+    const thumbSrc = item.thumb || item.url;
+    img.src = thumbSrc;
+    if (fullSrcset) {
+      img.srcset = fullSrcset;
+      img.sizes = sizes;
     }
 
     img.alt = item.title || item.caption || '';
-    img.loading = 'lazy';
-    img.decoding = 'async';
-    // Prevent already-loaded images from being discarded when out of view
-    img.addEventListener('load', () => {
-      img.loading = 'eager';
-    }, { once: true });
-
+    img.loading = 'eager';
+    img.decoding = 'auto';
     if (className) img.className = className;
     element = img;
   }
@@ -380,9 +305,7 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
       vid.addEventListener('loadeddata', updateCache, { once: true });
     }
   } else {
-    element.addEventListener('load', () => {
-      if (!element.dataset.fullSrcset) updateCache();
-    }, { once: true });
+    element.addEventListener('load', updateCache, { once: true });
   }
 
   return element;
@@ -802,7 +725,7 @@ function renderFeed(){
       }
     }
 
-    // Optimize thumbnail rendering with lazy loading
+    // Populate thumbnails without lazy loading
     function populateThumbnails() {
       if (!drawer) return;
       const thumbsContainer = drawer.querySelector('.drawer-thumbnails');
@@ -2201,11 +2124,7 @@ function renderPhotoGrid(){
     const img = document.createElement('img');
     img.src = p.thumb || p.url;
     img.alt = p.caption || '';
-    img.loading = 'lazy';
-    // Switch to eager after load so scrolling doesn't trigger re-fetch
-    img.addEventListener('load', () => {
-      img.loading = 'eager';
-    }, { once: true });
+    img.loading = 'eager';
     img.addEventListener('click', () => {
       if (window.openPhotoLightbox) {
         window.openPhotoLightbox(photos, idx);
