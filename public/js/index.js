@@ -217,6 +217,11 @@ const lazyLoadObserver = new IntersectionObserver((entries) => {
         delete element.dataset.src;
       }
       
+      // Once media is in view, ensure the browser keeps it loaded
+      if (element.tagName === 'IMG') {
+        element.loading = 'eager';
+      }
+
       lazyLoadObserver.unobserve(element);
     }
   });
@@ -351,6 +356,10 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
     img.alt = item.title || item.caption || '';
     img.loading = 'lazy';
     img.decoding = 'async';
+    // Prevent already-loaded images from being discarded when out of view
+    img.addEventListener('load', () => {
+      img.loading = 'eager';
+    }, { once: true });
 
     if (className) img.className = className;
     element = img;
@@ -2193,6 +2202,10 @@ function renderPhotoGrid(){
     img.src = p.thumb || p.url;
     img.alt = p.caption || '';
     img.loading = 'lazy';
+    // Switch to eager after load so scrolling doesn't trigger re-fetch
+    img.addEventListener('load', () => {
+      img.loading = 'eager';
+    }, { once: true });
     img.addEventListener('click', () => {
       if (window.openPhotoLightbox) {
         window.openPhotoLightbox(photos, idx);
