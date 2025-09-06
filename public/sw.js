@@ -1,5 +1,5 @@
 // Increment CACHE_NAME to bust old caches on deploys
-const CACHE_NAME = 'findllamas-v2';
+const CACHE_NAME = 'findllamas-v3';
 // Only cache static assets that rarely change. HTML files are fetched from
 // the network on each navigation to avoid serving stale pages from cache.
 const STATIC_ASSETS = [
@@ -34,16 +34,16 @@ self.addEventListener('fetch', event => {
 
   if (url.origin !== location.origin) return;
 
-  // cache-first for images
+  // cache-first for images without triggering a network request if cached
   if (/\.(?:png|jpg|jpeg|gif|webp|avif|svg)$/.test(url.pathname)) {
     event.respondWith(
       caches.open(CACHE_NAME).then(cache =>
         cache.match(request).then(cached => {
-          const fetchPromise = fetch(request).then(response => {
+          if (cached) return cached;
+          return fetch(request).then(response => {
             cache.put(request, response.clone());
             return response;
           });
-          return cached || fetchPromise;
         })
       )
     );
@@ -54,7 +54,7 @@ self.addEventListener('fetch', event => {
   // latest HTML. Fall back to a cached copy if offline.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match('/index.html'))
+      fetch(request, { cache: 'no-store' }).catch(() => caches.match('/index.html'))
     );
     return;
   }
