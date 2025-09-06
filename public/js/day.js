@@ -36,33 +36,7 @@ function isVideo(item) {
   );
 }
 
-// Lazy loading observer for media elements
-const lazyLoadObserver = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting) {
-      const el = entry.target;
-      if (el.dataset.fullSrcset && el.tagName === 'IMG') {
-        el.srcset = el.dataset.fullSrcset;
-        delete el.dataset.fullSrcset;
-      }
-      if (el.dataset.fullSrc && el.tagName === 'IMG') {
-        el.src = el.dataset.fullSrc;
-        delete el.dataset.fullSrc;
-      }
-      if (el.dataset.src && el.tagName === 'VIDEO') {
-        el.src = el.dataset.src;
-        delete el.dataset.src;
-      }
-      // Keep loaded media in memory when leaving the viewport
-      if (el.tagName === 'IMG') {
-        el.loading = 'eager';
-      }
-      lazyLoadObserver.unobserve(el);
-    }
-  });
-}, {
-  rootMargin: '50px'
-});
+// (Lazy loading removed to avoid fetches during scrolling)
 
 function renderMediaEl(item, { withControls = false, className = 'media-tile', useThumb = false } = {}) {
   if (isVideo(item)) {
@@ -76,12 +50,9 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
     v.playsInline = true;
     v.loop = true;
     v.controls = !!withControls;
-    v.setAttribute('preload', 'none');
+    v.setAttribute('preload', 'auto');
     v.className = className;
-
-    // Always defer loading video source until in view
-    v.dataset.src = videoSrc;
-    lazyLoadObserver.observe(v);
+    v.src = videoSrc;
 
     if (className.includes('stack-cover-media') || className.includes('photo-main-media')) {
       const playOverlay = document.createElement('div');
@@ -128,30 +99,16 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
     const fullSrcset = srcsetParts.join(', ');
     const sizes = '(max-width: 768px) 100vw, 50vw';
 
-    if (useThumb && item.url !== thumbSrc) {
-      img.src = thumbSrc;
-      if (fullSrcset) {
-        img.srcset = thumbSrc;
-        img.dataset.fullSrcset = fullSrcset;
-        img.sizes = sizes;
-        lazyLoadObserver.observe(img);
-      }
-    } else {
-      img.src = item.url;
-      if (fullSrcset) {
-        img.srcset = fullSrcset;
-        img.sizes = sizes;
-      }
+    img.src = thumbSrc;
+    if (fullSrcset) {
+      img.srcset = fullSrcset;
+      img.sizes = sizes;
     }
 
     img.alt = item.title || item.caption || '';
-    img.loading = 'lazy';
-    img.decoding = 'async';
+    img.loading = 'eager';
+    img.decoding = 'auto';
     img.className = className;
-    // Once loaded, switch to eager so it doesn't unload on scroll
-    img.addEventListener('load', () => {
-      img.loading = 'eager';
-    }, { once: true });
     return img;
   }
 }
@@ -562,7 +519,7 @@ function renderPhotoPost() {
   `;
   container.innerHTML = headerHtml;
 
-  // Main media (always start with thumbnail and lazy-load full version)
+  // Main media (start with thumbnail but load full version immediately)
   const mainWrap = document.getElementById('photo-main');
   const mainEl = renderMediaEl(main, { withControls: false, className: 'photo-main-media', useThumb: true });
   mainWrap.appendChild(mainEl);
