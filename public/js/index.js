@@ -422,42 +422,6 @@ async function loadStacks(count = DAYS_PER_LOAD) {
       } catch (e) {
         console.warn("Failed to load days index:", e);
         return;
-412
- 
-  } else {
-413
- 
-    // Load day index once
-414
- 
-    if (daysIndex.length === 0) {
-415
- 
-      try {
-416
- 
-        const res = await fetch(dataUrl("days", "index.json"));
-417
- 
-        daysIndex = res.ok ? await res.json() : [];
-412
- 
-  } else {
-413
- 
-    // Load day index once
-414
- 
-    if (daysIndex.length === 0) {
-415
- 
-      try {
-416
- 
-        const res = await fetch(dataUrl("days", "index.json"));
-417
- 
-        daysIndex = res.ok ? await res.json() : [];
       }
     }
 
