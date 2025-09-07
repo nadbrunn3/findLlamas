@@ -240,10 +240,34 @@ if (LOCAL_MEDIA_DIR) {
       const dir = path.join(LOCAL_MEDIA_DIR, path.dirname(relBase));
       const name = path.basename(relBase);
       try {
-        for (const f of await fs.readdir(dir)) {
+        const files = await fs.readdir(dir);
+        const imgExts = new Set([
+          '.jpg',
+          '.jpeg',
+          '.png',
+          '.gif',
+          '.webp',
+          '.heic',
+          '.heif',
+          '.tif',
+          '.tiff'
+        ]);
+        for (const f of files) {
           if (path.parse(f).name === name) {
-            orig = path.join(dir, f);
-            break;
+            const ext = path.extname(f).toLowerCase();
+            if (imgExts.has(ext)) {
+              orig = path.join(dir, f);
+              break;
+            }
+          }
+        }
+        // if no image match found, fall back to any file with same base name
+        if (!orig) {
+          for (const f of files) {
+            if (path.parse(f).name === name) {
+              orig = path.join(dir, f);
+              break;
+            }
           }
         }
       } catch {}
@@ -264,7 +288,11 @@ if (LOCAL_MEDIA_DIR) {
           '.jpeg': 'image/jpeg',
           '.png': 'image/png',
           '.gif': 'image/gif',
-          '.webp': 'image/webp'
+          '.webp': 'image/webp',
+          '.heic': 'image/heic',
+          '.heif': 'image/heif',
+          '.tif': 'image/tiff',
+          '.tiff': 'image/tiff'
         };
         const mime = mimeMap[ext] || 'application/octet-stream';
         reply.header('cache-control', 'public, max-age=31536000');
