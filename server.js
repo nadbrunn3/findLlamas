@@ -232,13 +232,13 @@ if (LOCAL_MEDIA_DIR) {
     const [, relBase, sizeStr] = m;
     const thumbBase = path.join(LOCAL_MEDIA_DIR, 'thumbs', relBase);
     const thumbPath = `${thumbBase}-${sizeStr}.jpg`;
+    let orig = null;
 
     try {
       await fs.access(thumbPath);
     } catch {
       const dir = path.join(LOCAL_MEDIA_DIR, path.dirname(relBase));
       const name = path.basename(relBase);
-      let orig = null;
       try {
         for (const f of await fs.readdir(dir)) {
           if (path.parse(f).name === name) {
@@ -255,9 +255,22 @@ if (LOCAL_MEDIA_DIR) {
     try {
       await fs.access(thumbPath);
       reply.header('cache-control', 'public, max-age=31536000');
-      reply.type('image/jpeg').send(fsSync.createReadStream(thumbPath));
+      return reply.type('image/jpeg').send(fsSync.createReadStream(thumbPath));
     } catch {
-      reply.code(404).send();
+      if (orig) {
+        const ext = path.extname(orig).toLowerCase();
+        const mimeMap = {
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.gif': 'image/gif',
+          '.webp': 'image/webp'
+        };
+        const mime = mimeMap[ext] || 'application/octet-stream';
+        reply.header('cache-control', 'public, max-age=31536000');
+        return reply.type(mime).send(fsSync.createReadStream(orig));
+      }
+      return reply.code(404).send();
     }
   });
 
