@@ -1003,7 +1003,9 @@ app.get('/api/immich/day', async (req, reply) => {
 // Proxy original (keeps API key server-side; avoids CORS)
 app.get('/api/immich/assets/:id/original', async (req, reply) => {
   try {
-    const [idx, assetId] = req.params.id.split('_');
+    const [idx, ...assetIdParts] = req.params.id.split('_');
+    const assetId = assetIdParts.join('_');
+    // allow Immich asset IDs that contain underscores
     const server = IMMICH_SERVERS[Number(idx)];
     if (!server) return reply.code(404).send('immich server not found');
     const url = `${server.url}/api/assets/${assetId}/original`;
@@ -1025,7 +1027,9 @@ app.get('/api/immich/assets/:id/original', async (req, reply) => {
 // Proxy thumbnail (Immich supports /thumbnail and size param on newer builds)
 app.get('/api/immich/assets/:id/thumb', async (req, reply) => {
   try {
-    const [idx, assetId] = req.params.id.split('_');
+    const [idx, ...assetIdParts] = req.params.id.split('_');
+    const assetId = assetIdParts.join('_');
+    // allow Immich asset IDs that contain underscores
     const server = IMMICH_SERVERS[Number(idx)];
     if (!server) return reply.code(404).send('immich server not found');
     // try size=thumbnail; some builds accept ?size=tiny/thumbnail/preview
