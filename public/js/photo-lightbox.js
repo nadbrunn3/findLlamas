@@ -27,6 +27,12 @@ function escapeHtml(s){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt
 
 function likeKey(kind, id){ return `liked:${kind}:${id}`; }
 
+// Return a thumbnail URL regardless of whether the media item uses legacy
+// property names. Falls back to the main URL if no thumb is available.
+function thumbUrl(item={}){
+  return item.thumb || item.thumbUrl || item.thumbnailUrl || item.url || '';
+}
+
 function isVideo(item){
   const mt = (item?.mimeType || '').toLowerCase();
   const url = (item?.url || '').toLowerCase();
@@ -518,7 +524,7 @@ window.openPhotoLightbox = (photos, startIndex=0) => {
       img.removeAttribute('srcset');
       vid.style.display = 'block';
       vid.src = p.url;
-      vid.poster = p.thumb || '';
+      vid.poster = thumbUrl(p);
       vid.currentTime = 0;
       const pp = vid.play();
       if (pp && pp.catch) pp.catch(()=>{});
@@ -529,7 +535,7 @@ window.openPhotoLightbox = (photos, startIndex=0) => {
       img.style.display = 'block';
 
       // show thumbnail first
-      const thumbSrc = p.thumb || p.url;
+      const thumbSrc = thumbUrl(p);
       const srcsetParts = [];
       if (p.thumb) srcsetParts.push(`${p.thumb} 400w`);
       if (p.variants?.medium) srcsetParts.push(`${p.variants.medium} 800w`);
@@ -727,7 +733,7 @@ function openFullscreenMapWithPhotos(photos, focusIndex = 0) {
           cursor: pointer;
           background: white;
         ">
-          <img src="${photo.thumb || photo.url}" style="width:100%;height:100%;object-fit:cover;" alt="Photo">
+          <img src="${thumbUrl(photo)}" style="width:100%;height:100%;object-fit:cover;" alt="Photo">
         </div>`;
       const marker = new mapboxgl.Marker(el).setLngLat([photo.lon, photo.lat]).addTo(fullscreenMap);
       el.addEventListener('click', () => {

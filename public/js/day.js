@@ -1,4 +1,4 @@
-import { dataUrl, getApiBase, haversineKm, escapeHtml, formatTime, formatDateTime, groupIntoStacks, formatDate } from "./utils.js";
+import { dataUrl, getApiBase, haversineKm, escapeHtml, formatTime, formatDateTime, groupIntoStacks, formatDate, thumbUrl } from "./utils.js";
 
 const MAPBOX_STYLE = 'mapbox://styles/mapbox/satellite-v9';
 // Use provided Mapbox token by default; replace with your own for production.
@@ -45,7 +45,8 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
       isMobile && item.variants && (item.variants.mobile || item.variants.sd || item.variants.low)
         ? item.variants.mobile || item.variants.sd || item.variants.low
         : item.url;
-    if (item.thumb) v.poster = item.thumb;
+    const t = thumbUrl(item);
+    if (t) v.poster = t;
     v.muted = true;
     v.playsInline = true;
     v.loop = true;
@@ -90,9 +91,10 @@ function renderMediaEl(item, { withControls = false, className = 'media-tile', u
     return v;
   } else {
     const img = document.createElement('img');
-    const thumbSrc = item.thumb || item.url;
+    const t = thumbUrl(item);
+    const thumbSrc = t;
     const srcsetParts = [];
-    if (item.thumb) srcsetParts.push(`${item.thumb} 400w`);
+    if (t) srcsetParts.push(`${t} 400w`);
     if (item.variants?.medium) srcsetParts.push(`${item.variants.medium} 800w`);
     if (item.variants?.large) srcsetParts.push(`${item.variants.large} 1600w`);
     if (item.url) srcsetParts.push(`${item.url} 2400w`);
@@ -376,7 +378,7 @@ function initMap() {
     const bounds = new mapboxgl.LngLatBounds();
     photosWithGPS.forEach(photo => {
       const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
-        <img src="${photo.thumb || photo.url}" style="width:100px;height:75px;object-fit:cover;border-radius:4px;" alt="">
+        <img src="${thumbUrl(photo)}" style="width:100px;height:75px;object-fit:cover;border-radius:4px;" alt="">
         <br><strong>${escapeHtml(photo.title || (isVideo(photo) ? 'Video' : 'Photo'))}</strong>
         <br><small>${formatTime(photo.taken_at)}</small>
       `);
@@ -452,7 +454,7 @@ function openFullscreenMapFromRegularMap(sourceMap, containerId) {
       .map(p => ({
         id: p.id,
         url: p.url,
-        thumb: p.thumb || p.url,
+        thumb: thumbUrl(p),
         caption: p.caption || p.title || '',
         title: p.title || '',
         lat: p.lat,
@@ -590,7 +592,7 @@ function openLightbox(index = 0) {
       const photos = dayData.photos.map(photo => ({
         id: photo.id,
         url: photo.url,
-        thumb: photo.thumb,
+        thumb: thumbUrl(photo),
         caption: photo.caption || photo.description || '',
         title: photo.title || '',
         type: isVideo(photo) ? 'video' : 'image'

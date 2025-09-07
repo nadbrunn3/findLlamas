@@ -12,6 +12,19 @@ export const replaceUrlParam = (k, v) => {
   const u = new URL(window.location); u.searchParams.set(k, v); history.replaceState(null, "", u);
 };
 
+// --- Media helpers ---
+// Return the best available thumbnail URL for a media item, falling back to
+// known legacy property names before using the full-size URL.
+export function thumbUrl(item = {}) {
+  return (
+    item.thumb ||
+    item.thumbUrl ||
+    item.thumbnailUrl ||
+    item.url ||
+    ''
+  );
+}
+
 // --- API base (single source of truth) ---
 export function getApiBase() {
   try {
