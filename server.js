@@ -232,13 +232,13 @@ if (LOCAL_MEDIA_DIR) {
     const [, relBase, sizeStr] = m;
     const thumbBase = path.join(LOCAL_MEDIA_DIR, 'thumbs', relBase);
     const thumbPath = `${thumbBase}-${sizeStr}.jpg`;
+    let orig = null;
 
     try {
       await fs.access(thumbPath);
     } catch {
       const dir = path.join(LOCAL_MEDIA_DIR, path.dirname(relBase));
       const name = path.basename(relBase);
-      let orig = null;
       try {
         for (const f of await fs.readdir(dir)) {
           if (path.parse(f).name === name) {
@@ -255,9 +255,22 @@ if (LOCAL_MEDIA_DIR) {
     try {
       await fs.access(thumbPath);
       reply.header('cache-control', 'public, max-age=31536000');
-      reply.type('image/jpeg').send(fsSync.createReadStream(thumbPath));
+      return reply.type('image/jpeg').send(fsSync.createReadStream(thumbPath));
     } catch {
-      reply.code(404).send();
+      if (orig) {
+        const ext = path.extname(orig).toLowerCase();
+        const mimeMap = {
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.gif': 'image/gif',
+          '.webp': 'image/webp'
+        };
+        const mime = mimeMap[ext] || 'application/octet-stream';
+        reply.header('cache-control', 'public, max-age=31536000');
+        return reply.type(mime).send(fsSync.createReadStream(orig));
+      }
+      return reply.code(404).send();
     }
   });
 
@@ -1067,10 +1080,22 @@ app.get('/api/immich/assets/:id/thumb', async (req, reply) => {
     // allow Immich asset IDs that contain underscores
     const server = IMMICH_SERVERS[Number(idx)];
     if (!server) return reply.code(404).send('immich server not found');
-    // try size=thumbnail; some builds accept ?size=tiny/thumbnail/preview
-    const url = `${server.url}/api/assets/${assetId}/thumbnail?size=thumbnail`;
-    const res = await fetch(url, { headers: server.key ? { 'x-api-key': server.key } : {} });
-    if (!res.ok) return reply.code(res.status).send(await res.text());
+    const base = `${server.url}/api/assets/${assetId}/thumbnail`;
+    const headers = server.key ? { 'x-api-key': server.key } : {};
+    const attempts = [
+      `${base}?size=thumbnail`,
+      `${base}?size=preview`,
+      `${base}?size=tiny`,
+      base,
+    ];
+    let res;
+    for (const u of attempts) {
+      res = await fetch(u, { headers });
+      if (res.ok) break;
+    }
+    if (!res || !res.ok) {
+      return reply.code(res?.status || 500).send(res ? await res.text() : 'failed to fetch thumbnail');
+    }
     reply.header('content-type', res.headers.get('content-type') || 'image/jpeg');
     reply.header('cache-control', res.headers.get('cache-control') || 'public, max-age=604800');
     const enc = res.headers.get('content-encoding');
