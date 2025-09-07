@@ -222,6 +222,45 @@ app.register(fastifyStatic, {
 
 // expose locally synced media if configured
 if (LOCAL_MEDIA_DIR) {
+  // generate missing thumbnails on demand
+  app.get('/media/thumbs/*', async (req, reply) => {
+    const rel = req.params['*'];
+    const m = rel.match(/(.+)-(\d+)\.jpg$/);
+    if (!m) {
+      return reply.code(404).send();
+    }
+    const [, relBase, sizeStr] = m;
+    const thumbBase = path.join(LOCAL_MEDIA_DIR, 'thumbs', relBase);
+    const thumbPath = `${thumbBase}-${sizeStr}.jpg`;
+
+    try {
+      await fs.access(thumbPath);
+    } catch {
+      const dir = path.join(LOCAL_MEDIA_DIR, path.dirname(relBase));
+      const name = path.basename(relBase);
+      let orig = null;
+      try {
+        for (const f of await fs.readdir(dir)) {
+          if (path.parse(f).name === name) {
+            orig = path.join(dir, f);
+            break;
+          }
+        }
+      } catch {}
+      if (orig) {
+        await ensureLocalThumb(orig, thumbBase);
+      }
+    }
+
+    try {
+      await fs.access(thumbPath);
+      reply.header('cache-control', 'public, max-age=31536000');
+      reply.type('image/jpeg').send(fsSync.createReadStream(thumbPath));
+    } catch {
+      reply.code(404).send();
+    }
+  });
+
   app.register(fastifyStatic, {
     root: LOCAL_MEDIA_DIR,
     prefix: '/media/',
