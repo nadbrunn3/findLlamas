@@ -398,21 +398,29 @@ async function loadStacks(count = DAYS_PER_LOAD) {
   if (previewSlug) {
     // Preview mode loads a single day and skips pagination
     const url = dataUrl("days", `${previewSlug}.json`);
-    const res = await fetch(url);
-    if (res.ok) {
-      const dj = await res.json();
-      stackMetaByDay[previewSlug] = dj.stackMeta || {};
-      (dj.photos || []).forEach((p) =>
-        allPhotos.push({
-          ...p,
-          dayTitle: dj.title,
-          daySlug: previewSlug,
-          ts: +new Date(p.taken_at),
-        })
-      );
-      daysIndex = [{ slug: previewSlug }];
-      daysLoaded = 1;
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const dj = await res.json();
+        stackMetaByDay[previewSlug] = dj.stackMeta || {};
+        (dj.photos || []).forEach((p) =>
+          allPhotos.push({
+            ...p,
+            dayTitle: dj.title,
+            daySlug: previewSlug,
+            ts: +new Date(p.taken_at),
+          })
+        );
+        daysIndex = [{ slug: previewSlug }];
+      } else {
+        console.warn(`Preview day ${previewSlug} not found`);
+        daysIndex = [];
+      }
+    } catch (e) {
+      console.warn(`Failed to load preview day ${previewSlug}:`, e);
+      daysIndex = [];
     }
+    daysLoaded = 1;
   } else {
     // Load day index once
     if (daysIndex.length === 0) {
@@ -437,7 +445,6 @@ async function loadStacks(count = DAYS_PER_LOAD) {
       })
     );
 
-    let loaded = 0;
     results.forEach((r, idx) => {
       if (r.status === "fulfilled") {
         const { slug, data: dj } = r.value;
@@ -450,13 +457,13 @@ async function loadStacks(count = DAYS_PER_LOAD) {
             ts: +new Date(p.taken_at),
           })
         );
-        loaded++;
       } else {
         console.warn(`Failed to load day ${slice[idx].slug}:`, r.reason);
       }
     });
 
-    daysLoaded += loaded;
+    // Advance daysLoaded by the number of attempted days to avoid infinite reloads
+    daysLoaded += slice.length;
   }
 
   allPhotos.sort((a, b) => a.ts - b.ts);
@@ -609,17 +616,46 @@ function renderFeed(){
   const host = document.getElementById("stack-feed");
   const seenCounts = JSON.parse(localStorage.getItem("stackPhotoCounts") || "{}");
   const newCounts = {};
-  
+
+  host.innerHTML = "";
+
+  // Handle empty state early
+  if (photoStacks.length === 0) {
+    const msg = document.createElement('p');
+    msg.className = 'no-data';
+    msg.textContent = 'No days available.';
+    host.appendChild(msg);
+
+    if (daysLoaded < daysIndex.length) {
+      const wrap = document.createElement('div');
+      wrap.className = 'load-more-container';
+      const btn = document.createElement('button');
+      btn.textContent = 'Load more days';
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        await loadStacks();
+        await resolveStackLocations();
+        refreshTopMap();
+        renderFeed();
+      });
+      wrap.appendChild(btn);
+      host.appendChild(wrap);
+    }
+
+    localStorage.setItem("stackPhotoCounts", JSON.stringify(newCounts));
+    return;
+  }
+
   // Sort stacks by newest photo timestamp (newest stacks first)
   const sortedStacks = [...photoStacks].sort((a, b) => {
     const aNewest = Math.max(...a.photos.map(p => p.ts || 0));
     const bNewest = Math.max(...b.photos.map(p => p.ts || 0));
     return bNewest - aNewest;
   });
-  
+
   // Use document fragment for better performance
   const fragment = document.createDocumentFragment();
-  
+
   sortedStacks.forEach((stack,i)=>{
     newCounts[stack.id] = stack.photos.length;
     const hasNew = stack.photos.length > (seenCounts[stack.id] || 0);
@@ -854,7 +890,6 @@ function renderFeed(){
   });
   
   // Single DOM operation to append all cards
-  host.innerHTML = "";
   host.appendChild(fragment);
 
   // Append load-more control if more days remain

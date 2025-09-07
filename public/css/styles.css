@@ -3152,4 +3152,10 @@ body.lightbox-open {
   background: #2563eb;
 }
 
+.no-data {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+}
+
 
