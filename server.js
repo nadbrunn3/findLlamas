@@ -746,6 +746,23 @@ async function ensureLocalThumb(original, thumbBase) {
     await fs.mkdir(path.dirname(thumbBase), { recursive: true });
     for (const size of sizes) {
       const thumbPath = `${thumbBase}-${size}.jpg`;
+
+      // Remove any duplicate thumbnails (e.g. "name-400 (1).jpg") to prevent
+      // multiple files accumulating for the same photo.
+      try {
+        const dir = path.dirname(thumbPath);
+        const base = `${path.basename(thumbBase)}-${size}`;
+        const files = await fs.readdir(dir);
+        for (const f of files) {
+          if (f.startsWith(base) && f !== `${base}.jpg`) {
+            try {
+              await fs.unlink(path.join(dir, f));
+            } catch {}
+          }
+        }
+      } catch {}
+
+      // Only generate a thumbnail if the canonical file doesn't already exist
       try {
         await fs.access(thumbPath);
       } catch {
