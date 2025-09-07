@@ -2,6 +2,9 @@
 export const DATA_ROOT = 'data';
 export const dataUrl = (...parts) => [DATA_ROOT, ...parts].join('/');
 
+// Fallback image for missing thumbnails
+export const FALLBACK_THUMB_URL = '/img/placeholder.svg';
+
 // --- URL helpers ---
 export const qs = (k, s = window.location.search) => new URLSearchParams(s).get(k);
 export const urlParam = qs;
@@ -138,7 +141,16 @@ export function groupIntoStacks(photos, radiusMeters = 500) {
   };
 
   const pushAndRecenter = (stack, photo) => {
-    stack.photos.push(photo);
+    const p = { ...photo };
+    const t = thumbUrl(p);
+    if (t) {
+      if (!p.thumb) p.thumb = t;
+      if (!p.url) p.url = t;
+    } else {
+      p.thumb = FALLBACK_THUMB_URL;
+      if (!p.url) p.url = FALLBACK_THUMB_URL;
+    }
+    stack.photos.push(p);
     const c = centroidOf(stack.photos);
     stack.center = c;
     if (!isFiniteCoord(stack.location.lat) && c) {
