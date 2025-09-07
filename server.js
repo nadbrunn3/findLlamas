@@ -1134,6 +1134,38 @@ REPO_DIR=.
   reply.type('text/plain').send(template);
 });
 
+// Regenerate missing thumbnails across all day files
+app.post('/api/admin/update-thumbnails', async (req, reply) => {
+  try {
+    if (!requireAdmin(req)) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+    if (!LOCAL_MEDIA_DIR) {
+      return reply.code(500).send({ error: 'LOCAL_MEDIA_DIR not configured' });
+    }
+
+    const entries = await fs.readdir(DAYS_DIR);
+    let updatedDays = 0;
+    for (const name of entries) {
+      if (!name.endsWith('.json') || name === 'index.json') continue;
+      const file = path.join(DAYS_DIR, name);
+      const day = await readJson(file);
+      if (!day) continue;
+      const changed = await repairThumbsForDay(day);
+      if (changed) {
+        await writeJson(file, day);
+        dayCache.set(day.slug || name.replace(/\.json$/, ''), day);
+        updatedDays++;
+      }
+    }
+
+    reply.send({ ok: true, updatedDays });
+  } catch (err) {
+    req.log?.error({ msg: 'update thumbnails failed', err: String(err) });
+    reply.code(500).send({ error: 'update thumbnails failed' });
+  }
+});
+
 // ---- Routes: Day JSON --------------------------------------------------------
 
 function dayFile(slug) {
@@ -1154,6 +1186,42 @@ async function ensureThumbsForDay(day) {
       await ensureLocalThumb(orig, thBase);
     }
   }
+}
+
+// Ensure thumbnail references exist for a day's photos. If a photo is missing
+// a thumbnail reference but has a local media URL, this will generate the
+// appropriate thumbnail path and create any missing thumbnail files. Returns
+// true if the day object was modified (e.g. thumbnails were added).
+async function repairThumbsForDay(day) {
+  if (!LOCAL_MEDIA_DIR || !Array.isArray(day?.photos)) return false;
+
+  let updated = false;
+  for (const p of day.photos) {
+    if (!p?.url?.startsWith('/media/')) continue;
+
+    const rel = p.url.replace('/media/', '');
+    const relDir = path.dirname(rel);
+    const nameNoExt = path.parse(rel).name;
+    const thumbRelBase = path.join('thumbs', relDir, nameNoExt);
+    const thumbUrl = `/media/${thumbRelBase}-400.jpg`;
+    const orig = path.join(LOCAL_MEDIA_DIR, rel);
+    const thumbBase = path.join(LOCAL_MEDIA_DIR, thumbRelBase);
+
+    if (p.thumb !== thumbUrl) {
+      p.thumb = thumbUrl;
+      updated = true;
+    }
+
+    try {
+      await fs.access(orig);
+      await ensureLocalThumb(orig, thumbBase);
+    } catch {
+      // If original is missing, skip thumbnail generation
+      continue;
+    }
+  }
+
+  return updated;
 }
 
 async function loadDay(slug) {

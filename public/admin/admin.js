@@ -1078,6 +1078,7 @@ async function renderSettingsTab(panel) {
     
     <button id="save-settings" style="margin-top:1rem; background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">💾 Save Local Settings</button>
     <button id="clear-settings" style="margin-top:1rem; margin-left: 8px; background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">🗑️ Clear All Local Settings</button>
+    <button id="regen-thumbnails" style="margin-top:1rem; margin-left: 8px; background: #0ea5e9; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">🔄 Update Thumbnails</button>
   `;
   
   panel.querySelector('#save-settings').addEventListener('click', () => {
@@ -1101,6 +1102,31 @@ async function renderSettingsTab(panel) {
       renderSettingsTab(panel); // Refresh the tab
     }
   });
+
+  const regenBtn = panel.querySelector('#regen-thumbnails');
+  if (regenBtn) {
+    regenBtn.addEventListener('click', async () => {
+      const adminToken = await getAdminToken();
+      regenBtn.disabled = true;
+      regenBtn.textContent = 'Updating...';
+      try {
+        const headers = adminToken ? { 'x-admin-token': adminToken } : {};
+        const res = await fetch(`${apiBase()}/api/admin/update-thumbnails`, {
+          method: 'POST',
+          headers
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        alert(`✅ Updated thumbnails for ${data.updatedDays || 0} day(s)`);
+      } catch (err) {
+        console.error(err);
+        alert('❌ Thumbnail update failed');
+      } finally {
+        regenBtn.disabled = false;
+        regenBtn.textContent = '🔄 Update Thumbnails';
+      }
+    });
+  }
 }
 
 // boot
