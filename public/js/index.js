@@ -16,7 +16,8 @@ let activeStackId = null;
 let scrollLocked = false;
 
 // Day loading state for incremental fetching
-const DAYS_PER_LOAD = 3; // number of day files to fetch at a time
+// number of day files to fetch in each batch
+const DAYS_PER_LOAD = 5;
 let daysIndex = [];
 let daysLoaded = 0;
 
@@ -444,18 +445,22 @@ async function loadStacks(count = DAYS_PER_LOAD) {
 
   if (previewSlug) {
     // Preview mode loads a single day and skips pagination
-    const dj = await (await fetch(dataUrl("days", `${previewSlug}.json`))).json();
-    stackMetaByDay[previewSlug] = dj.stackMeta || {};
-    (dj.photos || []).forEach((p) =>
-      allPhotos.push({
-        ...p,
-        dayTitle: dj.title,
-        daySlug: previewSlug,
-        ts: +new Date(p.taken_at)
-      })
-    );
-    daysIndex = [{ slug: previewSlug }];
-    daysLoaded = 1;
+    const url = dataUrl("days", `${previewSlug}.json`);
+    const res = await fetch(url);
+    if (res.ok) {
+      const dj = await res.json();
+      stackMetaByDay[previewSlug] = dj.stackMeta || {};
+      (dj.photos || []).forEach((p) =>
+        allPhotos.push({
+          ...p,
+          dayTitle: dj.title,
+          daySlug: previewSlug,
+          ts: +new Date(p.taken_at),
+        })
+      );
+      daysIndex = [{ slug: previewSlug }];
+      daysLoaded = 1;
+    }
   } else {
     // Load day index once
     if (daysIndex.length === 0) {
@@ -464,31 +469,42 @@ async function loadStacks(count = DAYS_PER_LOAD) {
         daysIndex = res.ok ? await res.json() : [];
       } catch (e) {
         console.warn("Failed to load days index:", e);
+        return;
       }
     }
 
     const slice = daysIndex.slice(daysLoaded, daysLoaded + count);
-    await Promise.all(
+    if (slice.length === 0) return;
+
+    const results = await Promise.allSettled(
       slice.map(async (d) => {
-        try {
-          const dj = await (
-            await fetch(dataUrl("days", `${d.slug}.json`))
-          ).json();
-          stackMetaByDay[d.slug] = dj.stackMeta || {};
-          (dj.photos || []).forEach((p) =>
-            allPhotos.push({
-              ...p,
-              dayTitle: dj.title,
-              daySlug: d.slug,
-              ts: +new Date(p.taken_at)
-            })
-          );
-        } catch (e) {
-          console.warn(`Failed to load day ${d.slug}:`, e);
-        }
+        const url = dataUrl("days", `${d.slug}.json`);
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(res.statusText);
+        return { slug: d.slug, data: await res.json() };
       })
     );
-    daysLoaded += slice.length;
+
+    let loaded = 0;
+    results.forEach((r, idx) => {
+      if (r.status === "fulfilled") {
+        const { slug, data: dj } = r.value;
+        stackMetaByDay[slug] = dj.stackMeta || {};
+        (dj.photos || []).forEach((p) =>
+          allPhotos.push({
+            ...p,
+            dayTitle: dj.title,
+            daySlug: slug,
+            ts: +new Date(p.taken_at),
+          })
+        );
+        loaded++;
+      } else {
+        console.warn(`Failed to load day ${slice[idx].slug}:`, r.reason);
+      }
+    });
+
+    daysLoaded += loaded;
   }
 
   allPhotos.sort((a, b) => a.ts - b.ts);
