@@ -28,9 +28,6 @@ const currentLocation = { lat: 35.6762, lng: 139.6503, name: "Tokyo, Japan" };
 const GEO_CACHE_KEY = "reverse_geocode_cache";
 let geocodeCache = JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || "{}");
 
-// Utility: delay to avoid hitting Nominatim too fast
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
 // Utility: fetch with timeout support
 async function fetchWithTimeout(resource, options = {}) {
   const { timeout = 8000 } = options;
@@ -49,23 +46,16 @@ async function fetchWithTimeout(resource, options = {}) {
   }
 }
 
-// Reverse geocode lat/lon into "Region, District, Country"
+// Reverse geocode lat/lon using the server-side proxy with caching
 async function reverseGeocode(lat, lon) {
   const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
 
   // Use cache if available
   if (geocodeCache[key]) return geocodeCache[key];
 
-  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`;
-
   try {
-    const res = await fetchWithTimeout(url, {
-      headers: {
-        "User-Agent": "FindPenguinApp/1.0 (your_email@example.com)", // REQUIRED
-        "Accept-Language": "en", // Optional, force English names
-      },
-      timeout: 8000,
-    });
+    const url = `${getApiBase()}/api/geocode?lat=${lat}&lon=${lon}`;
+    const res = await fetchWithTimeout(url, { timeout: 8000 });
 
     if (!res.ok) {
       console.warn("Reverse geocode failed:", res.status, await res.text());
@@ -73,46 +63,7 @@ async function reverseGeocode(lat, lon) {
     }
 
     const data = await res.json();
-    const addr = data.address || {};
-
-    /**
-     * Prefer finer-grained locality levels if available:
-     *  - For Japan: "ward" (Shibuya), then "city" (Tokyo), then "prefecture" (Tokyo)
-     */
-    const district =
-      addr.suburb ||
-      addr.city_district ||
-      addr.district ||
-      addr.borough ||
-      addr.ward; // ← important for Japanese addresses
-
-    const city =
-      addr.city ||
-      addr.town ||
-      addr.village ||
-      addr.municipality ||
-      addr.locality;
-
-    const region =
-      addr.state ||
-      addr.region ||
-      addr.province ||
-      addr.state_district;
-
-    const country = addr.country;
-
-    // Build a clean name: city → district → country
-    let nameParts = [city, district, country].filter(Boolean);
-
-    // If district and city are the same, skip duplicates
-    nameParts = nameParts.filter(
-      (part, idx) => nameParts.indexOf(part) === idx
-    );
-
-    const name =
-      nameParts.length > 0
-        ? nameParts.join(", ")
-        : `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    const name = data.name || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
 
     // Save to cache
     geocodeCache[key] = name;
@@ -125,34 +76,35 @@ async function reverseGeocode(lat, lon) {
   }
 }
 
-// Resolve labels for all stacks concurrently with throttling
+// Resolve labels for all stacks in larger parallel batches
 async function resolveStackLocations() {
-  const tasks = photoStacks.map((s, idx) => {
+  const batchSize = 8;
+  const stacks = photoStacks.filter((s) => {
     const { lat, lng } = s.location;
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return Promise.resolve();
-
-    // Throttle: allow up to 3 requests every ~1.1s
-    const startDelay = Math.floor(idx / 3) * 1100;
-
-    return delay(startDelay)
-      .then(() => reverseGeocode(lat, lng))
-      .then((label) => {
-        s.location.label = label;
-
-        // Update any rendered stack card with the new label
-        const card = document.getElementById(s.id);
-        if (card) {
-          const locEl = card.querySelector('.stack-location-time');
-          if (locEl) {
-            const t = fmtTime(s.takenAt);
-            locEl.textContent = `${label} • ${t}`;
-          }
-        }
-      })
-      .catch((e) => console.warn('Reverse geocode failed:', e));
+    return Number.isFinite(lat) && Number.isFinite(lng);
   });
 
-  await Promise.allSettled(tasks);
+  for (let i = 0; i < stacks.length; i += batchSize) {
+    const batch = stacks.slice(i, i + batchSize).map((s) =>
+      reverseGeocode(s.location.lat, s.location.lng)
+        .then((label) => {
+          s.location.label = label;
+
+          // Update any rendered stack card with the new label
+          const card = document.getElementById(s.id);
+          if (card) {
+            const locEl = card.querySelector('.stack-location-time');
+            if (locEl) {
+              const t = fmtTime(s.takenAt);
+              locEl.textContent = `${label} • ${t}`;
+            }
+          }
+        })
+        .catch((e) => console.warn('Reverse geocode failed:', e))
+    );
+
+    await Promise.allSettled(batch);
+  }
 }
 
 // Expose globals if needed elsewhere
