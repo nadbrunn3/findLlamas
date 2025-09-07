@@ -1,4 +1,4 @@
-import { dataUrl, getApiBase, groupIntoStacks, debounce, urlParam, pushUrlParam, replaceUrlParam, fmtTime, escapeHtml, formatDate } from "./utils.js";
+import { dataUrl, getApiBase, groupIntoStacks, debounce, urlParam, pushUrlParam, replaceUrlParam, fmtTime, escapeHtml, formatDate, thumbUrl } from "./utils.js";
 
 const MAPBOX_STYLE = 'mapbox://styles/mapbox/satellite-v9';
 // Use provided Mapbox token by default; replace with your own for production.
@@ -214,7 +214,7 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
   if (isVideo(item)) {
     const v = document.createElement('video');
     // Always use thumbnail for video poster to improve performance
-    v.poster = item.thumb || '';
+    v.poster = thumbUrl(item);
     v.muted = true;
     v.playsInline = true;
     v.loop = true;
@@ -270,13 +270,14 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
 
     // Determine appropriate source
     const srcsetParts = [];
-    if (item.thumb) srcsetParts.push(`${item.thumb} 400w`);
+    const t = thumbUrl(item);
+    if (t) srcsetParts.push(`${t} 400w`);
     if (item.variants?.medium) srcsetParts.push(`${item.variants.medium} 800w`);
     if (item.url) srcsetParts.push(`${item.url} 1600w`);
     const fullSrcset = srcsetParts.join(', ');
     const sizes = '(max-width: 768px) 100vw, 50vw';
 
-    const thumbSrc = item.thumb || item.url;
+    const thumbSrc = t;
     img.src = thumbSrc;
     if (fullSrcset) {
       img.srcset = fullSrcset;
@@ -555,7 +556,7 @@ function addMarkersAndPath(map){
   }
 
   gpsPhotos.forEach(photo => {
-    const thumb = photo.thumb || photo.url;
+    const thumb = thumbUrl(photo);
     const markerSize = getMarkerSize(map.getZoom());
     const el = document.createElement('div');
     el.className = `photo-marker${photo.stackId === activeStackId ? ' active' : ''}`;
@@ -2086,7 +2087,7 @@ function openLightboxForStack(stack, startIndex=0){
     const photos = stack.photos.map(photo => ({
       id: photo.id,
       url: photo.url,
-      thumb: photo.thumb || photo.url,
+      thumb: thumbUrl(photo),
       caption: photo.caption || '',
       taken_at: photo.taken_at,
       lat: photo.lat,
@@ -2111,7 +2112,7 @@ function renderPhotoGrid(){
   const photos = allPhotos.map(p => ({
     id: p.id,
     url: p.url,
-    thumb: p.thumb || p.url,
+    thumb: thumbUrl(p),
     caption: p.caption || '',
     taken_at: p.taken_at,
     lat: p.lat,
@@ -2122,7 +2123,7 @@ function renderPhotoGrid(){
 
   photos.forEach((p, idx) => {
     const img = document.createElement('img');
-    img.src = p.thumb || p.url;
+    img.src = thumbUrl(p);
     img.alt = p.caption || '';
     img.loading = 'eager';
     img.addEventListener('click', () => {
@@ -2327,7 +2328,7 @@ function openFullscreenMapFromRegularMap(sourceMap, containerId) {
       .map(p => ({
         id: p.id,
         url: p.url,
-        thumb: p.thumb || p.url,
+        thumb: thumbUrl(p),
         caption: p.caption || p.title || '',
         title: p.title || '',
         lat: p.lat,
@@ -2343,7 +2344,7 @@ function openFullscreenMapFromRegularMap(sourceMap, containerId) {
         .map(p => ({
           id: p.id,
           url: p.url,
-          thumb: p.thumb || p.url,
+          thumb: thumbUrl(p),
           caption: p.caption || p.title || '',
           title: p.title || '',
           lat: p.lat,
