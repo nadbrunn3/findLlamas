@@ -582,8 +582,6 @@ video.drawer-thumbnail::after {
 .comment-author{font-size:13px;font-weight:600;color:#8bb8ff;margin-bottom:3px}
 .comment-text{font-size:14px;color:#fff;line-height:1.4;margin-bottom:3px}
 .comment-time{font-size:11px;color:rgba(255,255,255,.6)}
-.load-more-btn{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.8);padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px}
-.load-more-btn:hover{background:rgba(255,255,255,.1)}
 
 /* ===== RESPONSIVE DESIGN ===== */
 @media (max-width:768px){
@@ -1733,28 +1731,6 @@ video.drawer-thumbnail::after {
 .post-btn:disabled {
   background: #d1d5db;
   cursor: not-allowed;
-}
-
-/* Load More */
-.load-more-comments {
-  text-align: center;
-  padding: .5rem;
-}
-
-.load-more-btn {
-  background: none;
-  border: 1px solid var(--border);
-  color: #6b7280;
-  cursor: pointer;
-  font-size: .8rem;
-  padding: .5rem 1rem;
-  border-radius: 4px;
-  transition: all .2s ease;
-}
-
-.load-more-btn:hover {
-  background: rgba(0,0,0,.04);
-  color: var(--text);
 }
 
 /* Translation Pills */

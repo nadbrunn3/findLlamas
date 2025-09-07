@@ -16,8 +16,8 @@ let activeStackId = null;
 let scrollLocked = false;
 
 // Day loading state for incremental fetching
-// number of day files to fetch in each batch
-const DAYS_PER_LOAD = 5;
+// load all day files at once
+const DAYS_PER_LOAD = Infinity;
 let daysIndex = [];
 let daysLoaded = 0;
 
@@ -610,11 +610,11 @@ function renderFeed(){
   const seenCounts = JSON.parse(localStorage.getItem("stackPhotoCounts") || "{}");
   const newCounts = {};
   
-  // Sort stacks by newest photo timestamp (newest stacks first)
+  // Sort stacks by newest photo timestamp (oldest stacks first)
   const sortedStacks = [...photoStacks].sort((a, b) => {
     const aNewest = Math.max(...a.photos.map(p => p.ts || 0));
     const bNewest = Math.max(...b.photos.map(p => p.ts || 0));
-    return bNewest - aNewest;
+    return aNewest - bNewest;
   });
   
   // Use document fragment for better performance
@@ -675,10 +675,6 @@ function renderFeed(){
             </div>
             
             <ul class="comment-list" role="list" aria-label="Comments"></ul>
-            
-            <div class="load-more-comments" style="display: none;">
-              <button class="load-more-btn">Show earlier comments</button>
-            </div>
           </div>
 
           <form class="comment-composer" autocomplete="off">
@@ -856,23 +852,6 @@ function renderFeed(){
   // Single DOM operation to append all cards
   host.innerHTML = "";
   host.appendChild(fragment);
-
-  // Append load-more control if more days remain
-  if (daysLoaded < daysIndex.length) {
-    const wrap = document.createElement('div');
-    wrap.className = 'load-more-container';
-    const btn = document.createElement('button');
-    btn.textContent = 'Load more days';
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      await loadStacks();
-      await resolveStackLocations();
-      refreshTopMap();
-      renderFeed();
-    });
-    wrap.appendChild(btn);
-    host.appendChild(wrap);
-  }
 
   localStorage.setItem("stackPhotoCounts", JSON.stringify(newCounts));
 }
@@ -1329,9 +1308,9 @@ function renderThreadedComments(stackId, block) {
   
   emptyState.style.display = 'none';
   
-  // Display comments in chronological order (newest first)
+  // Display comments in chronological order (oldest first)
   const sortedComments = [...state.comments].sort((a, b) => {
-    return new Date(b.timestamp) - new Date(a.timestamp);
+    return new Date(a.timestamp) - new Date(b.timestamp);
   });
   
   // Render each comment thread with staggered animation
