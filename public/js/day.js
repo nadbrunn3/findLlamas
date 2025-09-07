@@ -1,4 +1,4 @@
-import { dataUrl, getApiBase, haversineKm, escapeHtml, formatTime, formatDateTime, groupIntoStacks, formatDate, thumbUrl } from "./utils.js";
+import { dataUrl, getApiBase, haversineKm, escapeHtml, formatTime, formatDateTime, groupIntoStacks, formatDate, thumbUrl, FALLBACK_THUMB_URL } from "./utils.js";
 
 const MAPBOX_STYLE = 'mapbox://styles/mapbox/satellite-v9';
 // Use provided Mapbox token by default; replace with your own for production.
@@ -301,6 +301,10 @@ async function loadDayData() {
       throw new Error(`Failed to load day data: ${response.status}`);
     }
     dayData = await response.json();
+    dayData.photos = (dayData.photos || []).map(p => {
+      const t = thumbUrl(p) || FALLBACK_THUMB_URL;
+      return { ...p, url: p.url || t, thumb: p.thumb || t };
+    });
     document.getElementById('day-title').textContent = dayData.title || `Day — ${daySlug}`;
   } catch (error) {
     console.error('Error loading day data:', error);

@@ -93,6 +93,9 @@ const LOCAL_MEDIA_DIR = process.env.LOCAL_MEDIA_DIR || '';
 const CDN_URL = (process.env.CDN_URL || '').replace(/\/$/, '');
 const PUBLIC_DIR = path.join(REPO_DIR, 'public');
 const assetHashes = {};
+// Cache recent album/date lookups to avoid repeatedly pulling large album lists
+// Map key format: `${serverIndex}|${albumId}|${date}`
+const albumDayCache = new Map();
 function collectAssetHashes(dir) {
   for (const entry of fsSync.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
@@ -113,6 +116,9 @@ function escapeRegex(str) {
 }
 collectAssetHashes(PUBLIC_DIR);
 
+// simple in-memory cache for reverse geocoding
+const geocodeCache = new Map();
+
 // helpers
 const app = fastify({ logger: true });
 app.register(cors, { origin: true });
@@ -129,6 +135,74 @@ app.get('/api/user/me', async (req, reply) => {
     headers: req.headers.cookie
   });
   reply.send({ anonId: req.anonId });
+});
+
+// ---- Geocoding ---------------------------------------------------------------
+app.get('/api/geocode', async (req, reply) => {
+  const lat = Number(req.query.lat);
+  const lon = Number(req.query.lon ?? req.query.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    reply.code(400).send({ error: 'invalid coordinates' });
+    return;
+  }
+
+  const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+  if (geocodeCache.has(key)) {
+    return { name: geocodeCache.get(key) };
+  }
+
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'FindLlamas/1.0 (your_email@example.com)',
+        'Accept-Language': 'en',
+      },
+    });
+
+    if (!res.ok) {
+      console.warn('Reverse geocode failed:', res.status, await res.text());
+      return { name: `${lat.toFixed(4)}, ${lon.toFixed(4)}` };
+    }
+
+    const data = await res.json();
+    const addr = data.address || {};
+
+    const district =
+      addr.suburb ||
+      addr.city_district ||
+      addr.district ||
+      addr.borough ||
+      addr.ward;
+
+    const city =
+      addr.city ||
+      addr.town ||
+      addr.village ||
+      addr.municipality ||
+      addr.locality;
+
+    const region =
+      addr.state ||
+      addr.region ||
+      addr.province ||
+      addr.state_district;
+
+    const country = addr.country;
+
+    let nameParts = [city, district, country].filter(Boolean);
+    nameParts = nameParts.filter((part, idx) => nameParts.indexOf(part) === idx);
+    const name =
+      nameParts.length > 0
+        ? nameParts.join(', ')
+        : `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+
+    geocodeCache.set(key, name);
+    return { name };
+  } catch (e) {
+    console.warn('Reverse geocode failed:', e);
+    return { name: `${lat.toFixed(4)}, ${lon.toFixed(4)}` };
+  }
 });
 
 // serve /public so /day.html, /js/day.js, /css etc. work
@@ -254,105 +328,61 @@ async function getAssetsForDayForServer(server, serverIndex, { date, albumId }) 
   const effectiveAlbumId = albumId || IMMICH_ALBUM_ID;
 
   if (effectiveAlbumId) {
+    const cacheKey = `${serverIndex}|${effectiveAlbumId}|${date}`;
+    if (albumDayCache.has(cacheKey)) {
+      app.log.info(`💾 Server ${serverIndex}: Using cached album data for ${date}`);
+      return albumDayCache.get(cacheKey);
+    }
+
     try {
-      app.log.info(`🔍 Server ${serverIndex}: Fetching assets for ${date} from ${server.url} with key ${server.key ? server.key.substring(0, 8) + '...' : 'NO_KEY'}`);
-      app.log.info(`📁 Server ${serverIndex}: Fetching all assets from album ${effectiveAlbumId}, then filtering by date ${date}`);
-      
-      // First, get all assets from the specific album with comprehensive approach
-      let albumAssets = [];
-      
-      // Method 1: Try to get album with embedded assets first
-      try {
-        app.log.info(`🔗 Server ${serverIndex}: Trying GET /api/albums/${effectiveAlbumId}`);
-        const album = await immichFetchJSON(server, `/api/albums/${effectiveAlbumId}`);
-        app.log.info(`📊 Server ${serverIndex}: Album response:`, typeof album, Object.keys(album || {}));
-        
-        if (Array.isArray(album?.assets)) {
-          albumAssets = album.assets;
-          app.log.info(`✅ Server ${serverIndex}: Got ${albumAssets.length} assets from album.assets`);
-        }
-      } catch (e) {
-        app.log.warn(`❌ Server ${serverIndex}: Failed to get album with assets: ${e.message}`);
-      }
-      
-      // Method 2: If no assets found, try the assets endpoint with pagination
-      if (albumAssets.length === 0) {
-        try {
-          app.log.info(`🔗 Server ${serverIndex}: Trying GET /api/albums/${effectiveAlbumId}/assets`);
-          const assetsRes = await immichFetchJSON(server, `/api/albums/${effectiveAlbumId}/assets`);
-          albumAssets = Array.isArray(assetsRes) ? assetsRes : assetsRes?.items || assetsRes?.assets || [];
-          app.log.info(`✅ Server ${serverIndex}: Got ${albumAssets.length} assets from /assets endpoint`);
-        } catch (e) {
-          app.log.warn(`❌ Server ${serverIndex}: Failed to get album assets: ${e.message}`);
-        }
-      }
-      
-      // Method 3: If still no assets, try paginated approach for large albums
-      if (albumAssets.length === 0) {
-        try {
-          app.log.info(`🔗 Server ${serverIndex}: Trying paginated album assets approach`);
-          let page = 0;
-          const pageSize = 1000;
-          let hasMore = true;
-          
-          while (hasMore && page < 20) { // Safety limit
-            const paginatedUrl = `/api/albums/${effectiveAlbumId}/assets?page=${page}&size=${pageSize}`;
-            const pageRes = await immichFetchJSON(server, paginatedUrl);
-            const pageAssets = Array.isArray(pageRes) ? pageRes : pageRes?.items || pageRes?.assets || [];
-            
-            if (pageAssets.length === 0) {
-              hasMore = false;
-            } else {
-              albumAssets.push(...pageAssets);
-              app.log.info(`📄 Server ${serverIndex}: Page ${page}: Got ${pageAssets.length} assets (total: ${albumAssets.length})`);
-              
-              if (pageAssets.length < pageSize) {
-                hasMore = false; // Last page
-              } else {
-                page++;
-              }
-            }
-          }
-          
-          app.log.info(`✅ Server ${serverIndex}: Paginated approach got ${albumAssets.length} total assets`);
-        } catch (e) {
-          app.log.warn(`❌ Server ${serverIndex}: Paginated album approach failed: ${e.message}`);
-        }
-      }
-      
-      if (albumAssets.length === 0) {
-        app.log.info(`❌ Server ${serverIndex}: No assets found in album ${effectiveAlbumId} using any method`);
-        return [];
-      }
-      
-      app.log.info(`📊 Server ${serverIndex}: Processing ${albumAssets.length} total album assets for date filtering`);
-      
-      // Filter assets by the specific date range
-      const dayAssets = albumAssets.filter(a => {
-        const asset = a?.asset || a; // Handle wrapped assets
-        const t = asset?.exifInfo?.dateTimeOriginal || asset?.localDateTime || asset?.fileCreatedAt || asset?.createdAt;
-        if (!t) return false;
-        
-        const ts = new Date(t).getTime();
-        const inRange = !Number.isNaN(ts) && ts >= +start && ts < +end;
-        
-        if (inRange) {
-          app.log.info(`Asset ${asset?.id} matches date ${date}: ${t}`);
-        }
-        
-        return inRange;
+      app.log.info(
+        `🔍 Server ${serverIndex}: Searching album ${effectiveAlbumId} for assets on ${date}`
+      );
+
+      const params = new URLSearchParams({
+        albumId: effectiveAlbumId,
+        takenAfter: start.toISOString(),
+        takenBefore: end.toISOString(),
+        size: '5000'
       });
 
-      if (dayAssets.length > 0) {
-        const photos = await Promise.all(dayAssets.map(a => mapAssetToPhoto(a?.asset || a, serverIndex)));
-        app.log.info(`Album ${effectiveAlbumId}: found ${photos.length} assets for ${date}`);
-        return photos;
+      const res = await immichFetchJSON(
+        server,
+        `/api/search/metadata?${params}`
+      );
+      const assets = Array.isArray(res?.assets?.items)
+        ? res.assets.items
+        : Array.isArray(res?.items)
+          ? res.items
+          : Array.isArray(res)
+            ? res
+            : [];
+
+      const photos = await Promise.all(
+        assets.map(a => mapAssetToPhoto(a?.asset || a, serverIndex))
+      );
+
+      albumDayCache.set(cacheKey, photos);
+      // simple LRU eviction
+      if (albumDayCache.size > 20) {
+        const oldestKey = albumDayCache.keys().next().value;
+        albumDayCache.delete(oldestKey);
       }
 
-      app.log.info(`No assets found for album ${effectiveAlbumId} on ${date}`);
-      return [];
+      if (photos.length) {
+        app.log.info(
+          `Album ${effectiveAlbumId}: found ${photos.length} assets for ${date}`
+        );
+      } else {
+        app.log.info(
+          `No assets found for album ${effectiveAlbumId} on ${date}`
+        );
+      }
+      return photos;
     } catch (e) {
-      app.log.warn(`Album fetch failed for ${effectiveAlbumId}: ${e.message}`);
+      app.log.warn(
+        `Album ${effectiveAlbumId} date-range search failed: ${e.message}`
+      );
       return [];
     }
   }
