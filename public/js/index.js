@@ -1,4 +1,4 @@
-import { dataUrl, getApiBase, groupIntoStacks, debounce, urlParam, pushUrlParam, replaceUrlParam, fmtTime, escapeHtml, formatDate, thumbUrl } from "./utils.js";
+import { dataUrl, getApiBase, groupIntoStacks, debounce, urlParam, pushUrlParam, replaceUrlParam, fmtTime, escapeHtml, formatDate, thumbUrl, FALLBACK_THUMB_URL } from "./utils.js";
 
 const MAPBOX_STYLE = 'mapbox://styles/mapbox/satellite-v9';
 // Use provided Mapbox token by default; replace with your own for production.
@@ -436,7 +436,10 @@ async function loadStacks(){
   if (previewSlug){
     const dj = await (await fetch(dataUrl("days", `${previewSlug}.json`))).json();
     stackMetaByDay[previewSlug] = dj.stackMeta || {};
-    (dj.photos||[]).forEach(p=> allPhotos.push({ ...p, dayTitle:dj.title, daySlug:previewSlug, ts:+new Date(p.taken_at) }));
+    (dj.photos||[]).forEach(p=> {
+      const t = thumbUrl(p) || FALLBACK_THUMB_URL;
+      allPhotos.push({ ...p, url: p.url || t, thumb: p.thumb || t, dayTitle:dj.title, daySlug:previewSlug, ts:+new Date(p.taken_at) });
+    });
   } else {
     try {
       const res = await fetch(dataUrl("days", "index.json"));
@@ -446,7 +449,10 @@ async function loadStacks(){
           try {
             const dj = await (await fetch(dataUrl("days", `${d.slug}.json`))).json();
             stackMetaByDay[d.slug] = dj.stackMeta || {};
-            (dj.photos||[]).forEach(p=> allPhotos.push({ ...p, dayTitle:dj.title, daySlug:d.slug, ts:+new Date(p.taken_at) }));
+            (dj.photos||[]).forEach(p=> {
+              const t = thumbUrl(p) || FALLBACK_THUMB_URL;
+              allPhotos.push({ ...p, url: p.url || t, thumb: p.thumb || t, dayTitle:dj.title, daySlug:d.slug, ts:+new Date(p.taken_at) });
+            });
           } catch (e) {
             console.warn(`Failed to load day ${d.slug}:`, e);
           }
