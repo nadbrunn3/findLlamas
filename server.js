@@ -113,6 +113,9 @@ function escapeRegex(str) {
 }
 collectAssetHashes(PUBLIC_DIR);
 
+// simple in-memory cache for reverse geocoding
+const geocodeCache = new Map();
+
 // helpers
 const app = fastify({ logger: true });
 app.register(cors, { origin: true });
@@ -129,6 +132,74 @@ app.get('/api/user/me', async (req, reply) => {
     headers: req.headers.cookie
   });
   reply.send({ anonId: req.anonId });
+});
+
+// ---- Geocoding ---------------------------------------------------------------
+app.get('/api/geocode', async (req, reply) => {
+  const lat = Number(req.query.lat);
+  const lon = Number(req.query.lon ?? req.query.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    reply.code(400).send({ error: 'invalid coordinates' });
+    return;
+  }
+
+  const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+  if (geocodeCache.has(key)) {
+    return { name: geocodeCache.get(key) };
+  }
+
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'FindLlamas/1.0 (your_email@example.com)',
+        'Accept-Language': 'en',
+      },
+    });
+
+    if (!res.ok) {
+      console.warn('Reverse geocode failed:', res.status, await res.text());
+      return { name: `${lat.toFixed(4)}, ${lon.toFixed(4)}` };
+    }
+
+    const data = await res.json();
+    const addr = data.address || {};
+
+    const district =
+      addr.suburb ||
+      addr.city_district ||
+      addr.district ||
+      addr.borough ||
+      addr.ward;
+
+    const city =
+      addr.city ||
+      addr.town ||
+      addr.village ||
+      addr.municipality ||
+      addr.locality;
+
+    const region =
+      addr.state ||
+      addr.region ||
+      addr.province ||
+      addr.state_district;
+
+    const country = addr.country;
+
+    let nameParts = [city, district, country].filter(Boolean);
+    nameParts = nameParts.filter((part, idx) => nameParts.indexOf(part) === idx);
+    const name =
+      nameParts.length > 0
+        ? nameParts.join(', ')
+        : `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+
+    geocodeCache.set(key, name);
+    return { name };
+  } catch (e) {
+    console.warn('Reverse geocode failed:', e);
+    return { name: `${lat.toFixed(4)}, ${lon.toFixed(4)}` };
+  }
 });
 
 // serve /public so /day.html, /js/day.js, /css etc. work
