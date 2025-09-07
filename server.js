@@ -757,8 +757,8 @@ async function mapAssetToPhoto(a, serverIndex) {
     : null;
 
   const hasLocal = localOriginal && fsSync.existsSync(localOriginal);
-  let hasThumb = localThumbBase && fsSync.existsSync(`${localThumbBase}-400.jpg`);
-  if (hasLocal && !hasThumb && localThumbBase) {
+  let hasThumb = false;
+  if (hasLocal && localThumbBase) {
     await ensureLocalThumb(localOriginal, localThumbBase);
     hasThumb = fsSync.existsSync(`${localThumbBase}-400.jpg`);
   }
@@ -873,15 +873,11 @@ async function getLocalPhotosForDay({ date }) {
           const localThumbBase = path.join(LOCAL_MEDIA_DIR, 'thumbs', relBase);
           const thumbUrlBase = `/media/thumbs/${relBase}`;
           let thumbUrl = `${thumbUrlBase}-400.jpg`;
+          await ensureLocalThumb(full, localThumbBase);
           try {
             await fs.access(`${localThumbBase}-400.jpg`);
           } catch {
-            await ensureLocalThumb(full, localThumbBase);
-            try {
-              await fs.access(`${localThumbBase}-400.jpg`);
-            } catch {
-              thumbUrl = `/media/${rel}`;
-            }
+            thumbUrl = `/media/${rel}`;
           }
           const variants =
             thumbUrl.startsWith('/media/thumbs/')
