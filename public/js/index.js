@@ -15,6 +15,12 @@ let stackMetaByDay = {};
 let activeStackId = null;
 let scrollLocked = false;
 
+// Day loading state for incremental fetching
+// number of day files to fetch in each batch
+const DAYS_PER_LOAD = 5;
+let daysIndex = [];
+let daysLoaded = 0;
+
 // Full-screen map overlay variables
 let mapOverlay, overlayMap, overlayMarker;
 
@@ -380,44 +386,116 @@ function makeDragScrollable(el) {
   el.addEventListener('touchend', onUp);
 }
 
-async function loadStacks(){
+async function loadStacks(count = DAYS_PER_LOAD) {
   const previewSlug = urlParam("preview");
-  allPhotos = [];
-  stackMetaByDay = {};
 
-  if (previewSlug){
-    const dj = await (await fetch(dataUrl("days", `${previewSlug}.json`))).json();
-    stackMetaByDay[previewSlug] = dj.stackMeta || {};
-    (dj.photos||[]).forEach(p=> {
-      const t = thumbUrl(p) || FALLBACK_THUMB_URL;
-      allPhotos.push({ ...p, url: p.url || t, thumb: p.thumb || t, dayTitle:dj.title, daySlug:previewSlug, ts:+new Date(p.taken_at) });
-    });
-  } else {
-    try {
-      const res = await fetch(dataUrl("days", "index.json"));
-      const days = res.ok ? await res.json() : [];
-      if (Array.isArray(days) && days.length > 0) {
-  await Promise.all(days.map(async d=>{
-          try {
-            const dj = await (await fetch(dataUrl("days", `${d.slug}.json`))).json();
-            stackMetaByDay[d.slug] = dj.stackMeta || {};
-            (dj.photos||[]).forEach(p=> {
-              const t = thumbUrl(p) || FALLBACK_THUMB_URL;
-              allPhotos.push({ ...p, url: p.url || t, thumb: p.thumb || t, dayTitle:dj.title, daySlug:d.slug, ts:+new Date(p.taken_at) });
-            });
-          } catch (e) {
-            console.warn(`Failed to load day ${d.slug}:`, e);
-          }
-        }));
-      } else {
-        console.log("No days found in index.json");
-      }
-    } catch (e) {
-      console.warn("Failed to load days index:", e);
-    }
+  // Reset collections on first load
+  if (daysLoaded === 0) {
+    allPhotos = [];
+    stackMetaByDay = {};
   }
 
-  allPhotos.sort((a,b)=>a.ts-b.ts);
+  if (previewSlug) {
+    // Preview mode loads a single day and skips pagination
+    const url = dataUrl("days", `${previewSlug}.json`);
+    const res = await fetch(url);
+    if (res.ok) {
+      const dj = await res.json();
+      stackMetaByDay[previewSlug] = dj.stackMeta || {};
+      (dj.photos || []).forEach((p) =>
+        allPhotos.push({
+          ...p,
+          dayTitle: dj.title,
+          daySlug: previewSlug,
+          ts: +new Date(p.taken_at),
+        })
+      );
+      daysIndex = [{ slug: previewSlug }];
+      daysLoaded = 1;
+    }
+  } else {
+    // Load day index once
+    if (daysIndex.length === 0) {
+      try {
+        const res = await fetch(dataUrl("days", "index.json"));
+        daysIndex = res.ok ? await res.json() : [];
+      } catch (e) {
+        console.warn("Failed to load days index:", e);
+        return;
+412
+ 
+  } else {
+413
+ 
+    // Load day index once
+414
+ 
+    if (daysIndex.length === 0) {
+415
+ 
+      try {
+416
+ 
+        const res = await fetch(dataUrl("days", "index.json"));
+417
+ 
+        daysIndex = res.ok ? await res.json() : [];
+412
+ 
+  } else {
+413
+ 
+    // Load day index once
+414
+ 
+    if (daysIndex.length === 0) {
+415
+ 
+      try {
+416
+ 
+        const res = await fetch(dataUrl("days", "index.json"));
+417
+ 
+        daysIndex = res.ok ? await res.json() : [];
+      }
+    }
+
+    const slice = daysIndex.slice(daysLoaded, daysLoaded + count);
+    if (slice.length === 0) return;
+
+    const results = await Promise.allSettled(
+      slice.map(async (d) => {
+        const url = dataUrl("days", `${d.slug}.json`);
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(res.statusText);
+        return { slug: d.slug, data: await res.json() };
+      })
+    );
+
+    let loaded = 0;
+    results.forEach((r, idx) => {
+      if (r.status === "fulfilled") {
+        const { slug, data: dj } = r.value;
+        stackMetaByDay[slug] = dj.stackMeta || {};
+        (dj.photos || []).forEach((p) =>
+          allPhotos.push({
+            ...p,
+            dayTitle: dj.title,
+            daySlug: slug,
+            ts: +new Date(p.taken_at),
+          })
+        );
+        loaded++;
+      } else {
+        console.warn(`Failed to load day ${slice[idx].slug}:`, r.reason);
+      }
+    });
+
+    daysLoaded += loaded;
+  }
+
+  allPhotos.sort((a, b) => a.ts - b.ts);
 
   // group photos into stacks by proximity (500m radius)
   photoStacks = groupIntoStacks(allPhotos, 500);
@@ -431,7 +509,7 @@ async function loadStacks(){
     const meta = stackMetaByDay[slug]?.[s.id];
     const title = meta?.title?.trim();
     s.title = title || formatDate(s.takenAt);
-    s.caption = meta?.caption || '';
+    s.caption = meta?.caption || "";
     s.photos.forEach((p) => (p.stackId = s.id));
   });
 }
@@ -543,6 +621,15 @@ function updateMarkerSizes(map) {
     const newSize = getMarkerSize(currentZoom);
     m.marker.getElement().style.setProperty('--marker-size', `${newSize}px`);
   });
+}
+
+// Remove existing markers and redraw them using current allPhotos data
+function refreshTopMap() {
+  if (!topMap) return;
+  mapMarkers.forEach(m => m.marker.remove());
+  mapMarkers = [];
+  addMarkersAndPath(topMap);
+  updateMarkerClasses();
 }
 
 
@@ -805,7 +892,24 @@ function renderFeed(){
   // Single DOM operation to append all cards
   host.innerHTML = "";
   host.appendChild(fragment);
-  
+
+  // Append load-more control if more days remain
+  if (daysLoaded < daysIndex.length) {
+    const wrap = document.createElement('div');
+    wrap.className = 'load-more-container';
+    const btn = document.createElement('button');
+    btn.textContent = 'Load more days';
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      await loadStacks();
+      await resolveStackLocations();
+      refreshTopMap();
+      renderFeed();
+    });
+    wrap.appendChild(btn);
+    host.appendChild(wrap);
+  }
+
   localStorage.setItem("stackPhotoCounts", JSON.stringify(newCounts));
 }
 
