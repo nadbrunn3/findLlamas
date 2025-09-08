@@ -929,6 +929,7 @@ async function getLocalPhotosForDay({ date }) {
           const relDir = path.dirname(rel).replace(/\\/g, '/');
           const nameNoExt = path.parse(rel).name;
           const relBase = relDir && relDir !== '.' ? `${relDir}/${nameNoExt}` : nameNoExt;
+          const fileId = rel.replace(/[\\/]/g, '_');
           const localThumbBase = path.join(LOCAL_MEDIA_DIR, 'thumbs', relDir, nameNoExt);
           const thumbUrlBase = `/media/thumbs/${relBase}`;
           let thumbUrl = `${thumbUrlBase}-400.jpg`;
