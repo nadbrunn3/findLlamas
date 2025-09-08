@@ -740,8 +740,49 @@ async function getAssetsForDay({ date, albumId }) {
 async function ensureLocalThumb(original, thumbBase) {
   const sizes = [400, 800, 1600];
   try {
+    if (!fsSync.existsSync(original)) {
+      app.log.warn({
+        msg: 'original file missing, skipping thumbnail',
+        file: original,
+      });
+      return;
+    }
     if (!sharp) {
       sharp = (await import('sharp')).default;
+    }
+    const ext = path.extname(original).toLowerCase();
+    let input = original;
+    if (ext === '.heic' || ext === '.heif') {
+      const heifSupported = sharp.format?.heif?.input;
+      if (!heifSupported) {
+        try {
+          const wasmHeic = await import('@saschazar/wasm-heic');
+          const decode =
+            wasmHeic.decode ||
+            wasmHeic.default?.decode ||
+            wasmHeic.default;
+          if (typeof decode !== 'function') {
+            throw new Error('HEIC decoder not available');
+          }
+          const fileBuffer = await fs.readFile(original);
+          const decoded = await decode(
+            fileBuffer instanceof Uint8Array ? fileBuffer : new Uint8Array(fileBuffer)
+          );
+          const { width, height, data } = decoded;
+          input = await sharp(Buffer.from(data), {
+            raw: { width, height, channels: 4 },
+          })
+            .jpeg()
+            .toBuffer();
+        } catch (convErr) {
+          app.log.error({
+            msg: 'HEIC to JPEG conversion failed',
+            file: original,
+            err: String(convErr),
+          });
+          return;
+        }
+      }
     }
     await fs.mkdir(path.dirname(thumbBase), { recursive: true });
     for (const size of sizes) {
@@ -767,17 +808,25 @@ async function ensureLocalThumb(original, thumbBase) {
         await fs.access(thumbPath);
       } catch {
         try {
-          await sharp(original)
+          await sharp(input)
             .rotate()
             .resize(size, size, { fit: 'inside', withoutEnlargement: true })
             .toFile(thumbPath);
         } catch (err) {
-          app.log.error({ msg: `thumb generation failed (${size})`, err: String(err) });
+          app.log.error({
+            msg: `thumb generation failed (${size})`,
+            file: original,
+            err: String(err),
+          });
         }
       }
     }
   } catch (err) {
-    app.log.error({ msg: 'thumb generation setup failed', err: String(err) });
+    app.log.error({
+      msg: 'thumb generation setup failed',
+      file: original,
+      err: String(err),
+    });
   }
 }
 
