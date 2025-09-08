@@ -925,10 +925,11 @@ async function getLocalPhotosForDay({ date }) {
           }
         if (t >= start && t < end) {
           const isVideo = video.has(ext);
-          const rel = path.relative(LOCAL_MEDIA_DIR, full);
-          const fileId = rel.replace(/[\\/]/g, '_');
-          const relBase = path.join(path.dirname(rel), path.parse(rel).name);
-          const localThumbBase = path.join(LOCAL_MEDIA_DIR, 'thumbs', relBase);
+          const rel = path.relative(LOCAL_MEDIA_DIR, full).replace(/\\/g, '/');
+          const relDir = path.dirname(rel).replace(/\\/g, '/');
+          const nameNoExt = path.parse(rel).name;
+          const relBase = relDir && relDir !== '.' ? `${relDir}/${nameNoExt}` : nameNoExt;
+          const localThumbBase = path.join(LOCAL_MEDIA_DIR, 'thumbs', relDir, nameNoExt);
           const thumbUrlBase = `/media/thumbs/${relBase}`;
           let thumbUrl = `${thumbUrlBase}-400.jpg`;
           await ensureLocalThumb(full, localThumbBase);
@@ -1270,12 +1271,13 @@ async function repairThumbsForDay(day) {
     if (!p?.url?.startsWith('/media/')) continue;
 
     const rel = p.url.replace('/media/', '');
-    const relDir = path.dirname(rel);
+    const relDir = path.dirname(rel).replace(/\\/g, '/');
     const nameNoExt = path.parse(rel).name;
-    const thumbRelBase = path.join('thumbs', relDir, nameNoExt);
+    const thumbRelPath = path.join('thumbs', relDir, nameNoExt);
+    const thumbRelBase = thumbRelPath.replace(/\\/g, '/');
     const thumbUrl = `/media/${thumbRelBase}-400.jpg`;
     const orig = path.join(LOCAL_MEDIA_DIR, rel);
-    const thumbBase = path.join(LOCAL_MEDIA_DIR, thumbRelBase);
+    const thumbBase = path.join(LOCAL_MEDIA_DIR, thumbRelPath);
 
     if (p.thumb !== thumbUrl) {
       p.thumb = thumbUrl;
