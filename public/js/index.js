@@ -16,10 +16,11 @@ let activeStackId = null;
 let scrollLocked = false;
 
 // Day loading state for incremental fetching
-// load all day files at once
-const DAYS_PER_LOAD = Infinity;
+// load a few day files at a time so new stacks can stream in lazily
+const DAYS_PER_LOAD = 3;
 let daysIndex = [];
 let daysLoaded = 0;
+let loadingMoreDays = false;
 
 // Full-screen map overlay variables
 let mapOverlay, overlayMap, overlayMarker;
@@ -243,8 +244,8 @@ function renderMediaEl(item, { withControls = false, className = '', useThumb = 
     }
 
     img.alt = item.title || item.caption || '';
-    img.loading = 'eager';
-    img.decoding = 'auto';
+    img.loading = 'lazy';
+    img.decoding = 'async';
     if (className) img.className = className;
     element = img;
   }
@@ -329,6 +330,7 @@ async function init(){
   setupTabs();
 
   setupScrollSync();
+  setupInfiniteScroll();
 
   const initial = urlParam("stack");
   if (initial) {
@@ -2130,7 +2132,8 @@ function renderPhotoGrid(){
     const img = document.createElement('img');
     img.src = thumbUrl(p);
     img.alt = p.caption || '';
-    img.loading = 'eager';
+    img.loading = 'lazy';
+    img.decoding = 'async';
     img.addEventListener('click', () => {
       if (window.openPhotoLightbox) {
         window.openPhotoLightbox(photos, idx);
@@ -2277,6 +2280,26 @@ function setupScrollSync(){
   });
 
   photoStacks.forEach(s=>{ const el=document.getElementById(s.id); if (el) io.observe(el); });
+}
+
+// Load additional day files as the user approaches the bottom of the page
+function setupInfiniteScroll(){
+  const onScroll = debounce(async () => {
+    if (loadingMoreDays || daysLoaded >= daysIndex.length) return;
+    const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 800;
+    if (!nearBottom) return;
+    loadingMoreDays = true;
+    const prev = photoStacks.length;
+    await loadStacks();
+    if (photoStacks.length > prev) {
+      renderFeed();
+      resolveStackLocations();
+      refreshTopMap();
+    }
+    loadingMoreDays = false;
+  }, 200);
+
+  window.addEventListener('scroll', onScroll, { passive: true });
 }
 
 
