@@ -612,11 +612,11 @@ function renderFeed(){
   const seenCounts = JSON.parse(localStorage.getItem("stackPhotoCounts") || "{}");
   const newCounts = {};
   
-  // Sort stacks by newest photo timestamp (oldest stacks first)
+  // Sort stacks by newest photo timestamp (newest stacks first)
   const sortedStacks = [...photoStacks].sort((a, b) => {
     const aNewest = Math.max(...a.photos.map(p => p.ts || 0));
     const bNewest = Math.max(...b.photos.map(p => p.ts || 0));
-    return aNewest - bNewest;
+    return bNewest - aNewest;
   });
   
   // Use document fragment for better performance
