@@ -1248,14 +1248,21 @@ const dayCache = new Map();
 
 async function ensureThumbsForDay(day) {
   if (!LOCAL_MEDIA_DIR || !Array.isArray(day?.photos)) return;
-  for (const p of day.photos) {
-    if (p.url?.startsWith('/media/') && p.thumb?.startsWith('/media/')) {
-      const orig = path.join(LOCAL_MEDIA_DIR, p.url.replace('/media/', ''));
-      const thumbBaseRel = p.thumb
-        .replace('/media/', '')
-        .replace(/-400\.jpg$/, '');
-      const thBase = path.join(LOCAL_MEDIA_DIR, thumbBaseRel);
-      await ensureLocalThumb(orig, thBase);
+
+  // repairThumbsForDay will ensure each photo has a valid thumbnail reference
+  // and generate any missing thumbnail files. If any thumbnails are added or
+  // updated, persist the changes to disk so future loads use the repaired data.
+  const updated = await repairThumbsForDay(day);
+
+  if (updated) {
+    const slug = day.slug || day.date;
+    if (slug) {
+      try {
+        await writeJson(dayFile(slug), day);
+        dayCache.set(slug, day);
+      } catch (err) {
+        app.log?.error({ msg: 'failed to persist repaired thumbnails', err: String(err) });
+      }
     }
   }
 }
