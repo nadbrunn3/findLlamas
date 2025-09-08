@@ -129,6 +129,14 @@ if (fastifyCompress) app.register(fastifyCompress);
 
 app.register(anonPlugin);
 
+// default to no-cache unless a route sets its own policy
+app.addHook('onSend', (req, reply, payload, done) => {
+  if (!reply.getHeader('cache-control')) {
+    reply.header('cache-control', 'no-cache');
+  }
+  done(null, payload);
+});
+
 // ---- User Identity ----------------------------------------------------------
 app.get('/api/user/me', async (req, reply) => {
   console.log('🔍 User ID request:', {
