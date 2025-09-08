@@ -740,6 +740,13 @@ async function getAssetsForDay({ date, albumId }) {
 async function ensureLocalThumb(original, thumbBase) {
   const sizes = [400, 800, 1600];
   try {
+    if (!fsSync.existsSync(original)) {
+      app.log.warn({
+        msg: 'original file missing, skipping thumbnail',
+        file: original,
+      });
+      return;
+    }
     if (!sharp) {
       sharp = (await import('sharp')).default;
     }
