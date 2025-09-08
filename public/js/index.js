@@ -14,6 +14,7 @@ let allPhotos = [];
 let stackMetaByDay = {};
 let activeStackId = null;
 let scrollLocked = false;
+let scrollSyncObserver;
 
 // Day loading state for incremental fetching
 // load a few day files at a time so new stacks can stream in lazily
@@ -336,6 +337,8 @@ async function init(){
   if (initial) {
     setActive(initial);
     requestAnimationFrame(() => scrollToStack(initial, { instant: true }));
+  } else {
+    window.scrollTo({ top: 0, behavior: 'auto' });
   }
   
   // Performance monitoring (only in development)
@@ -421,6 +424,8 @@ async function loadStacks(count = DAYS_PER_LOAD) {
       try {
         const res = await fetch(dataUrl("days", "index.json"));
         daysIndex = res.ok ? await res.json() : [];
+        // Ensure the newest days are loaded first
+        daysIndex.sort((a, b) => b.slug.localeCompare(a.slug));
       } catch (e) {
         console.warn("Failed to load days index:", e);
         return;
@@ -609,8 +614,8 @@ function onMarkerClick(id){
 // ---------- feed ----------
 function renderFeed(){
   const host = document.getElementById("stack-feed");
-  const seenCounts = JSON.parse(localStorage.getItem("stackPhotoCounts") || "{}");
   const newCounts = {};
+  const existingIds = new Set(Array.from(host.children).map(el => el.id));
   
   // Sort stacks by newest photo timestamp (newest stacks first)
   const sortedStacks = [...photoStacks].sort((a, b) => {
@@ -624,7 +629,7 @@ function renderFeed(){
   
   sortedStacks.forEach((stack,i)=>{
     newCounts[stack.id] = stack.photos.length;
-    const hasNew = stack.photos.length > (seenCounts[stack.id] || 0);
+    if (existingIds.has(stack.id)) return;
     const card = document.createElement("div");
     card.className = `stack-card${stack.id===activeStackId?' active':''}`;
     card.id = stack.id; card.dataset.stackId = stack.id; card.tabIndex = 0;
@@ -823,6 +828,7 @@ function renderFeed(){
       setActive(stack.id); replaceUrlParam("stack", stack.id); panMiniMapTo(stack.id);
     });
 
+    if (scrollSyncObserver) scrollSyncObserver.observe(card);
     fragment.appendChild(card);
 
     // Initialize the main media display
@@ -852,7 +858,6 @@ function renderFeed(){
   });
   
   // Single DOM operation to append all cards
-  host.innerHTML = "";
   host.appendChild(fragment);
 
   localStorage.setItem("stackPhotoCounts", JSON.stringify(newCounts));
@@ -2239,8 +2244,8 @@ const panMiniMapTo = panTopMapTo;
 function setupScrollSync(){
   // Debounce the scroll sync for better performance
   let scrollSyncTimeout;
-  
-  const io = new IntersectionObserver((entries)=>{
+
+  scrollSyncObserver = new IntersectionObserver((entries)=>{
     if (scrollLocked) return;
     
     // Clear previous timeout
@@ -2273,13 +2278,13 @@ function setupScrollSync(){
         }
       }
     }, 16); // ~60fps
-  }, { 
-    root: null, 
+  }, {
+    root: null,
     rootMargin: "-15% 0px -35% 0px", // More responsive trigger area
     threshold: [0.25, 0.5, 0.75] // Reduced thresholds for better performance
   });
 
-  photoStacks.forEach(s=>{ const el=document.getElementById(s.id); if (el) io.observe(el); });
+  photoStacks.forEach(s=>{ const el=document.getElementById(s.id); if (el) scrollSyncObserver.observe(el); });
 }
 
 // Load additional day files as the user approaches the bottom of the page
