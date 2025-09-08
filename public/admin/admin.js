@@ -501,13 +501,13 @@ function renderTripsTab(panel) {
     const sourceSel = /** @type {HTMLSelectElement} */(document.getElementById('import-source'));
     const importSource = sourceSel ? sourceSel.value : 'immich';
 
-    if (importSource === 'immich' && !serverConfig.immichConfigured) {
+    if (importSource === 'immich' && serverConfig.immichConfigured === false) {
       const missing = serverConfig.missingConfig || [];
       const errorMsg = `Immich not configured. Missing: ${missing.join(', ')}.\n\nPlease create a .env file with:\nIMMICH_URLS=https://immich-one.example.com,https://immich-two.example.com\nIMMICH_API_KEYS=your_api_key_1,your_api_key_2\nIMMICH_ALBUM_ID=your_album_id (optional)`;
       alert(errorMsg);
       return;
     }
-    if (importSource === 'local' && !serverConfig.localMediaConfigured) {
+    if (importSource === 'local' && serverConfig.localMediaConfigured === false) {
       alert('Local media not configured. Set LOCAL_MEDIA_DIR in your .env file.');
       return;
     }
