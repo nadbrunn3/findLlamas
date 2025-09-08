@@ -424,6 +424,8 @@ async function loadStacks(count = DAYS_PER_LOAD) {
       try {
         const res = await fetch(dataUrl("days", "index.json"));
         daysIndex = res.ok ? await res.json() : [];
+        // Ensure the newest days are loaded first
+        daysIndex.sort((a, b) => b.slug.localeCompare(a.slug));
       } catch (e) {
         console.warn("Failed to load days index:", e);
         return;
